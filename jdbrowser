@@ -1,0 +1,124 @@
+#!/usr/bin/env python3.13
+"""
+Simple file browser with image preview stub using PySide6 and TokyoNight Dark theme.
+"""
+
+import sys
+import os
+import argparse
+from configparser import ConfigParser
+from PySide6.QtWidgets import QApplication, QMainWindow, QListWidget
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette, QColor
+
+class FileListWidget(QListWidget):
+    """
+    Custom QListWidget to handle J/K navigation.
+    """
+    def keyPressEvent(self, event):
+        key = event.key()
+        current = self.currentRow()
+        if key in (Qt.Key_K, Qt.Key_Up):
+            new_index = max(0, current - 1)
+            self.setCurrentRow(new_index)
+        elif key in (Qt.Key_J, Qt.Key_Down):
+            new_index = min(self.count() - 1, current + 1)
+            self.setCurrentRow(new_index)
+        else:
+            super().keyPressEvent(event)
+
+class FileBrowser(QMainWindow):
+    def __init__(self, directory):
+        super().__init__()
+        self.directory = directory
+        self.setWindowTitle(f"jdbrowser - {directory}")
+        self.list_widget = FileListWidget()
+        self.populate_list()
+        self.list_widget.setCurrentRow(0)
+        self.list_widget.setFocus()
+        self.setCentralWidget(self.list_widget)
+        self.apply_styles()
+
+    def populate_list(self):
+        try:
+            items = sorted(os.listdir(self.directory))
+        except OSError as e:
+            items = []
+            print(f"Error reading directory: {e}", file=sys.stderr)
+        self.list_widget.clear()
+        for item in items:
+            self.list_widget.addItem(item)
+
+    def apply_styles(self):
+        QApplication.setStyle("Fusion")
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor("#1a1b26"))
+        palette.setColor(QPalette.Base, QColor("#1a1b26"))
+        palette.setColor(QPalette.Text, QColor("#c0caf5"))
+        palette.setColor(QPalette.WindowText, QColor("#c0caf5"))
+        palette.setColor(QPalette.Highlight, QColor("#2a2b3c"))
+        palette.setColor(QPalette.HighlightedText, QColor("#c0caf5"))
+        QApplication.setPalette(palette)
+
+        self.list_widget.setStyleSheet("""
+        QListWidget {
+            background-color: #1a1b26;
+            border: none;
+            color: #c0caf5;
+            font-size: 14px;
+        }
+        QListWidget::item:selected {
+            background-color: #2a2b3c;
+        }
+        QListWidget::item:hover {
+            background-color: #2f334d;
+        }
+        QScrollBar:vertical {
+            background: #2f334d;
+            width: 8px;
+            margin: 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: #3b3f58;
+            min-height: 20px;
+            border-radius: 4px;
+        }
+        QScrollBar::add-line, QScrollBar::sub-line {
+            height: 0px;
+        }
+        """
+        )
+
+def read_config():
+    config_path = os.path.expanduser("~/.config/jdbrowser/config.conf")
+    parser = ConfigParser()
+    if parser.read(config_path):
+        try:
+            repo = parser.get("settings", "repository")
+            return os.path.expanduser(repo)
+        except Exception as e:
+            print(f"Error reading repository from config: {e}", file=sys.stderr)
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="jdbrowser - simple file browser")
+    parser.add_argument("path", nargs="?", help="Directory to browse")
+    args = parser.parse_args()
+
+    directory = args.path or read_config()
+    if not directory:
+        print("No directory specified and no repository found in config.", file=sys.stderr)
+        sys.exit(1)
+    if not os.path.isdir(directory):
+        print(f"Not a directory: {directory}", file=sys.stderr)
+        sys.exit(1)
+
+    app = QApplication(sys.argv)
+    window = FileBrowser(directory)
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
