@@ -180,10 +180,25 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_J, self.moveVert, 1),
             (QtCore.Qt.Key_Up, self.moveVert, -1),
             (QtCore.Qt.Key_K, self.moveVert, -1),
+            (QtCore.Qt.Key_BracketLeft, self.moveToSectionStart, None),
+            (QtCore.Qt.Key_BracketRight, self.moveToSectionEnd, None),
+            (QtCore.Qt.Key_G, self.moveToAbsoluteFirst, None),
+            (QtCore.Qt.Key_G, self.moveToAbsoluteLast, None, QtCore.Qt.KeyboardModifier.ShiftModifier),
+            (QtCore.Qt.Key_U, self.moveVertMultiple, -3, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_D, self.moveVertMultiple, 3, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_PageUp, self.moveVertMultiple, -3),
+            (QtCore.Qt.Key_PageDown, self.moveVertMultiple, 3),
+            (QtCore.Qt.Key_Z, self.centerSelectedItem, None),
+            (QtCore.Qt.Key_Y, self.copySelectedName, None),
         ]
-        for key, func, arg in mappings:
-            s = QtGui.QShortcut(QtGui.QKeySequence(key), self)
-            s.activated.connect(lambda f=func, a=arg: f(a))
+        for mapping in mappings:
+            key, func, arg = mapping[0], mapping[1], mapping[2]
+            modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
+            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self)
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
         # row home/end
         zero = QtGui.QShortcut(QtGui.QKeySequence('0'), self)
         zero.activated.connect(self.firstInRow)
@@ -236,6 +251,62 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self.idx_in_sec = last * cols + min(pref_col, length - 1)
         self.updateSelection()
 
+    def moveToSectionStart(self):
+        if self.idx_in_sec == 0 and self.sec_idx > 0:
+            self.sec_idx -= 1
+            self.idx_in_sec = 0
+        else:
+            self.idx_in_sec = 0
+        self.desired_col = 0
+        self.updateSelection()
+
+    def moveToSectionEnd(self):
+        sec = self.sections[self.sec_idx]
+        last_idx = len(sec) - 1
+        if self.idx_in_sec == last_idx and self.sec_idx < len(self.sections) - 1:
+            self.sec_idx += 1
+            sec = self.sections[self.sec_idx]
+            self.idx_in_sec = len(sec) - 1
+        else:
+            self.idx_in_sec = last_idx
+        self.desired_col = self.idx_in_sec % self.cols
+        self.updateSelection()
+
+    def moveToAbsoluteFirst(self):
+        self.sec_idx = 0
+        self.idx_in_sec = 0
+        self.desired_col = 0
+        self.updateSelection()
+
+    def moveToAbsoluteLast(self):
+        self.sec_idx = len(self.sections) - 1
+        sec = self.sections[self.sec_idx]
+        self.idx_in_sec = len(sec) - 1
+        self.desired_col = self.idx_in_sec % self.cols
+        self.updateSelection()
+
+    def moveVertMultiple(self, count):
+        for _ in range(abs(count)):
+            self.moveVert(1 if count > 0 else -1)
+
+    def centerSelectedItem(self):
+        current = self.sections[self.sec_idx][self.idx_in_sec]
+        self.scroll.ensureWidgetVisible(current)
+        # Calculate position to center the widget vertically
+        viewport = self.scroll.viewport()
+        viewport_height = viewport.height()
+        widget_rect = current.rect()
+        widget_pos = current.mapTo(self.scroll.widget(), widget_rect.topLeft())
+        scroll_bar = self.scroll.verticalScrollBar()
+        target_pos = widget_pos.y() - (viewport_height - widget_rect.height()) // 2
+        scroll_bar.setValue(max(0, target_pos))
+        self.updateSelection()
+
+    def copySelectedName(self):
+        current = self.sections[self.sec_idx][self.idx_in_sec]
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(current.name)
+
     def firstInRow(self):
         row = self.idx_in_sec // self.cols
         self.idx_in_sec = row * self.cols
@@ -266,7 +337,6 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
-
 
 def read_config():
     config = configparser.ConfigParser()
