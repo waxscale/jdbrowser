@@ -8,6 +8,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 # Highlight colors
 HIGHLIGHT_COLOR = '#44475a'
 HOVER_COLOR = '#5c6370'
+SLATE_COLOR = '#2e303e'
 
 class FileItem(QtWidgets.QWidget):
     def __init__(self, name, parent_path):
@@ -15,6 +16,7 @@ class FileItem(QtWidgets.QWidget):
         self.name = name
         self.isSelected = False
         self.isHover = False
+        self.isDimmed = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
 
         # Fix vertical size policy
@@ -38,12 +40,13 @@ class FileItem(QtWidgets.QWidget):
                 # Fallback to slate box if image is invalid
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(240, 150)
-                self.icon.setStyleSheet('background-color: #2e303e; border-radius: 10px;')
+                self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
         else:
             # Default slate box
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(240, 150)
-            self.icon.setStyleSheet('background-color: #2e303e; border-radius: 10px;')
+            self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
+        self.icon.setAutoFillBackground(True)
         layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         # Label (single line)
@@ -52,6 +55,7 @@ class FileItem(QtWidgets.QWidget):
         self.label.setFixedWidth(240)
         self.label.setWordWrap(False)
         self.label.setStyleSheet('color: #c0caf5;')
+        self.label.setAutoFillBackground(True)
         layout.addWidget(self.label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         # Fixed height: icon + single line label + spacings and margins
@@ -72,7 +76,18 @@ class FileItem(QtWidgets.QWidget):
             bg = HIGHLIGHT_COLOR
         else:
             bg = 'transparent'
+        # Apply dimming for non-matching items using QGraphicsOpacityEffect
+        opacity = 0.4 if self.isDimmed else 1.0
+        icon_effect = QtWidgets.QGraphicsOpacityEffect(self.icon)
+        icon_effect.setOpacity(opacity)
+        self.icon.setGraphicsEffect(icon_effect)
+        label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
+        label_effect.setOpacity(opacity)
+        self.label.setGraphicsEffect(label_effect)
+        icon_style = f'background-color: {SLATE_COLOR}; border-radius: 10px;' if isinstance(self.icon, QtWidgets.QFrame) else 'border-radius: 10px;'
         self.setStyleSheet(f'background-color: {bg}; border-radius: 10px;')
+        self.icon.setStyleSheet(icon_style)
+        self.label.setStyleSheet('color: #c0caf5;')
 
     def enterEvent(self, event):
         self.isHover = True
@@ -86,6 +101,16 @@ class FileItem(QtWidgets.QWidget):
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
         super().leaveEvent(event)
 
+class SearchLineEdit(QtWidgets.QLineEdit):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_browser = parent
+
+    def focusOutEvent(self, event):
+        # Exit search mode like Enter when losing focus
+        self.parent_browser.exit_search_mode_select()
+        super().focusOutEvent(event)
+
 class FileBrowser(QtWidgets.QMainWindow):
     def __init__(self, directory):
         super().__init__()
@@ -96,6 +121,12 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.sec_idx = 0
         self.idx_in_sec = 0
         self.desired_col = 0
+        self.in_search_mode = False
+        self.prev_sec_idx = 0
+        self.prev_idx_in_sec = 0
+        self.search_matches = []
+        self.current_match_idx = -1
+        self.shortcuts = []
 
         # Disable window decorations
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
@@ -174,6 +205,26 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.scroll.setWidget(container)
         self.setCentralWidget(self.scroll)
 
+        # Search input box
+        self.search_input = SearchLineEdit(self)
+        self.search_input.setFixedWidth(300)
+        self.search_input.setFixedHeight(30)
+        self.search_input.setStyleSheet('''
+            QLineEdit {
+                background-color: #2e303e;
+                color: #c0caf5;
+                border: 1px solid #44475a;
+                border-radius: 5px;
+                padding: 5px;
+                font-family: 'FiraCode Nerd Font';
+            }
+        ''')
+        self.search_input.hide()
+        self.search_input.textChanged.connect(self.perform_search)
+
+        # Position search input in bottom-right
+        self.search_input.move(self.width() - 310, self.height() - 40)
+
         style = '''
         * { font-family: 'FiraCode Nerd Font'; }
         QWidget { background-color: #000000; }
@@ -195,8 +246,8 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        # navigation keys
-        mappings = [
+        # Normal mode navigation keys
+        self.normal_shortcuts = [
             (QtCore.Qt.Key_Right, self.moveHoriz, 1),
             (QtCore.Qt.Key_L, self.moveHoriz, 1),
             (QtCore.Qt.Key_Left, self.moveHoriz, -1),
@@ -215,8 +266,15 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_PageDown, self.moveVertMultiple, 3),
             (QtCore.Qt.Key_Z, self.centerSelectedItem, None),
             (QtCore.Qt.Key_Y, self.copySelectedName, None),
+            (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
+            (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_0, self.firstInRow, None),
+            (QtCore.Qt.Key_Dollar, self.lastInRow, None),
         ]
-        for mapping in mappings:
+        # Quit keys (always active)
+        quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
+        self.shortcuts = []
+        for mapping in self.normal_shortcuts:
             key, func, arg = mapping[0], mapping[1], mapping[2]
             modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
             s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self)
@@ -224,127 +282,248 @@ class FileBrowser(QtWidgets.QMainWindow):
                 s.activated.connect(func)
             else:
                 s.activated.connect(lambda f=func, a=arg: f(a))
-        # row home/end
-        zero = QtGui.QShortcut(QtGui.QKeySequence('0'), self)
-        zero.activated.connect(self.firstInRow)
-        dollar = QtGui.QShortcut(QtGui.QKeySequence('$'), self)
-        dollar.activated.connect(self.lastInRow)
-        # quit keys
-        for seq in ['Q', 'Ctrl+Q', 'Ctrl+W', 'Esc', 'Alt+F4']:
+            self.shortcuts.append(s)
+        for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(self.close)
+            self.shortcuts.append(s)
+
+        # Search mode shortcuts
+        self.search_shortcuts = [
+            (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
+            (QtCore.Qt.Key_BracketLeft, self.exit_search_mode_revert, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_Return, self.exit_search_mode_select, None),
+            (QtCore.Qt.Key_G, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_G, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.KeyboardModifier.ShiftModifier),
+            (QtCore.Qt.Key_N, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_P, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+        ]
+        self.search_shortcut_instances = []
+        for mapping in self.search_shortcuts:
+            key, func, arg = mapping[0], mapping[1], mapping[2]
+            modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
+            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
+            s.setEnabled(False)  # Disabled by default
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
+            self.search_shortcut_instances.append(s)
+
+    def enter_search_mode(self):
+        if not self.in_search_mode:
+            self.in_search_mode = True
+            self.prev_sec_idx = self.sec_idx
+            self.prev_idx_in_sec = self.idx_in_sec
+            self.search_matches = []
+            self.current_match_idx = -1
+            self.search_input.clear()
+            self.search_input.show()
+            self.search_input.setFocus()
+            # Disable normal shortcuts except quit keys
+            for s in self.shortcuts:
+                key_str = s.key().toString()
+                if key_str and not any(key_str.lower() == seq.lower() for seq in ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']):
+                    s.setEnabled(False)
+            # Enable search shortcuts
+            for s in self.search_shortcut_instances:
+                s.setEnabled(True)
+            self.perform_search("")
+
+    def exit_search_mode_revert(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            self.sec_idx = self.prev_sec_idx
+            self.idx_in_sec = self.prev_idx_in_sec
+            self.search_matches = []
+            self.current_match_idx = -1
+            # Re-enable normal shortcuts
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            # Disable search shortcuts
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            # Reset dimming
+            for sec in self.sections:
+                for item in sec:
+                    item.isDimmed = False
+                    item.updateStyle()
+            self.updateSelection()
+
+    def exit_search_mode_select(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            # If there are matches, select the current match
+            if self.search_matches and self.current_match_idx >= 0:
+                self.sec_idx, self.idx_in_sec = self.search_matches[self.current_match_idx]
+            self.search_matches = []
+            self.current_match_idx = -1
+            # Re-enable normal shortcuts
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            # Disable search shortcuts
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            # Reset dimming
+            for sec in self.sections:
+                for item in sec:
+                    item.isDimmed = False
+                    item.updateStyle()
+            self.updateSelection()
+
+    def perform_search(self, query):
+        query = query.lower()
+        self.search_matches = []
+        for s, sec in enumerate(self.sections):
+            for i, item in enumerate(sec):
+                if query in item.name.lower():
+                    self.search_matches.append((s, i))
+                item.isDimmed = query and not query in item.name.lower()
+                item.updateStyle()
+        # Select first match if available
+        if self.search_matches:
+            self.current_match_idx = 0
+            self.sec_idx, self.idx_in_sec = self.search_matches[0]
+        else:
+            self.current_match_idx = -1
+        self.updateSelection()
+
+    def next_match(self):
+        if self.in_search_mode and self.current_match_idx < len(self.search_matches) - 1:
+            self.current_match_idx += 1
+            self.sec_idx, self.idx_in_sec = self.search_matches[self.current_match_idx]
+            self.updateSelection()
+
+    def prev_match(self):
+        if self.in_search_mode and self.current_match_idx > 0:
+            self.current_match_idx -= 1
+            self.sec_idx, self.idx_in_sec = self.search_matches[self.current_match_idx]
+            self.updateSelection()
 
     def moveHoriz(self, delta):
-        sec = self.sections[self.sec_idx]
-        new = self.idx_in_sec + delta
-        if 0 <= new < len(sec):
-            self.idx_in_sec = new
-            # update preferred column
-            self.desired_col = self.idx_in_sec % self.cols
-        self.updateSelection()
+        if not self.in_search_mode:
+            sec = self.sections[self.sec_idx]
+            new = self.idx_in_sec + delta
+            if 0 <= new < len(sec):
+                self.idx_in_sec = new
+                # update preferred column
+                self.desired_col = self.idx_in_sec % self.cols
+            self.updateSelection()
 
     def moveVert(self, direction):
-        pref_col = self.desired_col
-        sec_index = self.sec_idx
-        idx = self.idx_in_sec
-        cols = self.cols
-        # within section
-        sec = self.sections[sec_index]
-        row = idx // cols
-        rows = (len(sec) + cols - 1) // cols
-        if direction > 0:
-            if row + 1 < rows:
-                r2 = row + 1
-                length = min(cols, len(sec) - r2 * cols)
-                self.idx_in_sec = r2 * cols + min(pref_col, length - 1)
-            elif sec_index + 1 < len(self.sections):
-                sec2 = self.sections[sec_index + 1]
-                length = min(cols, len(sec2))
-                self.sec_idx += 1
-                self.idx_in_sec = min(pref_col, length - 1)
-        else:
-            if row > 0:
-                r2 = row - 1
-                length = min(cols, len(sec) - r2 * cols)
-                self.idx_in_sec = r2 * cols + min(pref_col, length - 1)
-            elif sec_index > 0:
-                sec2 = self.sections[sec_index - 1]
-                rows2 = (len(sec2) + cols - 1) // cols
-                last = rows2 - 1
-                length = min(cols, len(sec2) - last * cols)
-                self.sec_idx -= 1
-                self.idx_in_sec = last * cols + min(pref_col, length - 1)
-        self.updateSelection()
+        if not self.in_search_mode:
+            pref_col = self.desired_col
+            sec_index = self.sec_idx
+            idx = self.idx_in_sec
+            cols = self.cols
+            # within section
+            sec = self.sections[sec_index]
+            row = idx // cols
+            rows = (len(sec) + cols - 1) // cols
+            if direction > 0:
+                if row + 1 < rows:
+                    r2 = row + 1
+                    length = min(cols, len(sec) - r2 * cols)
+                    self.idx_in_sec = r2 * cols + min(pref_col, length - 1)
+                elif sec_index + 1 < len(self.sections):
+                    sec2 = self.sections[sec_index + 1]
+                    length = min(cols, len(sec2))
+                    self.sec_idx += 1
+                    self.idx_in_sec = min(pref_col, length - 1)
+            else:
+                if row > 0:
+                    r2 = row - 1
+                    length = min(cols, len(sec) - r2 * cols)
+                    self.idx_in_sec = r2 * cols + min(pref_col, length - 1)
+                elif sec_index > 0:
+                    sec2 = self.sections[sec_index - 1]
+                    rows2 = (len(sec2) + cols - 1) // cols
+                    last = rows2 - 1
+                    length = min(cols, len(sec2) - last * cols)
+                    self.sec_idx -= 1
+                    self.idx_in_sec = last * cols + min(pref_col, length - 1)
+            self.updateSelection()
 
     def moveToSectionStart(self):
-        if self.idx_in_sec == 0 and self.sec_idx > 0:
-            self.sec_idx -= 1
-            self.idx_in_sec = 0
-        else:
-            self.idx_in_sec = 0
-        self.desired_col = 0
-        self.updateSelection()
+        if not self.in_search_mode:
+            if self.idx_in_sec == 0 and self.sec_idx > 0:
+                self.sec_idx -= 1
+                self.idx_in_sec = 0
+            else:
+                self.idx_in_sec = 0
+            self.desired_col = 0
+            self.updateSelection()
 
     def moveToSectionEnd(self):
-        sec = self.sections[self.sec_idx]
-        last_idx = len(sec) - 1
-        if self.idx_in_sec == last_idx and self.sec_idx < len(self.sections) - 1:
-            self.sec_idx += 1
+        if not self.in_search_mode:
             sec = self.sections[self.sec_idx]
-            self.idx_in_sec = len(sec) - 1
-        else:
-            self.idx_in_sec = last_idx
-        self.desired_col = self.idx_in_sec % self.cols
-        self.updateSelection()
+            last_idx = len(sec) - 1
+            if self.idx_in_sec == last_idx and self.sec_idx < len(self.sections) - 1:
+                self.sec_idx += 1
+                sec = self.sections[self.sec_idx]
+                self.idx_in_sec = len(sec) - 1
+            else:
+                self.idx_in_sec = last_idx
+            self.desired_col = self.idx_in_sec % self.cols
+            self.updateSelection()
 
     def moveToAbsoluteFirst(self):
-        self.sec_idx = 0
-        self.idx_in_sec = 0
-        self.desired_col = 0
-        self.updateSelection()
+        if not self.in_search_mode:
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+            self.desired_col = 0
+            self.updateSelection()
 
     def moveToAbsoluteLast(self):
-        self.sec_idx = len(self.sections) - 1
-        sec = self.sections[self.sec_idx]
-        self.idx_in_sec = len(sec) - 1
-        self.desired_col = self.idx_in_sec % self.cols
-        self.updateSelection()
+        if not self.in_search_mode:
+            self.sec_idx = len(self.sections) - 1
+            sec = self.sections[self.sec_idx]
+            self.idx_in_sec = len(sec) - 1
+            self.desired_col = self.idx_in_sec % self.cols
+            self.updateSelection()
 
     def moveVertMultiple(self, count):
-        for _ in range(abs(count)):
-            self.moveVert(1 if count > 0 else -1)
+        if not self.in_search_mode:
+            for _ in range(abs(count)):
+                self.moveVert(1 if count > 0 else -1)
 
     def centerSelectedItem(self):
-        current = self.sections[self.sec_idx][self.idx_in_sec]
-        self.scroll.ensureWidgetVisible(current)
-        # Calculate position to center the widget vertically
-        viewport = self.scroll.viewport()
-        viewport_height = viewport.height()
-        widget_rect = current.rect()
-        widget_pos = current.mapTo(self.scroll.widget(), widget_rect.topLeft())
-        scroll_bar = self.scroll.verticalScrollBar()
-        target_pos = widget_pos.y() - (viewport_height - widget_rect.height()) // 2
-        scroll_bar.setValue(max(0, target_pos))
-        self.updateSelection()
+        if not self.in_search_mode:
+            current = self.sections[self.sec_idx][self.idx_in_sec]
+            self.scroll.ensureWidgetVisible(current)
+            # Calculate position to center the widget vertically
+            viewport = self.scroll.viewport()
+            viewport_height = viewport.height()
+            widget_rect = current.rect()
+            widget_pos = current.mapTo(self.scroll.widget(), widget_rect.topLeft())
+            scroll_bar = self.scroll.verticalScrollBar()
+            target_pos = widget_pos.y() - (viewport_height - widget_rect.height()) // 2
+            scroll_bar.setValue(max(0, target_pos))
+            self.updateSelection()
 
     def copySelectedName(self):
-        current = self.sections[self.sec_idx][self.idx_in_sec]
-        clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.setText(current.name)
+        if not self.in_search_mode:
+            current = self.sections[self.sec_idx][self.idx_in_sec]
+            clipboard = QtWidgets.QApplication.clipboard()
+            clipboard.setText(current.name)
 
     def firstInRow(self):
-        row = self.idx_in_sec // self.cols
-        self.idx_in_sec = row * self.cols
-        self.desired_col = 0
-        self.updateSelection()
+        if not self.in_search_mode:
+            row = self.idx_in_sec // self.cols
+            self.idx_in_sec = row * self.cols
+            self.desired_col = 0
+            self.updateSelection()
 
     def lastInRow(self):
-        sec = self.sections[self.sec_idx]
-        row = self.idx_in_sec // self.cols
-        length = min(self.cols, len(sec) - row * self.cols)
-        self.idx_in_sec = row * self.cols + length - 1
-        self.desired_col = length - 1
-        self.updateSelection()
+        if not self.in_search_mode:
+            sec = self.sections[self.sec_idx]
+            row = self.idx_in_sec // self.cols
+            length = min(self.cols, len(sec) - row * self.cols)
+            self.idx_in_sec = row * self.cols + length - 1
+            self.desired_col = length - 1
+            self.updateSelection()
 
     def updateSelection(self):
         # scroll to ensure visible
@@ -360,6 +539,12 @@ class FileBrowser(QtWidgets.QMainWindow):
             for item in sec:
                 item.updateStyle()
 
+    def mousePressEvent(self, event):
+        if self.in_search_mode:
+            # Exit search mode and allow normal click behavior
+            self.exit_search_mode_select()
+        super().mousePressEvent(event)
+
     def closeEvent(self, event):
         # Save window position and size before closing
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -369,6 +554,11 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
+
+    def resizeEvent(self, event):
+        # Update search input position on window resize
+        self.search_input.move(self.width() - 310, self.height() - 40)
+        super().resizeEvent(event)
 
 def read_config():
     config = configparser.ConfigParser()
