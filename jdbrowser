@@ -1,31 +1,80 @@
 #!/usr/bin/env python3.13
 """
 Simple file browser with image preview stub using PySide6 and TokyoNight Dark theme.
+
+All styling is driven by a Qt stylesheet. No hard-coded colors in code.
 """
 
 import sys
 import os
 import argparse
 from configparser import ConfigParser
-from PySide6.QtWidgets import QApplication, QMainWindow, QListWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QListWidget, QListWidgetItem, QLabel, QWidget, QHBoxLayout
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtGui import QPalette, QColor, QFont
 
 class FileListWidget(QListWidget):
     """
-    Custom QListWidget to handle J/K navigation.
+    Custom QListWidget to handle navigation and category skipping.
+    Header items use embedded widgets with a header property for styling.
     """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.header_indices = []
+
     def keyPressEvent(self, event):
         key = event.key()
-        current = self.currentRow()
+        mod = event.modifiers()
+        # Quit on Q, Ctrl+Q, Ctrl+W, Esc
+        if (key == Qt.Key_Q and (not mod or mod & Qt.ControlModifier)) \
+           or (key == Qt.Key_W and mod & Qt.ControlModifier) \
+           or key == Qt.Key_Escape:
+            QApplication.quit()
+            return
+
+        curr = self.currentRow()
         if key in (Qt.Key_K, Qt.Key_Up):
-            new_index = max(0, current - 1)
-            self.setCurrentRow(new_index)
+            self.setCurrentRow(max(0, curr - 1))
         elif key in (Qt.Key_J, Qt.Key_Down):
-            new_index = min(self.count() - 1, current + 1)
-            self.setCurrentRow(new_index)
+            self.setCurrentRow(min(self.count() - 1, curr + 1))
+        elif key == Qt.Key_BracketLeft:
+            self.navigate_prev_category()
+        elif key == Qt.Key_BracketRight:
+            self.navigate_next_category()
         else:
             super().keyPressEvent(event)
+
+    def navigate_prev_category(self):
+        curr = self.currentRow()
+        prev_headers = [h for h in self.header_indices if h < curr]
+        if not prev_headers:
+            return
+        header = max(prev_headers)
+        next_idx = header + 1
+        if curr != next_idx and next_idx < self.count():
+            self.setCurrentRow(next_idx)
+        else:
+            earlier = [h for h in self.header_indices if h < header]
+            if earlier:
+                target = max(earlier) + 1
+                if target < self.count():
+                    self.setCurrentRow(target)
+
+    def navigate_next_category(self):
+        curr = self.currentRow()
+        next_headers = [h for h in self.header_indices if h > curr]
+        if not next_headers:
+            return
+        header = min(next_headers)
+        prev_idx = header - 1
+        if curr != prev_idx and prev_idx >= 0:
+            self.setCurrentRow(prev_idx)
+        else:
+            later = [h for h in self.header_indices if h > header]
+            if later:
+                target = min(later) - 1
+                if target >= 0:
+                    self.setCurrentRow(target)
 
 class FileBrowser(QMainWindow):
     def __init__(self, directory):
@@ -37,41 +86,86 @@ class FileBrowser(QMainWindow):
         self.list_widget.setCurrentRow(0)
         self.list_widget.setFocus()
         self.setCentralWidget(self.list_widget)
-        self.apply_styles()
+        self.apply_stylesheet()
 
     def populate_list(self):
         try:
-            items = sorted(os.listdir(self.directory))
+            entries = sorted(os.listdir(self.directory))
         except OSError as e:
-            items = []
+            entries = []
             print(f"Error reading directory: {e}", file=sys.stderr)
         self.list_widget.clear()
-        for item in items:
-            self.list_widget.addItem(item)
+        headers = [0]
+        for name in entries:
+            if name.endswith('.2do'):
+                display = name[:-4]
+                item = QListWidgetItem()
+                label = QLabel(display)
+                label.setProperty('header', True)
+                label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                # Label uses layout padding, remove own margins
+                label.setContentsMargins(0, 0, 0, 0)
+                widget = QWidget()
+                layout = QHBoxLayout(widget)
+                # Add padding inside the yellow header
+                layout.setContentsMargins(4, 4, 4, 4)
+                layout.addWidget(label)
+                widget.setProperty('header', True)
+                self.list_widget.addItem(item)
+                self.list_widget.setItemWidget(item, widget)
+                item.setSizeHint(widget.sizeHint())
+                idx = self.list_widget.count() - 1
+                headers.append(idx)
+            else:
+                self.list_widget.addItem(name)
+        headers.append(self.list_widget.count())
+        self.list_widget.header_indices = headers
 
-    def apply_styles(self):
-        QApplication.setStyle("Fusion")
+    def apply_stylesheet(self):
+        QApplication.setStyle('Fusion')
+        # Global monospace font
+        font = QFont('FiraCode Nerd Font')
+        font.setStyleHint(QFont.Monospace)
+        font.setPointSize(14)
+        QApplication.setFont(font)
+        # TokyoNight Dark palette
         palette = QPalette()
-        palette.setColor(QPalette.Window, QColor("#1a1b26"))
-        palette.setColor(QPalette.Base, QColor("#1a1b26"))
-        palette.setColor(QPalette.Text, QColor("#c0caf5"))
-        palette.setColor(QPalette.WindowText, QColor("#c0caf5"))
-        palette.setColor(QPalette.Highlight, QColor("#2a2b3c"))
-        palette.setColor(QPalette.HighlightedText, QColor("#c0caf5"))
+        palette.setColor(QPalette.Window, QColor('#1a1b26'))
+        palette.setColor(QPalette.Base, QColor('#1a1b26'))
+        palette.setColor(QPalette.Text, QColor('#c0caf5'))
+        palette.setColor(QPalette.WindowText, QColor('#c0caf5'))
+        palette.setColor(QPalette.Highlight, QColor('#2a2b3c'))
+        palette.setColor(QPalette.HighlightedText, QColor('#c0caf5'))
         QApplication.setPalette(palette)
 
-        self.list_widget.setStyleSheet("""
+        # Entire styling via stylesheet
+        self.list_widget.setStyleSheet(r"""
         QListWidget {
             background-color: #1a1b26;
             border: none;
             color: #c0caf5;
+            font-family: 'FiraCode Nerd Font';
             font-size: 14px;
         }
         QListWidget::item:selected {
             background-color: #2a2b3c;
+            color: #c0caf5;
         }
         QListWidget::item:hover {
             background-color: #2f334d;
+            color: #c0caf5;
+        }
+        QListWidget QWidget[header="true"] {
+            background-color: #74711d;
+            color: #000000;
+            font-weight: bold;
+            font-family: 'FiraCode Nerd Font';
+            font-size: 14px;
+        }
+        QListWidget QWidget[header="true"]:hover,
+        QListWidget QWidget[header="true"]:selected {
+            background-color: #94911d;
+            color: #000000;
         }
         QScrollBar:vertical {
             background: #2f334d;
@@ -89,12 +183,13 @@ class FileBrowser(QMainWindow):
         """
         )
 
+
 def read_config():
-    config_path = os.path.expanduser("~/.config/jdbrowser/config.conf")
+    config_path = os.path.expanduser('~/.config/jdbrowser/config.conf')
     parser = ConfigParser()
     if parser.read(config_path):
         try:
-            repo = parser.get("settings", "repository")
+            repo = parser.get('settings', 'repository')
             return os.path.expanduser(repo)
         except Exception as e:
             print(f"Error reading repository from config: {e}", file=sys.stderr)
@@ -102,16 +197,16 @@ def read_config():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="jdbrowser - simple file browser")
-    parser.add_argument("path", nargs="?", help="Directory to browse")
+    parser = argparse.ArgumentParser(description='jdbrowser - simple file browser')
+    parser.add_argument('path', nargs='?', help='Directory to browse')
     args = parser.parse_args()
 
     directory = args.path or read_config()
     if not directory:
-        print("No directory specified and no repository found in config.", file=sys.stderr)
+        print('No directory specified and no repository found in config.', file=sys.stderr)
         sys.exit(1)
     if not os.path.isdir(directory):
-        print(f"Not a directory: {directory}", file=sys.stderr)
+        print(f'Not a directory: {directory}', file=sys.stderr)
         sys.exit(1)
 
     app = QApplication(sys.argv)
@@ -119,6 +214,5 @@ def main():
     window.show()
     sys.exit(app.exec())
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
