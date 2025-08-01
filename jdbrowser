@@ -131,6 +131,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.search_matches = []
         self.current_match_idx = -1
         self.shortcuts = []
+        self.search_shortcut_instances = []
         # Load show_hidden state from QSettings
         settings = QtCore.QSettings("xAI", "jdbrowser")
         self.show_hidden = settings.value("show_hidden", False, type=bool)
@@ -159,34 +160,77 @@ class FileBrowser(QtWidgets.QMainWindow):
         ]
         return name.startswith('.') or name in hidden_patterns
 
+    def _setup_search_shortcuts(self):
+        """Set up search mode shortcuts for the current search_input widget."""
+        # Clear old search shortcuts
+        for shortcut in self.search_shortcut_instances:
+            shortcut.deleteLater()
+        self.search_shortcut_instances = []
+
+        # Define search mode shortcuts
+        search_shortcuts = [
+            (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
+            (QtCore.Qt.Key_BracketLeft, self.exit_search_mode_revert, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_Return, self.exit_search_mode_select, None),
+            (QtCore.Qt.Key_G, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_G, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.KeyboardModifier.ShiftModifier),
+            (QtCore.Qt.Key_N, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_P, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+        ]
+
+        # Create new shortcuts
+        for mapping in search_shortcuts:
+            key, func, arg = mapping[0], mapping[1], mapping[2]
+            modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
+            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
+            s.setEnabled(False)  # Disabled by default
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
+            self.search_shortcut_instances.append(s)
+
     def _setup_ui(self):
         self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidgetResizable(False)  # Prevent container from stretching
         container = QtWidgets.QWidget()
         mainLayout = QtWidgets.QVBoxLayout(container)
-        mainLayout.setSpacing(10)
+        mainLayout.setSpacing(10)  # Fixed spacing between sections and headers
         mainLayout.setContentsMargins(5, 5, 5, 5)
 
         self.sections = []
         current_section = []
-        grid = QtWidgets.QGridLayout()
-        grid.setSpacing(5)
-        row = col = 0
+        col = 0
 
         entries = sorted(os.listdir(self.directory), key=lambda x: x.lower())
         for name in entries:
             if self._is_hidden_item(name):
                 continue
             if name.lower().endswith('.2do'):
-                # flush current section
+                # Flush current section
                 if current_section:
-                    self.sections.append(current_section)
                     sectionWidget = QtWidgets.QWidget()
-                    sectionWidget.setLayout(grid)
+                    sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+                    sectionLayout.setSpacing(5)  # Fixed spacing between rows
+                    sectionLayout.setContentsMargins(0, 0, 0, 0)
+                    sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                    rowLayout = None
+                    for i, item in enumerate(current_section):
+                        if i % self.cols == 0:
+                            if rowLayout:
+                                sectionLayout.addLayout(rowLayout)
+                            rowLayout = QtWidgets.QHBoxLayout()
+                            rowLayout.setSpacing(5)  # Fixed spacing between items
+                            rowLayout.setContentsMargins(0, 0, 0, 0)
+                            rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                        rowLayout.addWidget(item)
+                    if rowLayout:
+                        sectionLayout.addLayout(rowLayout)
                     sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
                     mainLayout.addWidget(sectionWidget)
                     mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                # header
+                    self.sections.append(current_section)
+                # Header
                 header_text = os.path.splitext(name)[0]
                 header = QtWidgets.QLabel(header_text)
                 header.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
@@ -198,30 +242,42 @@ class FileBrowser(QtWidgets.QMainWindow):
                 fm = header.fontMetrics()
                 header.setFixedHeight(fm.height() + 6)
                 mainLayout.addWidget(header)
-                # reset for new section
+                mainLayout.addSpacing(10)  # Fixed 10px margin between header and items
+                # Reset for new section
                 current_section = []
-                grid = QtWidgets.QGridLayout()
-                grid.setSpacing(5)
-                row = col = 0
+                col = 0
                 continue
-            # normal item
+            # Normal item
             item = FileItem(name, self.directory)
             current_section.append(item)
-            grid.addWidget(item, row, col)
             col += 1
-            if col >= self.cols:
-                col = 0
-                row += 1
-        # flush last section
+        # Flush last section
         if current_section:
-            self.sections.append(current_section)
             sectionWidget = QtWidgets.QWidget()
-            sectionWidget.setLayout(grid)
+            sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+            sectionLayout.setSpacing(5)  # Fixed spacing between rows
+            sectionLayout.setContentsMargins(0, 0, 0, 0)
+            sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+            rowLayout = None
+            for i, item in enumerate(current_section):
+                if i % self.cols == 0:
+                    if rowLayout:
+                        sectionLayout.addLayout(rowLayout)
+                    rowLayout = QtWidgets.QHBoxLayout()
+                    rowLayout.setSpacing(5)  # Fixed spacing between items
+                    rowLayout.setContentsMargins(0, 0, 0, 0)
+                    rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                rowLayout.addWidget(item)
+            if rowLayout:
+                sectionLayout.addLayout(rowLayout)
             sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
             mainLayout.addWidget(sectionWidget)
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
+            self.sections.append(current_section)
+        mainLayout.addStretch()  # Prevent vertical stretching of entire layout
 
         container.setStyleSheet('background-color: #000000;')
+        container.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
         self.scroll.setWidget(container)
         self.setCentralWidget(self.scroll)
 
@@ -241,6 +297,9 @@ class FileBrowser(QtWidgets.QMainWindow):
         ''')
         self.search_input.hide()
         self.search_input.textChanged.connect(self.perform_search)
+
+        # Set up search shortcuts for the new search_input
+        self._setup_search_shortcuts()
 
         # Position search input in bottom-right
         self.search_input.move(self.width() - 310, self.height() - 40)
@@ -271,7 +330,9 @@ class FileBrowser(QtWidgets.QMainWindow):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current_name = self.sections[self.sec_idx][self.idx_in_sec].name
         # Clear current layout
-        self.scroll.takeWidget()
+        old_widget = self.scroll.takeWidget()
+        if old_widget:
+            old_widget.deleteLater()  # Schedule deletion to avoid parenting issues
         # Rebuild UI
         self.sections = []
         self._setup_ui()
@@ -339,28 +400,6 @@ class FileBrowser(QtWidgets.QMainWindow):
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(self.close)
             self.shortcuts.append(s)
-
-        # Search mode shortcuts
-        self.search_shortcuts = [
-            (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
-            (QtCore.Qt.Key_BracketLeft, self.exit_search_mode_revert, None, QtCore.Qt.KeyboardModifier.ControlModifier),
-            (QtCore.Qt.Key_Return, self.exit_search_mode_select, None),
-            (QtCore.Qt.Key_G, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
-            (QtCore.Qt.Key_G, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.KeyboardModifier.ShiftModifier),
-            (QtCore.Qt.Key_N, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
-            (QtCore.Qt.Key_P, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
-        ]
-        self.search_shortcut_instances = []
-        for mapping in self.search_shortcuts:
-            key, func, arg = mapping[0], mapping[1], mapping[2]
-            modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
-            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
-            s.setEnabled(False)  # Disabled by default
-            if arg is None:
-                s.activated.connect(func)
-            else:
-                s.activated.connect(lambda f=func, a=arg: f(a))
-            self.search_shortcut_instances.append(s)
 
     def enter_search_mode(self):
         if not self.in_search_mode:
@@ -460,7 +499,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             new = self.idx_in_sec + delta
             if 0 <= new < len(sec):
                 self.idx_in_sec = new
-                # update preferred column
+                # Update preferred column
                 self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
@@ -470,7 +509,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             sec_index = self.sec_idx
             idx = self.idx_in_sec
             cols = self.cols
-            # within section
+            # Within section
             sec = self.sections[sec_index]
             row = idx // cols
             rows = (len(sec) + cols - 1) // cols
@@ -578,11 +617,11 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def updateSelection(self):
-        # scroll to ensure visible
+        # Scroll to ensure visible
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current = self.sections[self.sec_idx][self.idx_in_sec]
             self.scroll.ensureWidgetVisible(current)
-            # update flags
+            # Update flags
             for s, sec in enumerate(self.sections):
                 for i, item in enumerate(sec):
                     item.isSelected = False
