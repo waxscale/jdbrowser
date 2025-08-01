@@ -9,7 +9,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 # Allow Ctrl+C (SIGINT) to quit the Qt application
 signal.signal(signal.SIGINT, lambda sig, frame: QtWidgets.QApplication.quit())
 
-
 # Highlight colors
 HIGHLIGHT_COLOR = '#44475a'
 HOVER_COLOR = '#5c6370'
@@ -132,6 +131,9 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.search_matches = []
         self.current_match_idx = -1
         self.shortcuts = []
+        # Load show_hidden state from QSettings
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        self.show_hidden = settings.value("show_hidden", False, type=bool)
 
         # Disable window decorations
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
@@ -141,10 +143,21 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.updateSelection()
 
         # Restore saved position and size
-        settings = QtCore.QSettings("xAI", "jdbrowser")
         if settings.contains("pos") and settings.contains("size"):
             self.move(settings.value("pos", type=QtCore.QPoint))
             self.resize(settings.value("size", type=QtCore.QSize))
+
+    def _is_hidden_item(self, name):
+        """Check if an item should be hidden based on naming patterns."""
+        if self.show_hidden:
+            return False
+        hidden_patterns = [
+            '[00].png', '[00] #auto.png',
+            '[.00].png', '[.00] #auto.png',
+            '[+0000].png', '[+0000] #auto.png',
+            '[0-META 0000-00-00 00.00.00].png', '[0-META 0000-00-00 00.00.00] #auto.png'
+        ]
+        return name.startswith('.') or name in hidden_patterns
 
     def _setup_ui(self):
         self.scroll = QtWidgets.QScrollArea()
@@ -162,6 +175,8 @@ class FileBrowser(QtWidgets.QMainWindow):
 
         entries = sorted(os.listdir(self.directory), key=lambda x: x.lower())
         for name in entries:
+            if self._is_hidden_item(name):
+                continue
             if name.lower().endswith('.2do'):
                 # flush current section
                 if current_section:
@@ -249,6 +264,37 @@ class FileBrowser(QtWidgets.QMainWindow):
         '''
         self.setStyleSheet(style)
 
+    def _rebuild_ui(self):
+        """Rebuild the UI to reflect the current show_hidden state."""
+        # Save current selection if possible
+        current_name = None
+        if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
+            current_name = self.sections[self.sec_idx][self.idx_in_sec].name
+        # Clear current layout
+        self.scroll.takeWidget()
+        # Rebuild UI
+        self.sections = []
+        self._setup_ui()
+        # Restore selection if possible
+        if current_name:
+            for s, sec in enumerate(self.sections):
+                for i, item in enumerate(sec):
+                    if item.name == current_name:
+                        self.sec_idx = s
+                        self.idx_in_sec = i
+                        break
+                else:
+                    continue
+                break
+        self.updateSelection()
+
+    def toggle_hidden(self):
+        """Toggle visibility of hidden items and save state."""
+        self.show_hidden = not self.show_hidden
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("show_hidden", self.show_hidden)
+        self._rebuild_ui()
+
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         # Normal mode navigation keys
@@ -275,6 +321,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
+            (QtCore.Qt.Key_H, self.toggle_hidden, None, QtCore.Qt.KeyboardModifier.ControlModifier),
         ]
         # Quit keys (always active)
         quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
@@ -532,17 +579,18 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def updateSelection(self):
         # scroll to ensure visible
-        current = self.sections[self.sec_idx][self.idx_in_sec]
-        self.scroll.ensureWidgetVisible(current)
-        # update flags
-        for s, sec in enumerate(self.sections):
-            for i, item in enumerate(sec):
-                item.isSelected = False
-        if not current.isHover:
-            current.isSelected = True
-        for sec in self.sections:
-            for item in sec:
-                item.updateStyle()
+        if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
+            current = self.sections[self.sec_idx][self.idx_in_sec]
+            self.scroll.ensureWidgetVisible(current)
+            # update flags
+            for s, sec in enumerate(self.sections):
+                for i, item in enumerate(sec):
+                    item.isSelected = False
+            if not current.isHover:
+                current.isSelected = True
+            for sec in self.sections:
+                for item in sec:
+                    item.updateStyle()
 
     def mousePressEvent(self, event):
         if self.in_search_mode:
@@ -569,7 +617,7 @@ def read_config():
     config = configparser.ConfigParser()
     cfg_path = os.path.expanduser('~/.config/jdbrowser/config.conf')
     config.read(cfg_path)
-    return config.get('settings','repository',fallback=os.getcwd())
+    return config.get('settings', 'repository', fallback=os.getcwd())
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
@@ -584,7 +632,7 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setFont(QtGui.QFont('FiraCode Nerd Font'))
     browser = FileBrowser(directory)
-        # Only set default size and position if no saved settings exist
+    # Only set default size and position if no saved settings exist
     settings = QtCore.QSettings("xAI", "jdbrowser")
     if not (settings.contains("pos") and settings.contains("size")):
         browser.resize(1000, 600)
