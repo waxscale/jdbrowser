@@ -10,7 +10,7 @@ HIGHLIGHT_COLOR = '#44475a'
 HOVER_COLOR = '#5c6370'
 
 class FileItem(QtWidgets.QWidget):
-    def __init__(self, name):
+    def __init__(self, name, parent_path):
         super().__init__()
         self.name = name
         self.isSelected = False
@@ -24,10 +24,26 @@ class FileItem(QtWidgets.QWidget):
         layout.setSpacing(2)
         layout.setContentsMargins(2, 2, 2, 2)
 
-        # Icon placeholder
-        self.icon = QtWidgets.QFrame()
-        self.icon.setFixedSize(240, 150)
-        self.icon.setStyleSheet('background-color: #2e303e; border-radius: 10px;')
+        # Icon: Check if item is a folder and contains [00].png
+        icon_path = os.path.join(parent_path, name, '[00].png')
+        if os.path.isdir(os.path.join(parent_path, name)) and os.path.isfile(icon_path):
+            self.icon = QtWidgets.QLabel()
+            pixmap = QtGui.QPixmap(icon_path)
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+                self.icon.setPixmap(scaled_pixmap)
+                self.icon.setFixedSize(240, 150)
+                self.icon.setStyleSheet('border-radius: 10px;')
+            else:
+                # Fallback to slate box if image is invalid
+                self.icon = QtWidgets.QFrame()
+                self.icon.setFixedSize(240, 150)
+                self.icon.setStyleSheet('background-color: #2e303e; border-radius: 10px;')
+        else:
+            # Default slate box
+            self.icon = QtWidgets.QFrame()
+            self.icon.setFixedSize(240, 150)
+            self.icon.setStyleSheet('background-color: #2e303e; border-radius: 10px;')
         layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         # Label (single line)
@@ -129,7 +145,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 row = col = 0
                 continue
             # normal item
-            item = FileItem(name)
+            item = FileItem(name, self.directory)
             current_section.append(item)
             grid.addWidget(item, row, col)
             col += 1
