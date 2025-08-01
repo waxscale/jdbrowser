@@ -382,6 +382,8 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
+            (QtCore.Qt.Key_Home, self.firstInRow, None),  # Added Home key
+            (QtCore.Qt.Key_End, self.lastInRow, None),    # Added End key
             (QtCore.Qt.Key_H, self.toggle_hidden, None, QtCore.Qt.KeyboardModifier.ControlModifier),
         ]
         # Quit keys (always active)
