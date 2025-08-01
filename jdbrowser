@@ -36,10 +36,22 @@ class FileItem(QtWidgets.QWidget):
             self.icon = QtWidgets.QLabel()
             pixmap = QtGui.QPixmap(icon_path)
             if not pixmap.isNull():
+                # Create a rounded pixmap
+                rounded_pixmap = QtGui.QPixmap(240, 150)
+                rounded_pixmap.fill(QtCore.Qt.transparent)
+                painter = QtGui.QPainter(rounded_pixmap)
+                painter.setRenderHint(QtGui.QPainter.Antialiasing)
+                # Define rounded rectangle path
+                path = QtGui.QPainterPath()
+                path.addRoundedRect(0, 0, 240, 150, 10, 10)
+                painter.setClipPath(path)
+                # Scale and draw the pixmap
                 scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
-                self.icon.setPixmap(scaled_pixmap)
+                painter.drawPixmap(0, 0, scaled_pixmap)
+                painter.end()
+                self.icon.setPixmap(rounded_pixmap)
                 self.icon.setFixedSize(240, 150)
-                self.icon.setStyleSheet('border-radius: 10px;')
+                self.icon.setStyleSheet('background-color: transparent;')
             else:
                 # Fallback to slate box if image is invalid
                 self.icon = QtWidgets.QFrame()
@@ -88,7 +100,7 @@ class FileItem(QtWidgets.QWidget):
         label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
         label_effect.setOpacity(opacity)
         self.label.setGraphicsEffect(label_effect)
-        icon_style = f'background-color: {SLATE_COLOR}; border-radius: 10px;' if isinstance(self.icon, QtWidgets.QFrame) else 'border-radius: 10px;'
+        icon_style = f'background-color: {SLATE_COLOR}; border-radius: 10px;' if isinstance(self.icon, QtWidgets.QFrame) else 'background-color: transparent;'
         self.setStyleSheet(f'background-color: {bg}; border-radius: 10px;')
         self.icon.setStyleSheet(icon_style)
         self.label.setStyleSheet('color: #c0caf5;')
@@ -382,8 +394,8 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
-            (QtCore.Qt.Key_Home, self.firstInRow, None),  # Added Home key
-            (QtCore.Qt.Key_End, self.lastInRow, None),    # Added End key
+            (QtCore.Qt.Key_Home, self.firstInRow, None),
+            (QtCore.Qt.Key_End, self.lastInRow, None),
             (QtCore.Qt.Key_H, self.toggle_hidden, None, QtCore.Qt.KeyboardModifier.ControlModifier),
         ]
         # Quit keys (always active)
