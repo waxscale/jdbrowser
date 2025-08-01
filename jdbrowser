@@ -3,7 +3,12 @@
 import sys
 import os
 import configparser
+import signal
 from PySide6 import QtCore, QtGui, QtWidgets
+
+# Allow Ctrl+C (SIGINT) to quit the Qt application
+signal.signal(signal.SIGINT, lambda sig, frame: QtWidgets.QApplication.quit())
+
 
 # Highlight colors
 HIGHLIGHT_COLOR = '#44475a'
@@ -579,12 +584,17 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setFont(QtGui.QFont('FiraCode Nerd Font'))
     browser = FileBrowser(directory)
-    # Only set default size and position if no saved settings exist
+        # Only set default size and position if no saved settings exist
     settings = QtCore.QSettings("xAI", "jdbrowser")
     if not (settings.contains("pos") and settings.contains("size")):
         browser.resize(1000, 600)
         # Center the window on the screen as a fallback
         screen = app.primaryScreen().geometry()
         browser.move((screen.width() - 1000) // 2, (screen.height() - 600) // 2)
+    # Always show the window
     browser.show()
+    # Keep Qt loop responsive to SIGINT (Ctrl+C)
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: None)
+    timer.start(100)
     sys.exit(app.exec())
