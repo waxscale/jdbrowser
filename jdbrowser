@@ -4,24 +4,312 @@ import sys
 import os
 import configparser
 import signal
+import sqlite3
+import uuid
+import re
 from PySide6 import QtCore, QtGui, QtWidgets
 
 # Allow Ctrl+C (SIGINT) to quit the Qt application
 signal.signal(signal.SIGINT, lambda sig, frame: QtWidgets.QApplication.quit())
 
-# Highlight colors
+# TokyoNight Dark theme colors
 HIGHLIGHT_COLOR = '#44475a'
 HOVER_COLOR = '#5c6370'
 SLATE_COLOR = '#2e303e'
+TEXT_COLOR = '#c0caf5'
+BACKGROUND_COLOR = '#2e303e'
+BORDER_COLOR = '#44475a'
+BUTTON_COLOR = '#d7ba7d'
+
+class EditTagDialog(QtWidgets.QDialog):
+    def __init__(self, current_label, current_icon, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Tag")
+        self.setFixedWidth(300)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Icon display
+        self.icon_label = QtWidgets.QLabel()
+        if current_icon:
+            pixmap = QtGui.QPixmap()
+            pixmap.loadFromData(current_icon)
+            if not pixmap.isNull():
+                rounded_pixmap = QtGui.QPixmap(240, 150)
+                rounded_pixmap.fill(QtCore.Qt.transparent)
+                painter = QtGui.QPainter(rounded_pixmap)
+                painter.setRenderHint(QtGui.QPainter.Antialiasing)
+                path = QtGui.QPainterPath()
+                path.addRoundedRect(0, 0, 240, 150, 10, 10)
+                painter.setClipPath(path)
+                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+                painter.drawPixmap(0, 0, scaled_pixmap)
+                painter.end()
+                self.icon_label.setPixmap(rounded_pixmap)
+            else:
+                self.icon_label = QtWidgets.QFrame()
+                self.icon_label.setFixedSize(240, 150)
+                self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
+        else:
+            self.icon_label = QtWidgets.QFrame()
+            self.icon_label.setFixedSize(240, 150)
+            self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
+        layout.addWidget(self.icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+        # Label input
+        self.label_input = QtWidgets.QLineEdit(current_label)
+        self.label_input.setPlaceholderText("Enter tag label")
+        self.label_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        layout.addWidget(self.label_input)
+
+        # Buttons
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.setStyleSheet(f'''
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #e0c58f;
+            }}
+        ''')
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
+
+    def get_label(self):
+        return self.label_input.text()
+
+class SimpleEditTagDialog(QtWidgets.QDialog):
+    def __init__(self, current_label, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Rename Tag")
+        self.setFixedWidth(300)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Label input
+        self.label_input = QtWidgets.QLineEdit(current_label)
+        self.label_input.setPlaceholderText("Enter tag label")
+        self.label_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        layout.addWidget(self.label_input)
+
+        # Buttons
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.setStyleSheet(f'''
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #e0c58f;
+            }}
+        ''')
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
+
+    def get_label(self):
+        return self.label_input.text()
+
+class InputTagDialog(QtWidgets.QDialog):
+    def __init__(self, default_jd_area, default_label, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Tag")
+        self.setFixedWidth(300)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # jd_area input
+        self.jd_area_input = QtWidgets.QLineEdit(str(default_jd_area))
+        self.jd_area_input.setPlaceholderText("Enter jd_area (integer)")
+        self.jd_area_input.setValidator(QtGui.QIntValidator())
+        self.jd_area_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        layout.addWidget(QtWidgets.QLabel("jd_area:"))
+        layout.addWidget(self.jd_area_input)
+
+        # jd_id input (hidden for now)
+        self.jd_id_input = QtWidgets.QLineEdit()
+        self.jd_id_input.setPlaceholderText("Enter jd_id (integer, optional)")
+        self.jd_id_input.setValidator(QtGui.QIntValidator())
+        self.jd_id_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        # layout.addWidget(QtWidgets.QLabel("jd_id (optional):"))
+        # layout.addWidget(self.jd_id_input)
+
+        # jd_ext input (hidden for now)
+        self.jd_ext_input = QtWidgets.QLineEdit()
+        self.jd_ext_input.setPlaceholderText("Enter jd_ext (integer, optional)")
+        self.jd_ext_input.setValidator(QtGui.QIntValidator())
+        self.jd_ext_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        # layout.addWidget(QtWidgets.QLabel("jd_ext (optional):"))
+        # layout.addWidget(self.jd_ext_input)
+
+        # Label input
+        self.label_input = QtWidgets.QLineEdit(default_label)
+        self.label_input.setPlaceholderText("Enter tag label")
+        self.label_input.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+            }}
+        ''')
+        layout.addWidget(QtWidgets.QLabel("Label:"))
+        layout.addWidget(self.label_input)
+
+        # Buttons
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.setStyleSheet(f'''
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #e0c58f;
+            }}
+        ''')
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        # Style labels
+        self.setStyleSheet(f'''
+            QDialog {{
+                background-color: {BACKGROUND_COLOR};
+            }}
+            QLabel {{
+                color: {TEXT_COLOR};
+            }}
+        ''')
+
+        # Focus the label input
+        self.label_input.setFocus()
+
+    def get_values(self):
+        try:
+            jd_area = int(self.jd_area_input.text()) if self.jd_area_input.text() else None
+            jd_id = int(self.jd_id_input.text()) if self.jd_id_input.text() else None
+            jd_ext = int(self.jd_ext_input.text()) if self.jd_ext_input.text() else None
+        except ValueError:
+            jd_area, jd_id, jd_ext = None, None, None
+        return jd_area, jd_id, jd_ext, self.label_input.text()
+
+class DeleteTagDialog(QtWidgets.QDialog):
+    def __init__(self, tag_name, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Confirm Delete")
+        self.setFixedWidth(600)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Confirmation message
+        self.message = QtWidgets.QLabel(f"Are you sure you want to delete the tag '{tag_name}'?")
+        self.message.setStyleSheet(f'color: {TEXT_COLOR};')
+        layout.addWidget(self.message)
+
+        # Buttons
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.setStyleSheet(f'''
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #e0c58f;
+            }}
+        ''')
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
 
 class FileItem(QtWidgets.QWidget):
-    def __init__(self, name, parent_path):
+    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, parent_path):
         super().__init__()
-        self.name = name
+        self.tag_id = tag_id  # None for placeholder items
+        self.name = name if name is not None else ""
+        self.jd_area = jd_area
+        self.jd_id = jd_id
+        self.jd_ext = jd_ext
         self.isSelected = False
         self.isHover = False
         self.isDimmed = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
+
+        # Construct display label
+        if self.jd_area is not None:
+            if self.jd_id is None:
+                prefix = f"[{self.jd_area:02d}]"
+            elif self.jd_ext is None:
+                prefix = f"[{self.jd_area:02d}.{self.jd_id:02d}]"
+            else:
+                prefix = f"[{self.jd_area:02d}.{self.jd_id:02d}+{self.jd_ext:04d}]"
+            self.display_name = f"{prefix} {self.name}" if self.name else prefix
+        else:
+            self.display_name = self.name
 
         # Fix vertical size policy
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
@@ -30,22 +318,19 @@ class FileItem(QtWidgets.QWidget):
         layout.setSpacing(2)
         layout.setContentsMargins(2, 2, 2, 2)
 
-        # Icon: Check if item is a folder and contains [00].png
-        icon_path = os.path.join(parent_path, name, '[00].png')
-        if os.path.isdir(os.path.join(parent_path, name)) and os.path.isfile(icon_path):
-            self.icon = QtWidgets.QLabel()
-            pixmap = QtGui.QPixmap(icon_path)
+        # Icon: Load from database BLOB or use slate placeholder
+        if icon_data:
+            pixmap = QtGui.QPixmap()
+            pixmap.loadFromData(icon_data)
             if not pixmap.isNull():
-                # Create a rounded pixmap
+                self.icon = QtWidgets.QLabel()
                 rounded_pixmap = QtGui.QPixmap(240, 150)
                 rounded_pixmap.fill(QtCore.Qt.transparent)
                 painter = QtGui.QPainter(rounded_pixmap)
                 painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                # Define rounded rectangle path
                 path = QtGui.QPainterPath()
                 path.addRoundedRect(0, 0, 240, 150, 10, 10)
                 painter.setClipPath(path)
-                # Scale and draw the pixmap
                 scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
                 painter.drawPixmap(0, 0, scaled_pixmap)
                 painter.end()
@@ -53,24 +338,22 @@ class FileItem(QtWidgets.QWidget):
                 self.icon.setFixedSize(240, 150)
                 self.icon.setStyleSheet('background-color: transparent;')
             else:
-                # Fallback to slate box if image is invalid
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(240, 150)
                 self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
         else:
-            # Default slate box
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(240, 150)
             self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
         self.icon.setAutoFillBackground(True)
         layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
-        # Label (single line)
-        self.label = QtWidgets.QLabel(name)
+        # Label (single line, empty for placeholders)
+        self.label = QtWidgets.QLabel(self.display_name)
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.label.setFixedWidth(240)
         self.label.setWordWrap(False)
-        self.label.setStyleSheet('color: #c0caf5;')
+        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
         self.label.setAutoFillBackground(True)
         layout.addWidget(self.label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
@@ -103,7 +386,7 @@ class FileItem(QtWidgets.QWidget):
         icon_style = f'background-color: {SLATE_COLOR}; border-radius: 10px;' if isinstance(self.icon, QtWidgets.QFrame) else 'background-color: transparent;'
         self.setStyleSheet(f'background-color: {bg}; border-radius: 10px;')
         self.icon.setStyleSheet(icon_style)
-        self.label.setStyleSheet('color: #c0caf5;')
+        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
 
     def enterEvent(self, event):
         self.isHover = True
@@ -121,6 +404,16 @@ class SearchLineEdit(QtWidgets.QLineEdit):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_browser = parent
+        self.setStyleSheet(f'''
+            QLineEdit {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 5px;
+                padding: 5px;
+                font-family: 'FiraCode Nerd Font';
+            }}
+        ''')
 
     def focusOutEvent(self, event):
         # Exit search mode like Enter when losing focus
@@ -134,6 +427,8 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.setWindowTitle(f"File Browser - {self.directory}")
         self.cols = 5
         self.sections = []
+        self.section_jd_areas = []  # Store base jd_area for each section
+        self.section_filenames = []  # Store .2do filenames for sorting
         self.sec_idx = 0
         self.idx_in_sec = 0
         self.desired_col = 0
@@ -148,6 +443,15 @@ class FileBrowser(QtWidgets.QMainWindow):
         settings = QtCore.QSettings("xAI", "jdbrowser")
         self.show_hidden = settings.value("show_hidden", False, type=bool)
 
+        # Initialize SQLite database
+        xdg_data_home = os.getenv('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
+        db_dir = os.path.join(xdg_data_home, 'jdbrowser')
+        os.makedirs(db_dir, exist_ok=True)
+        self.db_path = os.path.join(db_dir, 'tag.db')
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.execute('PRAGMA foreign_keys = ON')
+        self._setup_database()
+
         # Disable window decorations
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
@@ -159,6 +463,153 @@ class FileBrowser(QtWidgets.QMainWindow):
         if settings.contains("pos") and settings.contains("size"):
             self.move(settings.value("pos", type=QtCore.QPoint))
             self.resize(settings.value("size", type=QtCore.QSize))
+
+    def _setup_database(self):
+        """Initialize SQLite database tables with unique constraint and triggers."""
+        cursor = self.conn.cursor()
+        cursor.executescript("""
+            PRAGMA foreign_keys = ON;
+
+            CREATE TABLE IF NOT EXISTS events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL CHECK (
+                    event_type IN (
+                        'create_tag',
+                        'set_tag_path',
+                        'set_tag_label',
+                        'set_tag_icon',
+                        'delete_tag'
+                    )
+                ),
+                timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS event_create_tag (
+                event_id INTEGER PRIMARY KEY,
+                tag_id TEXT NOT NULL,
+                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS event_set_tag_path (
+                event_id INTEGER PRIMARY KEY,
+                tag_id TEXT NOT NULL,
+                jd_area INTEGER,
+                jd_id INTEGER,
+                jd_ext INTEGER,
+                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+                UNIQUE(jd_area, jd_id, jd_ext)
+            );
+
+            CREATE TABLE IF NOT EXISTS event_set_tag_label (
+                event_id INTEGER PRIMARY KEY,
+                tag_id TEXT NOT NULL,
+                new_label TEXT NOT NULL,
+                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS event_set_tag_icon (
+                event_id INTEGER PRIMARY KEY,
+                tag_id TEXT NOT NULL,
+                icon BLOB,
+                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS event_delete_tag (
+                event_id INTEGER PRIMARY KEY,
+                tag_id TEXT NOT NULL,
+                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS state_tag_icons (
+                tag_id TEXT PRIMARY KEY,
+                icon BLOB
+            );
+
+            CREATE TABLE IF NOT EXISTS state_tags (
+                tag_id TEXT PRIMARY KEY,
+                jd_area INTEGER,
+                jd_id INTEGER,
+                jd_ext INTEGER,
+                label TEXT NOT NULL,
+                UNIQUE(jd_area, jd_id, jd_ext)
+            );
+
+            -- Trigger to prevent jd_id without jd_area
+            CREATE TRIGGER IF NOT EXISTS check_jd_id
+            BEFORE INSERT ON event_set_tag_path
+            WHEN NEW.jd_id IS NOT NULL AND NEW.jd_area IS NULL
+            BEGIN
+                SELECT RAISE(ABORT, 'jd_id requires jd_area');
+            END;
+
+            -- Trigger to prevent jd_ext without jd_id
+            CREATE TRIGGER IF NOT EXISTS check_jd_ext
+            BEFORE INSERT ON event_set_tag_path
+            WHEN NEW.jd_ext IS NOT NULL AND NEW.jd_id IS NULL
+            BEGIN
+                SELECT RAISE(ABORT, 'jd_ext requires jd_id');
+            END;
+        """)
+        self._rebuild_state_tags()
+        self.conn.commit()
+
+    def _rebuild_state_tags(self):
+        """Rebuild the state_tags table from the event log."""
+        cursor = self.conn.cursor()
+        cursor.executescript("""
+            DELETE FROM state_tags;
+
+            INSERT INTO state_tags (tag_id, jd_area, jd_id, jd_ext, label)
+            SELECT
+                p.tag_id,
+                p.jd_area,
+                p.jd_id,
+                p.jd_ext,
+                l.new_label
+            FROM (
+                SELECT
+                    p.tag_id,
+                    p.jd_area,
+                    p.jd_id,
+                    p.jd_ext,
+                    p.event_id
+                FROM event_set_tag_path p
+                JOIN (
+                    SELECT tag_id, MAX(event_id) AS max_event
+                    FROM event_set_tag_path
+                    GROUP BY tag_id
+                ) latest_path ON p.tag_id = latest_path.tag_id AND p.event_id = latest_path.max_event
+            ) p
+            JOIN (
+                SELECT
+                    l.tag_id,
+                    l.new_label,
+                    l.event_id
+                FROM event_set_tag_label l
+                JOIN (
+                    SELECT tag_id, MAX(event_id) AS max_event
+                    FROM event_set_tag_label
+                    GROUP BY tag_id
+                ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
+            ) l ON p.tag_id = l.tag_id
+            WHERE p.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
+        """)
+        cursor.executescript("""
+            DELETE FROM state_tag_icons;
+
+            INSERT INTO state_tag_icons (tag_id, icon)
+            SELECT
+                i.tag_id,
+                i.icon
+            FROM event_set_tag_icon i
+            JOIN (
+                SELECT tag_id, MAX(event_id) AS max_event
+                FROM event_set_tag_icon
+                GROUP BY tag_id
+            ) latest ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
+            WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
+        """)
+        self.conn.commit()
 
     def _is_hidden_item(self, name):
         """Check if an item should be hidden based on naming patterns."""
@@ -172,14 +623,174 @@ class FileBrowser(QtWidgets.QMainWindow):
         ]
         return name.startswith('.') or name in hidden_patterns
 
+    def _create_tag(self, jd_area, jd_id, jd_ext, label):
+        """Create a new tag and return its tag_id, or None if constraints are violated."""
+        cursor = self.conn.cursor()
+        # Check for unique (jd_area, jd_id, jd_ext) constraint
+        cursor.execute("SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ?", (jd_area, jd_id, jd_ext))
+        if cursor.fetchone():
+            return None  # Conflict exists
+        # Validate constraints: no jd_id without jd_area, no jd_ext without jd_id
+        if jd_id is not None and jd_area is None:
+            return None
+        if jd_ext is not None and jd_id is None:
+            return None
+        tag_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO events (event_type) VALUES ('create_tag')")
+        event_id = cursor.lastrowid
+        cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
+        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+        event_id = cursor.lastrowid
+        cursor.execute("INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)", (event_id, tag_id, jd_area, jd_id, jd_ext))
+        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+        event_id = cursor.lastrowid
+        cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
+        self.conn.commit()
+        return tag_id
+
+    def _append_tag_to_section(self):
+        """Append a tag to the current section with jd_area = max + 1 or section base."""
+        if not self.sections or self.sec_idx >= len(self.sections):
+            return
+        cursor = self.conn.cursor()
+        jd_area = self.section_jd_areas[self.sec_idx]
+        cursor.execute("SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?", (jd_area, jd_area + 10))
+        max_jd_area = cursor.fetchone()[0]
+        new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        label = "NewTag"
+        new_tag_id = self._create_tag(new_jd_area, None, None, label)
+        if new_tag_id:  # Only rebuild if tag was created successfully
+            self._rebuild_state_tags()
+            self._rebuild_ui(new_tag_id=new_tag_id)
+
+    def _input_tag_dialog(self):
+        """Open a dialog to input jd_area, jd_id, jd_ext, and label for a new tag."""
+        if not self.sections or self.sec_idx >= len(self.sections):
+            return
+        cursor = self.conn.cursor()
+        jd_area = self.section_jd_areas[self.sec_idx]
+        cursor.execute("SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?", (jd_area, jd_area + 10))
+        max_jd_area = cursor.fetchone()[0]
+        default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        default_label = "NewTag"
+        while True:
+            dialog = InputTagDialog(default_jd_area, default_label, self)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                jd_area, jd_id, jd_ext, label = dialog.get_values()
+                if jd_area is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                    continue
+                if jd_id is not None and jd_area is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                    continue
+                if jd_ext is not None and jd_id is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                    continue
+                if not label:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "Label cannot be empty.")
+                    continue
+                new_tag_id = self._create_tag(jd_area, jd_id, jd_ext, label)
+                if new_tag_id:
+                    self._rebuild_state_tags()
+                    self._rebuild_ui(new_tag_id=new_tag_id)
+                    break
+                else:
+                    QtWidgets.QMessageBox.warning(self, "Constraint Violation", f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.")
+            else:
+                break
+
+    def _edit_tag_label_with_icon(self):
+        """Edit the current tag's label with a dialog showing the icon."""
+        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
+            return
+        current_item = self.sections[self.sec_idx][self.idx_in_sec]
+        if not current_item.tag_id:  # Skip placeholder items
+            return
+        tag_id = current_item.tag_id
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT label FROM state_tags WHERE tag_id = ?", (tag_id,))
+        current_label = cursor.fetchone()[0]
+        cursor.execute("SELECT icon FROM state_tag_icons WHERE tag_id = ?", (tag_id,))
+        icon_data = cursor.fetchone()
+        icon_data = icon_data[0] if icon_data else None
+        dialog = EditTagDialog(current_label, icon_data, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            new_label = dialog.get_label()
+            if new_label:
+                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+                event_id = cursor.lastrowid
+                cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
+                self.conn.commit()
+                self._rebuild_state_tags()
+                self._rebuild_ui()
+
+    def _rename_tag_label(self):
+        """Edit the current tag's label with a simple dialog."""
+        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
+            return
+        current_item = self.sections[self.sec_idx][self.idx_in_sec]
+        if not current_item.tag_id:  # Skip placeholder items
+            return
+        tag_id = current_item.tag_id
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT label FROM state_tags WHERE tag_id = ?", (tag_id,))
+        current_label = cursor.fetchone()[0]
+        dialog = SimpleEditTagDialog(current_label, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            new_label = dialog.get_label()
+            if new_label:
+                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+                event_id = cursor.lastrowid
+                cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
+                self.conn.commit()
+                self._rebuild_state_tags()
+                self._rebuild_ui()
+
+    def _delete_tag(self):
+        """Delete the current tag with a confirmation dialog."""
+        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
+            return
+        current_item = self.sections[self.sec_idx][self.idx_in_sec]
+        if not current_item.tag_id:  # Skip placeholder items
+            return
+        tag_id = current_item.tag_id
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT label, jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?", (tag_id,))
+        tag_name, jd_area, jd_id, jd_ext = cursor.fetchone()
+        # Construct display name for dialog
+        if jd_area is not None:
+            if jd_id is None:
+                prefix = f"[{jd_area:02d}]"
+            elif jd_ext is None:
+                prefix = f"[{jd_area:02d}.{jd_id:02d}]"
+            else:
+                prefix = f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+            display_name = f"{prefix} {tag_name}" if tag_name else prefix
+        else:
+            display_name = tag_name
+        dialog = DeleteTagDialog(display_name, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            cursor.execute("INSERT INTO events (event_type) VALUES ('delete_tag')")
+            event_id = cursor.lastrowid
+            cursor.execute("INSERT INTO event_delete_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
+            self.conn.commit()
+            self._rebuild_state_tags()
+            # Adjust selection to the previous item
+            if self.idx_in_sec > 0:
+                self.idx_in_sec -= 1
+            elif self.sec_idx > 0:
+                self.sec_idx -= 1
+                self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
+            else:
+                self.sec_idx = 0
+                self.idx_in_sec = 0
+            self._rebuild_ui()
+
     def _setup_search_shortcuts(self):
         """Set up search mode shortcuts for the current search_input widget."""
-        # Clear old search shortcuts
         for shortcut in self.search_shortcut_instances:
             shortcut.deleteLater()
         self.search_shortcut_instances = []
-
-        # Define search mode shortcuts
         search_shortcuts = [
             (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
             (QtCore.Qt.Key_BracketLeft, self.exit_search_mode_revert, None, QtCore.Qt.KeyboardModifier.ControlModifier),
@@ -189,13 +800,11 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_N, self.next_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_P, self.prev_match, None, QtCore.Qt.KeyboardModifier.ControlModifier),
         ]
-
-        # Create new shortcuts
         for mapping in search_shortcuts:
             key, func, arg = mapping[0], mapping[1], mapping[2]
             modifiers = mapping[3] if len(mapping) > 3 else QtCore.Qt.KeyboardModifier.NoModifier
             s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
-            s.setEnabled(False)  # Disabled by default
+            s.setEnabled(False)
             if arg is None:
                 s.activated.connect(func)
             else:
@@ -204,17 +813,56 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def _setup_ui(self):
         self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(False)  # Prevent container from stretching
+        self.scroll.setWidgetResizable(True)
         container = QtWidgets.QWidget()
         mainLayout = QtWidgets.QVBoxLayout(container)
-        mainLayout.setSpacing(10)  # Fixed spacing between sections and headers
+        mainLayout.setSpacing(10)
         mainLayout.setContentsMargins(5, 5, 5, 5)
 
         self.sections = []
+        self.section_jd_areas = []
+        self.section_filenames = []
         current_section = []
         col = 0
 
+        # Read headers from disk, sort alphabetically
         entries = sorted(os.listdir(self.directory), key=lambda x: x.lower())
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags ORDER BY jd_area, jd_id, jd_ext")
+        tags = cursor.fetchall()
+        tag_dict = {tag[0]: (tag[1], tag[2], tag[3], tag[4]) for tag in tags}
+        cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
+        icons = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Extract numerical prefixes from .2do filenames for section assignment
+        section_prefixes = []
+        for name in entries:
+            if self._is_hidden_item(name) or not name.lower().endswith('.2do'):
+                continue
+            header_text = os.path.splitext(name)[0]
+            match = re.match(r"\[(\d+)[^\]]*\]", header_text)
+            prefix = int(match.group(1)) if match else 0
+            section_prefixes.append((name, prefix))
+
+        # Assign tags to sections based on alphabetical order of .2do filenames
+        tags_by_section = {}
+        for tag_id, (jd_area, jd_id, jd_ext, label) in tag_dict.items():
+            # Find the .2do file with the largest prefix <= jd_area
+            section_name = None
+            if jd_area is not None:
+                for name, prefix in sorted(section_prefixes, key=lambda x: x[0].lower()):
+                    if prefix <= jd_area:
+                        section_name = name
+                    else:
+                        break
+            if section_name:
+                tags_by_section.setdefault(section_name, []).append((tag_id, jd_area, jd_id, jd_ext, label))
+            else:
+                # If no prefix matches or jd_area is NULL, assign to the first section
+                tags_by_section.setdefault(section_prefixes[0][0], []).append((tag_id, jd_area, jd_id, jd_ext, label))
+
+        # Build UI sections
+        section_index = 0
         for name in entries:
             if self._is_hidden_item(name):
                 continue
@@ -223,7 +871,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 if current_section:
                     sectionWidget = QtWidgets.QWidget()
                     sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                    sectionLayout.setSpacing(5)  # Fixed spacing between rows
+                    sectionLayout.setSpacing(5)
                     sectionLayout.setContentsMargins(0, 0, 0, 0)
                     sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
                     rowLayout = None
@@ -232,13 +880,13 @@ class FileBrowser(QtWidgets.QMainWindow):
                             if rowLayout:
                                 sectionLayout.addLayout(rowLayout)
                             rowLayout = QtWidgets.QHBoxLayout()
-                            rowLayout.setSpacing(5)  # Fixed spacing between items
+                            rowLayout.setSpacing(5)
                             rowLayout.setContentsMargins(0, 0, 0, 0)
                             rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
                         rowLayout.addWidget(item)
                     if rowLayout:
                         sectionLayout.addLayout(rowLayout)
-                    sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+                    sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
                     mainLayout.addWidget(sectionWidget)
                     mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
                     self.sections.append(current_section)
@@ -250,24 +898,51 @@ class FileBrowser(QtWidgets.QMainWindow):
                 font.setPointSize(int(font.pointSize() * 1.5))
                 font.setBold(True)
                 header.setFont(font)
-                header.setStyleSheet('background-color: #d7ba7d; color: black; padding-left:5px; padding-right:5px;')
+                header.setStyleSheet(f'background-color: {BUTTON_COLOR}; color: black; padding-left:5px; padding-right:5px;')
+                header.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                header.setMinimumWidth(self.scroll.viewport().width() - 10)
                 fm = header.fontMetrics()
                 header.setFixedHeight(fm.height() + 6)
                 mainLayout.addWidget(header)
-                mainLayout.addSpacing(10)  # Fixed 10px margin between header and items
-                # Reset for new section
+                mainLayout.addSpacing(10)
+                # Determine jd_area from filename or section index (0 for first section)
+                match = re.match(r"\[(\d+)[^\]]*\]", header_text)
+                jd_area = int(match.group(1)) if match else section_index * 10
+                if section_index == 0:
+                    jd_area = 0
+                # Create a section with tags or a placeholder
                 current_section = []
+                if name in tags_by_section:
+                    # Sort tags by full constructed label
+                    def get_sort_key(tag):
+                        jd_area, jd_id, jd_ext, label = tag[1:5]
+                        if jd_area is not None:
+                            if jd_id is None:
+                                prefix = f"[{jd_area:02d}]"
+                            elif jd_ext is None:
+                                prefix = f"[{jd_area:02d}.{jd_id:02d}]"
+                            else:
+                                prefix = f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+                            return f"{prefix} {label}" if label else prefix
+                        return label or ""
+                    for tag_id, tag_jd_area, tag_jd_id, tag_jd_ext, label in sorted(tags_by_section[name], key=get_sort_key):
+                        icon_data = icons.get(tag_id)
+                        item = FileItem(tag_id, label, tag_jd_area, tag_jd_id, tag_jd_ext, icon_data, self.directory)
+                        current_section.append(item)
+                        col += 1
+                else:
+                    current_section.append(FileItem(None, None, None, None, None, None, self.directory))
+                self.section_jd_areas.append(jd_area)
+                self.section_filenames.append(name)
+                section_index += 1
                 col = 0
                 continue
-            # Normal item
-            item = FileItem(name, self.directory)
-            current_section.append(item)
-            col += 1
+
         # Flush last section
         if current_section:
             sectionWidget = QtWidgets.QWidget()
             sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-            sectionLayout.setSpacing(5)  # Fixed spacing between rows
+            sectionLayout.setSpacing(5)
             sectionLayout.setContentsMargins(0, 0, 0, 0)
             sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
             rowLayout = None
@@ -276,20 +951,20 @@ class FileBrowser(QtWidgets.QMainWindow):
                     if rowLayout:
                         sectionLayout.addLayout(rowLayout)
                     rowLayout = QtWidgets.QHBoxLayout()
-                    rowLayout.setSpacing(5)  # Fixed spacing between items
+                    rowLayout.setSpacing(5)
                     rowLayout.setContentsMargins(0, 0, 0, 0)
                     rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
                 rowLayout.addWidget(item)
             if rowLayout:
                 sectionLayout.addLayout(rowLayout)
-            sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+            sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
             mainLayout.addWidget(sectionWidget)
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
             self.sections.append(current_section)
-        mainLayout.addStretch()  # Prevent vertical stretching of entire layout
 
-        container.setStyleSheet('background-color: #000000;')
-        container.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        mainLayout.addStretch()
+        container.setStyleSheet(f'background-color: #000000;')
+        container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll.setWidget(container)
         self.setCentralWidget(self.scroll)
 
@@ -297,68 +972,61 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.search_input = SearchLineEdit(self)
         self.search_input.setFixedWidth(300)
         self.search_input.setFixedHeight(30)
-        self.search_input.setStyleSheet('''
-            QLineEdit {
-                background-color: #2e303e;
-                color: #c0caf5;
-                border: 1px solid #44475a;
-                border-radius: 5px;
-                padding: 5px;
-                font-family: 'FiraCode Nerd Font';
-            }
-        ''')
         self.search_input.hide()
         self.search_input.textChanged.connect(self.perform_search)
 
-        # Set up search shortcuts for the new search_input
         self._setup_search_shortcuts()
-
-        # Position search input in bottom-right
         self.search_input.move(self.width() - 310, self.height() - 40)
 
-        style = '''
-        * { font-family: 'FiraCode Nerd Font'; }
-        QWidget { background-color: #000000; }
-        QMainWindow { background-color: #000000; }
-        QScrollArea { border: none; background-color: #000000; }
-        QScrollBar:vertical {
+        style = f'''
+        * {{ font-family: 'FiraCode Nerd Font'; }}
+        QWidget {{ background-color: #000000; }}
+        QMainWindow {{ background-color: #000000; }}
+        QScrollArea {{ border: none; background-color: #000000; }}
+        QScrollBar:vertical {{
             width: 8px;
             background: #000000;
-        }
-        QScrollBar::handle:vertical {
-            background: #44475a;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {BORDER_COLOR};
             min-height: 20px;
             border-radius: 4px;
-        }
-        QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
-        QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+        }}
+        QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
         '''
         self.setStyleSheet(style)
 
-    def _rebuild_ui(self):
-        """Rebuild the UI to reflect the current show_hidden state."""
-        # Save current selection if possible
-        current_name = None
+    def _rebuild_ui(self, new_tag_id=None):
+        """Rebuild the UI to reflect the current state, selecting new_tag_id or current_tag_id."""
+        current_tag_id = None
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
-            current_name = self.sections[self.sec_idx][self.idx_in_sec].name
-        # Clear current layout
+            current_tag_id = self.sections[self.sec_idx][self.idx_in_sec].tag_id
         old_widget = self.scroll.takeWidget()
         if old_widget:
-            old_widget.deleteLater()  # Schedule deletion to avoid parenting issues
-        # Rebuild UI
+            old_widget.deleteLater()
         self.sections = []
+        self.section_jd_areas = []
+        self.section_filenames = []
         self._setup_ui()
-        # Restore selection if possible
-        if current_name:
+        # Try to select the new tag or fall back to the previous selection
+        if new_tag_id or current_tag_id:
+            target_tag_id = new_tag_id or current_tag_id
+            found = False
             for s, sec in enumerate(self.sections):
                 for i, item in enumerate(sec):
-                    if item.name == current_name:
+                    if item.tag_id == target_tag_id:
                         self.sec_idx = s
                         self.idx_in_sec = i
+                        found = True
                         break
-                else:
-                    continue
-                break
+                if found:
+                    break
+            if not found:
+                # Fall back to first item in first section
+                if self.sections:
+                    self.sec_idx = 0
+                    self.idx_in_sec = 0
         self.updateSelection()
 
     def toggle_hidden(self):
@@ -370,7 +1038,6 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        # Normal mode navigation keys
         self.normal_shortcuts = [
             (QtCore.Qt.Key_Right, self.moveHoriz, 1),
             (QtCore.Qt.Key_L, self.moveHoriz, 1),
@@ -397,8 +1064,13 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_Home, self.firstInRow, None),
             (QtCore.Qt.Key_End, self.lastInRow, None),
             (QtCore.Qt.Key_H, self.toggle_hidden, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_A, self._append_tag_to_section, None),
+            (QtCore.Qt.Key_I, self._input_tag_dialog, None),
+            (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
+            (QtCore.Qt.Key_R, self._rename_tag_label, None),
+            (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+            (QtCore.Qt.Key_D, self._delete_tag, None),
         ]
-        # Quit keys (always active)
         quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
         self.shortcuts = []
         for mapping in self.normal_shortcuts:
@@ -417,6 +1089,8 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def enter_search_mode(self):
         if not self.in_search_mode:
+            if not self.sections:
+                return
             self.in_search_mode = True
             self.prev_sec_idx = self.sec_idx
             self.prev_idx_in_sec = self.idx_in_sec
@@ -425,12 +1099,10 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.search_input.clear()
             self.search_input.show()
             self.search_input.setFocus()
-            # Disable normal shortcuts except quit keys
             for s in self.shortcuts:
                 key_str = s.key().toString()
                 if key_str and not any(key_str.lower() == seq.lower() for seq in ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']):
                     s.setEnabled(False)
-            # Enable search shortcuts
             for s in self.search_shortcut_instances:
                 s.setEnabled(True)
             self.perform_search("")
@@ -443,13 +1115,10 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.idx_in_sec = self.prev_idx_in_sec
             self.search_matches = []
             self.current_match_idx = -1
-            # Re-enable normal shortcuts
             for s in self.shortcuts:
                 s.setEnabled(True)
-            # Disable search shortcuts
             for s in self.search_shortcut_instances:
                 s.setEnabled(False)
-            # Reset dimming
             for sec in self.sections:
                 for item in sec:
                     item.isDimmed = False
@@ -460,18 +1129,14 @@ class FileBrowser(QtWidgets.QMainWindow):
         if self.in_search_mode:
             self.in_search_mode = False
             self.search_input.hide()
-            # If there are matches, select the current match
             if self.search_matches and self.current_match_idx >= 0:
                 self.sec_idx, self.idx_in_sec = self.search_matches[self.current_match_idx]
             self.search_matches = []
             self.current_match_idx = -1
-            # Re-enable normal shortcuts
             for s in self.shortcuts:
                 s.setEnabled(True)
-            # Disable search shortcuts
             for s in self.search_shortcut_instances:
                 s.setEnabled(False)
-            # Reset dimming
             for sec in self.sections:
                 for item in sec:
                     item.isDimmed = False
@@ -479,15 +1144,16 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def perform_search(self, query):
+        if not self.sections:
+            return
         query = query.lower()
         self.search_matches = []
         for s, sec in enumerate(self.sections):
             for i, item in enumerate(sec):
-                if query in item.name.lower():
+                if item.tag_id and query in item.display_name.lower():  # Skip placeholders
                     self.search_matches.append((s, i))
-                item.isDimmed = query and not query in item.name.lower()
+                item.isDimmed = query and (not item.tag_id or not query in item.display_name.lower())
                 item.updateStyle()
-        # Select first match if available
         if self.search_matches:
             self.current_match_idx = 0
             self.sec_idx, self.idx_in_sec = self.search_matches[0]
@@ -508,22 +1174,20 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def moveHoriz(self, delta):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             sec = self.sections[self.sec_idx]
             new = self.idx_in_sec + delta
             if 0 <= new < len(sec):
                 self.idx_in_sec = new
-                # Update preferred column
                 self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
     def moveVert(self, direction):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             pref_col = self.desired_col
             sec_index = self.sec_idx
             idx = self.idx_in_sec
             cols = self.cols
-            # Within section
             sec = self.sections[sec_index]
             row = idx // cols
             rows = (len(sec) + cols - 1) // cols
@@ -537,6 +1201,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     length = min(cols, len(sec2))
                     self.sec_idx += 1
                     self.idx_in_sec = min(pref_col, length - 1)
+                self.updateSelection()
             else:
                 if row > 0:
                     r2 = row - 1
@@ -549,10 +1214,10 @@ class FileBrowser(QtWidgets.QMainWindow):
                     length = min(cols, len(sec2) - last * cols)
                     self.sec_idx -= 1
                     self.idx_in_sec = last * cols + min(pref_col, length - 1)
-            self.updateSelection()
+                self.updateSelection()
 
     def moveToSectionStart(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             if self.idx_in_sec == 0 and self.sec_idx > 0:
                 self.sec_idx -= 1
                 self.idx_in_sec = 0
@@ -562,7 +1227,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def moveToSectionEnd(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             sec = self.sections[self.sec_idx]
             last_idx = len(sec) - 1
             if self.idx_in_sec == last_idx and self.sec_idx < len(self.sections) - 1:
@@ -575,14 +1240,14 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def moveToAbsoluteFirst(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             self.sec_idx = 0
             self.idx_in_sec = 0
             self.desired_col = 0
             self.updateSelection()
 
     def moveToAbsoluteLast(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             self.sec_idx = len(self.sections) - 1
             sec = self.sections[self.sec_idx]
             self.idx_in_sec = len(sec) - 1
@@ -590,15 +1255,14 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def moveVertMultiple(self, count):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             for _ in range(abs(count)):
                 self.moveVert(1 if count > 0 else -1)
 
     def centerSelectedItem(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             current = self.sections[self.sec_idx][self.idx_in_sec]
             self.scroll.ensureWidgetVisible(current)
-            # Calculate position to center the widget vertically
             viewport = self.scroll.viewport()
             viewport_height = viewport.height()
             widget_rect = current.rect()
@@ -609,33 +1273,32 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def copySelectedName(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             current = self.sections[self.sec_idx][self.idx_in_sec]
-            clipboard = QtWidgets.QApplication.clipboard()
-            clipboard.setText(current.name)
+            if current.tag_id:  # Skip placeholders
+                clipboard = QtWidgets.QApplication.clipboard()
+                clipboard.setText(current.display_name)
 
     def firstInRow(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             row = self.idx_in_sec // self.cols
             self.idx_in_sec = row * self.cols
             self.desired_col = 0
             self.updateSelection()
 
     def lastInRow(self):
-        if not self.in_search_mode:
+        if not self.in_search_mode and self.sections:
             sec = self.sections[self.sec_idx]
             row = self.idx_in_sec // self.cols
             length = min(self.cols, len(sec) - row * self.cols)
-            self.idx_in_sec = row * self.cols + length - 1
+            self.idx_in_sec = row * cols + length - 1
             self.desired_col = length - 1
             self.updateSelection()
 
     def updateSelection(self):
-        # Scroll to ensure visible
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current = self.sections[self.sec_idx][self.idx_in_sec]
             self.scroll.ensureWidgetVisible(current)
-            # Update flags
             for s, sec in enumerate(self.sections):
                 for i, item in enumerate(sec):
                     item.isSelected = False
@@ -647,23 +1310,25 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def mousePressEvent(self, event):
         if self.in_search_mode:
-            # Exit search mode and allow normal click behavior
             self.exit_search_mode_select()
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        # Save window position and size before closing
         settings = QtCore.QSettings("xAI", "jdbrowser")
         settings.setValue("pos", self.pos())
         settings.setValue("size", self.size())
+        self.conn.close()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
     def resizeEvent(self, event):
-        # Update search input position on window resize
         self.search_input.move(self.width() - 310, self.height() - 40)
+        # Update header widths on resize
+        for widget in self.scroll.widget().findChildren(QtWidgets.QLabel):
+            if widget.styleSheet().startswith(f'background-color: {BUTTON_COLOR}'):
+                widget.setMinimumWidth(self.scroll.viewport().width() - 10)
         super().resizeEvent(event)
 
 def read_config():
@@ -685,16 +1350,12 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setFont(QtGui.QFont('FiraCode Nerd Font'))
     browser = FileBrowser(directory)
-    # Only set default size and position if no saved settings exist
     settings = QtCore.QSettings("xAI", "jdbrowser")
     if not (settings.contains("pos") and settings.contains("size")):
         browser.resize(1000, 600)
-        # Center the window on the screen as a fallback
         screen = app.primaryScreen().geometry()
         browser.move((screen.width() - 1000) // 2, (screen.height() - 600) // 2)
-    # Always show the window
     browser.show()
-    # Keep Qt loop responsive to SIGINT (Ctrl+C)
     timer = QtCore.QTimer()
     timer.timeout.connect(lambda: None)
     timer.start(100)
