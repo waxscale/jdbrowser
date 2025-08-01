@@ -97,9 +97,18 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.idx_in_sec = 0
         self.desired_col = 0
 
+        # Disable window decorations
+        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+
         self._setup_ui()
         self._setup_shortcuts()
         self.updateSelection()
+
+        # Restore saved position and size
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        if settings.contains("pos") and settings.contains("size"):
+            self.move(settings.value("pos", type=QtCore.QPoint))
+            self.resize(settings.value("size", type=QtCore.QSize))
 
     def _setup_ui(self):
         self.scroll = QtWidgets.QScrollArea()
@@ -351,6 +360,13 @@ class FileBrowser(QtWidgets.QMainWindow):
             for item in sec:
                 item.updateStyle()
 
+    def closeEvent(self, event):
+        # Save window position and size before closing
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("pos", self.pos())
+        settings.setValue("size", self.size())
+        super().closeEvent(event)
+
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
@@ -373,6 +389,12 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setFont(QtGui.QFont('FiraCode Nerd Font'))
     browser = FileBrowser(directory)
-    browser.resize(1000, 600)
+    # Only set default size and position if no saved settings exist
+    settings = QtCore.QSettings("xAI", "jdbrowser")
+    if not (settings.contains("pos") and settings.contains("size")):
+        browser.resize(1000, 600)
+        # Center the window on the screen as a fallback
+        screen = app.primaryScreen().geometry()
+        browser.move((screen.width() - 1000) // 2, (screen.height() - 600) // 2)
     browser.show()
     sys.exit(app.exec())
