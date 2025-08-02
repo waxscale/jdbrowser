@@ -2,7 +2,7 @@ from PySide6 import QtWidgets, QtGui
 from ..constants import *
 
 class HeaderDialog(QtWidgets.QDialog):
-    def __init__(self, jd_area=0, jd_id=None, jd_ext=None, label="HEADER", show_delete=False, parent=None):
+    def __init__(self, jd_area=0, jd_id=None, jd_ext=None, label="HEADER", show_delete=False, parent=None, level=0):
         super().__init__(parent)
         self.setWindowTitle("Section Header")
         self.delete_pressed = False
@@ -22,6 +22,7 @@ class HeaderDialog(QtWidgets.QDialog):
         self.jd_ext_input.setValidator(QtGui.QIntValidator())
         self.jd_ext_input.setPlaceholderText("jd_ext")
         for w in (self.jd_area_input, self.jd_id_input, self.jd_ext_input):
+            w.setFixedWidth(60)
             w.setStyleSheet(f"""
                 QLineEdit {{
                     background-color: {BACKGROUND_COLOR};
@@ -32,6 +33,11 @@ class HeaderDialog(QtWidgets.QDialog):
                 }}
             """)
             row.addWidget(w)
+        if level == 0:
+            self.jd_id_input.setEnabled(False)
+            self.jd_ext_input.setEnabled(False)
+        elif level == 1:
+            self.jd_ext_input.setEnabled(False)
         layout.addLayout(row)
 
         self.label_input = QtWidgets.QLineEdit(label)

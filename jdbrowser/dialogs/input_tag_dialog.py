@@ -1,8 +1,8 @@
-from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6 import QtWidgets, QtGui
 from ..constants import *
 
 class InputTagDialog(QtWidgets.QDialog):
-    def __init__(self, default_jd_area, default_label, parent=None):
+    def __init__(self, default_jd_area=None, default_jd_id=None, default_jd_ext=None, default_label="", level=0, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Tag")
         self.setFixedWidth(300)
@@ -10,57 +10,38 @@ class InputTagDialog(QtWidgets.QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        # jd_area input
-        self.jd_area_input = QtWidgets.QLineEdit(str(default_jd_area))
-        self.jd_area_input.setPlaceholderText("Enter jd_area (integer)")
-        self.jd_area_input.setValidator(QtGui.QIntValidator())
-        self.jd_area_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        layout.addWidget(QtWidgets.QLabel("jd_area:"))
-        layout.addWidget(self.jd_area_input)
+        row = QtWidgets.QHBoxLayout()
+        self.jd_area_input = QtWidgets.QLineEdit("" if default_jd_area is None else str(default_jd_area))
+        self.jd_id_input = QtWidgets.QLineEdit("" if default_jd_id is None else str(default_jd_id))
+        self.jd_ext_input = QtWidgets.QLineEdit("" if default_jd_ext is None else str(default_jd_ext))
+        for w, placeholder in (
+            (self.jd_area_input, "jd_area"),
+            (self.jd_id_input, "jd_id"),
+            (self.jd_ext_input, "jd_ext"),
+        ):
+            w.setPlaceholderText(placeholder)
+            w.setValidator(QtGui.QIntValidator())
+            w.setFixedWidth(60)
+            w.setStyleSheet(f'''
+                QLineEdit {{
+                    background-color: {BACKGROUND_COLOR};
+                    color: {TEXT_COLOR};
+                    border: 1px solid {BORDER_COLOR};
+                    border-radius: 5px;
+                    padding: 5px;
+                }}
+            ''')
+            row.addWidget(w)
+        layout.addLayout(row)
 
-        # jd_id input (hidden for now)
-        self.jd_id_input = QtWidgets.QLineEdit()
-        self.jd_id_input.setPlaceholderText("Enter jd_id (integer, optional)")
-        self.jd_id_input.setValidator(QtGui.QIntValidator())
-        self.jd_id_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        # layout.addWidget(QtWidgets.QLabel("jd_id (optional):"))
-        # layout.addWidget(self.jd_id_input)
+        if level == 0:
+            self.jd_id_input.setEnabled(False)
+            self.jd_ext_input.setEnabled(False)
+        elif level == 1:
+            self.jd_ext_input.setEnabled(False)
 
-        # jd_ext input (hidden for now)
-        self.jd_ext_input = QtWidgets.QLineEdit()
-        self.jd_ext_input.setPlaceholderText("Enter jd_ext (integer, optional)")
-        self.jd_ext_input.setValidator(QtGui.QIntValidator())
-        self.jd_ext_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        # layout.addWidget(QtWidgets.QLabel("jd_ext (optional):"))
-        # layout.addWidget(self.jd_ext_input)
-
-        # Label input
         self.label_input = QtWidgets.QLineEdit(default_label)
-        self.label_input.setPlaceholderText("Enter tag label")
+        self.label_input.setPlaceholderText("Label")
         self.label_input.setStyleSheet(f'''
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
@@ -70,10 +51,8 @@ class InputTagDialog(QtWidgets.QDialog):
                 padding: 5px;
             }}
         ''')
-        layout.addWidget(QtWidgets.QLabel("Label:"))
         layout.addWidget(self.label_input)
 
-        # Buttons
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         buttons.setStyleSheet(f'''
             QPushButton {{
@@ -91,7 +70,6 @@ class InputTagDialog(QtWidgets.QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        # Style labels
         self.setStyleSheet(f'''
             QDialog {{
                 background-color: {BACKGROUND_COLOR};
@@ -101,7 +79,6 @@ class InputTagDialog(QtWidgets.QDialog):
             }}
         ''')
 
-        # Focus the label input
         self.label_input.setFocus()
 
     def get_values(self):
@@ -112,3 +89,4 @@ class InputTagDialog(QtWidgets.QDialog):
         except ValueError:
             jd_area, jd_id, jd_ext = None, None, None
         return jd_area, jd_id, jd_ext, self.label_input.text()
+
