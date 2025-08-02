@@ -1,10 +1,19 @@
 import os
-import re
 from PySide6 import QtWidgets, QtGui, QtCore
 from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
+from .dialogs.header_dialog import HeaderDialog
 from .file_item import FileItem
+from .header_item import HeaderItem
 from .search_line_edit import SearchLineEdit
-from .database import create_tag, rebuild_state_tags, setup_database
+from .database import (
+    create_tag,
+    rebuild_state_tags,
+    setup_database,
+    create_header,
+    update_header,
+    delete_header,
+    rebuild_state_headers,
+)
 from .constants import *
 
 class FileBrowser(QtWidgets.QMainWindow):
@@ -164,6 +173,18 @@ class FileBrowser(QtWidgets.QMainWindow):
                 rebuild_state_tags(self.conn)
                 self._rebuild_ui()
 
+    def _create_header(self):
+        dialog = HeaderDialog(parent=self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
+            jd_area, jd_id, jd_ext, label = dialog.get_values()
+            if jd_area is None:
+                QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                return
+            header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
+            if header_id:
+                rebuild_state_headers(self.conn)
+                self._rebuild_ui()
+
     def _append_tag_to_section(self):
         """Append a tag to the current section with jd_area = max + 1 or section base."""
         if not self.sections or self.sec_idx >= len(self.sections):
@@ -307,6 +328,22 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self.idx_in_sec = 0
             self._rebuild_ui()
 
+    def _edit_header(self, header_item):
+        dialog = HeaderDialog(header_item.jd_area, header_item.jd_id, header_item.jd_ext, header_item.label, True, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            if dialog.delete_pressed:
+                delete_header(self.conn, header_item.header_id)
+            else:
+                jd_area, jd_id, jd_ext, label = dialog.get_values()
+                if jd_area is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                    return
+                if not update_header(self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label):
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "Header path conflicts or invalid.")
+                    return
+            rebuild_state_headers(self.conn)
+            self._rebuild_ui()
+
     def _setup_search_shortcuts(self):
         """Set up search mode shortcuts for the current search_input widget."""
         for shortcut in self.search_shortcut_instances:
@@ -344,51 +381,39 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.section_jd_areas = []
         self.section_filenames = []
         current_section = []
-        col = 0
-
-        # Read headers from disk, sort alphabetically
-        entries = sorted(os.listdir(self.directory), key=lambda x: x.lower())
         cursor = self.conn.cursor()
+        cursor.execute("SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers ORDER BY jd_area, jd_id, jd_ext")
+        headers = cursor.fetchall()
         cursor.execute("SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags ORDER BY jd_area, jd_id, jd_ext")
         tags = cursor.fetchall()
-        tag_dict = {tag[0]: (tag[1], tag[2], tag[3], tag[4]) for tag in tags}
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
         icons = {row[0]: row[1] for row in cursor.fetchall()}
 
-        # Extract numerical prefixes from .2do filenames for section assignment
-        section_prefixes = []
-        for name in entries:
-            if self._is_hidden_item(name) or not name.lower().endswith('.2do'):
+        def construct_prefix(jd_area, jd_id, jd_ext):
+            if jd_area is None:
+                return ""
+            if jd_id is None:
+                return f"[{jd_area:02d}]"
+            if jd_ext is None:
+                return f"[{jd_area:02d}.{jd_id:02d}]"
+            return f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+
+        items = []
+        for header_id, jd_area, jd_id, jd_ext, label in headers:
+            if jd_area is None or jd_id is not None or jd_ext is not None:
                 continue
-            header_text = os.path.splitext(name)[0]
-            match = re.match(r"\[(\d+)[^\]]*\]", header_text)
-            prefix = int(match.group(1)) if match else 0
-            section_prefixes.append((name, prefix))
+            prefix = construct_prefix(jd_area, jd_id, jd_ext)
+            items.append(("header", prefix, label, header_id, jd_area, jd_id, jd_ext))
+        for tag_id, jd_area, jd_id, jd_ext, label in tags:
+            prefix = construct_prefix(jd_area, jd_id, jd_ext)
+            items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
 
-        # Assign tags to sections based on alphabetical order of .2do filenames
-        tags_by_section = {}
-        for tag_id, (jd_area, jd_id, jd_ext, label) in tag_dict.items():
-            # Find the .2do file with the largest prefix <= jd_area
-            section_name = None
-            if jd_area is not None:
-                for name, prefix in sorted(section_prefixes, key=lambda x: x[0].lower()):
-                    if prefix <= jd_area:
-                        section_name = name
-                    else:
-                        break
-            if section_name:
-                tags_by_section.setdefault(section_name, []).append((tag_id, jd_area, jd_id, jd_ext, label))
-            else:
-                # If no prefix matches or jd_area is NULL, assign to the first section
-                tags_by_section.setdefault(section_prefixes[0][0], []).append((tag_id, jd_area, jd_id, jd_ext, label))
+        items.sort(key=lambda x: (x[1], 0 if x[0] == "header" else 1, (x[2] or "").lower()))
 
-        # Build UI sections
         section_index = 0
-        for name in entries:
-            if self._is_hidden_item(name):
-                continue
-            if name.lower().endswith('.2do'):
-                # Flush current section
+        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+            display = f"{prefix} {label}" if prefix else (label or "")
+            if kind == "header":
                 if current_section:
                     sectionWidget = QtWidgets.QWidget()
                     sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
@@ -411,56 +436,19 @@ class FileBrowser(QtWidgets.QMainWindow):
                     mainLayout.addWidget(sectionWidget)
                     mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
                     self.sections.append(current_section)
-                # Header
-                header_text = os.path.splitext(name)[0]
-                header = QtWidgets.QLabel(header_text)
-                header.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
-                font = header.font()
-                font.setPointSize(int(font.pointSize() * 1.5))
-                font.setBold(True)
-                header.setFont(font)
-                header.setStyleSheet(f'background-color: {BUTTON_COLOR}; color: black; padding-left:5px; padding-right:5px;')
-                header.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                header.setMinimumWidth(self.scroll.viewport().width() - 10)
-                fm = header.fontMetrics()
-                header.setFixedHeight(fm.height() + 6)
-                mainLayout.addWidget(header)
+                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
-                # Determine jd_area from filename or section index (0 for first section)
-                match = re.match(r"\[(\d+)[^\]]*\]", header_text)
-                jd_area = int(match.group(1)) if match else section_index * 10
-                if section_index == 0:
-                    jd_area = 0
-                # Create a section with tags or a placeholder
                 current_section = []
-                if name in tags_by_section:
-                    # Sort tags by full constructed label
-                    def get_sort_key(tag):
-                        jd_area, jd_id, jd_ext, label = tag[1:5]
-                        if jd_area is not None:
-                            if jd_id is None:
-                                prefix = f"[{jd_area:02d}]"
-                            elif jd_ext is None:
-                                prefix = f"[{jd_area:02d}.{jd_id:02d}]"
-                            else:
-                                prefix = f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
-                            return f"{prefix} {label}" if label else prefix
-                        return label or ""
-                    for i, (tag_id, tag_jd_area, tag_jd_id, tag_jd_ext, label) in enumerate(sorted(tags_by_section[name], key=get_sort_key)):
-                        icon_data = icons.get(tag_id)
-                        item = FileItem(tag_id, label, tag_jd_area, tag_jd_id, tag_jd_ext, icon_data, self.directory, self, section_index, i)
-                        current_section.append(item)
-                        col += 1
-                else:
-                    item = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
-                    current_section.append(item)
                 self.section_jd_areas.append(jd_area)
-                self.section_filenames.append(name)
+                self.section_filenames.append(obj_id)
                 section_index += 1
-                col = 0
-                continue
+            else:
+                icon_data = icons.get(obj_id)
+                item = FileItem(obj_id, label, jd_area, jd_id, jd_ext, icon_data, self.directory, self, section_index, len(current_section))
+                current_section.append(item)
 
-        # Flush last section
         if current_section:
             sectionWidget = QtWidgets.QWidget()
             sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
@@ -586,6 +574,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_Home, self.firstInRow, None),
             (QtCore.Qt.Key_End, self.lastInRow, None),
             (QtCore.Qt.Key_H, self.toggle_hidden, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_S, self._create_header, None),
             (QtCore.Qt.Key_A, self._append_tag_to_section, None),
             (QtCore.Qt.Key_I, self._input_tag_dialog, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
