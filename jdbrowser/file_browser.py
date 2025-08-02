@@ -1,551 +1,11 @@
-#!/home/jaguar/.pyenv/versions/jdbrowser/bin/python
-
-import sys
 import os
-import configparser
-import signal
-import sqlite3
-import uuid
 import re
-from PySide6 import QtCore, QtGui, QtWidgets
-
-# Allow Ctrl+C (SIGINT) to quit the Qt application
-signal.signal(signal.SIGINT, lambda sig, frame: QtWidgets.QApplication.quit())
-
-# TokyoNight Dark theme colors
-HIGHLIGHT_COLOR = '#44475a'
-HOVER_COLOR = '#5c6370'
-SLATE_COLOR = '#2e303e'
-TEXT_COLOR = '#c0caf5'
-BACKGROUND_COLOR = '#2e303e'
-BORDER_COLOR = '#44475a'
-BUTTON_COLOR = '#d7ba7d'
-
-class EditTagDialog(QtWidgets.QDialog):
-    def __init__(self, current_label, current_icon, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Edit Tag")
-        self.setFixedWidth(300)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Icon display (clickable)
-        self.icon_label = QtWidgets.QLabel()
-        self.icon_label.setMouseTracking(True)
-        self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        self.new_icon_data = None  # Track new image data
-        if current_icon:
-            pixmap = QtGui.QPixmap()
-            pixmap.loadFromData(current_icon)
-            if not pixmap.isNull():
-                rounded_pixmap = QtGui.QPixmap(240, 150)
-                rounded_pixmap.fill(QtCore.Qt.transparent)
-                painter = QtGui.QPainter(rounded_pixmap)
-                painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(0, 0, 240, 150, 10, 10)
-                painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
-                painter.drawPixmap(0, 0, scaled_pixmap)
-                painter.end()
-                self.icon_label.setPixmap(rounded_pixmap)
-            else:
-                self.icon_label = QtWidgets.QFrame()
-                self.icon_label.setFixedSize(240, 150)
-                self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        else:
-            self.icon_label = QtWidgets.QFrame()
-            self.icon_label.setFixedSize(240, 150)
-            self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        self.icon_label.setMouseTracking(True)
-        self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        self.icon_label.mousePressEvent = self.select_icon
-        layout.addWidget(self.icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-        # Label input
-        self.label_input = QtWidgets.QLineEdit(current_label)
-        self.label_input.setPlaceholderText("Enter tag label")
-        self.label_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        layout.addWidget(self.label_input)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
-            QPushButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0c58f;
-            }}
-        ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
-
-    def select_icon(self, event):
-        """Open file dialog to select a new .png image and update the icon display."""
-        file_dialog = QtWidgets.QFileDialog(self)
-        file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
-        file_dialog.setNameFilter("Images (*.png)")
-        file_dialog.setStyleSheet(f'''
-            QFileDialog {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-            }}
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-            QPushButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0c58f;
-            }}
-            QToolButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QToolButton:hover {{
-                background-color: #e0c58f;
-            }}
-            QLabel {{
-                color: {TEXT_COLOR};
-            }}
-            QTreeView, QListView {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-            }}
-            QTreeView::item:selected, QListView::item:selected {{
-                background-color: {HIGHLIGHT_COLOR};
-                color: {TEXT_COLOR};
-            }}
-            QTreeView::item:hover, QListView::item:hover {{
-                background-color: {HOVER_COLOR};
-            }}
-            QComboBox {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-            }}
-            QComboBox::down-arrow {{
-                image: none;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                selection-background-color: {HIGHLIGHT_COLOR};
-            }}
-        ''')
-        if file_dialog.exec():
-            file_path = file_dialog.selectedFiles()[0]
-            pixmap = QtGui.QPixmap(file_path)
-            if not pixmap.isNull():
-                rounded_pixmap = QtGui.QPixmap(240, 150)
-                rounded_pixmap.fill(QtCore.Qt.transparent)
-                painter = QtGui.QPainter(rounded_pixmap)
-                painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(0, 0, 240, 150, 10, 10)
-                painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
-                painter.drawPixmap(0, 0, scaled_pixmap)
-                painter.end()
-                # Replace QFrame with QLabel if necessary
-                if isinstance(self.icon_label, QtWidgets.QFrame):
-                    layout = self.icon_label.parent().layout()
-                    layout.removeWidget(self.icon_label)
-                    self.icon_label.deleteLater()
-                    self.icon_label = QtWidgets.QLabel()
-                    self.icon_label.setFixedSize(240, 150)
-                    self.icon_label.setMouseTracking(True)
-                    self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-                    self.icon_label.mousePressEvent = self.select_icon
-                    layout.insertWidget(0, self.icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
-                self.icon_label.setPixmap(rounded_pixmap)
-                with open(file_path, 'rb') as f:
-                    self.new_icon_data = f.read()
-
-    def get_label(self):
-        return self.label_input.text()
-
-    def get_icon_data(self):
-        return self.new_icon_data
-
-class SimpleEditTagDialog(QtWidgets.QDialog):
-    def __init__(self, current_label, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Rename Tag")
-        self.setFixedWidth(300)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Label input
-        self.label_input = QtWidgets.QLineEdit(current_label)
-        self.label_input.setPlaceholderText("Enter tag label")
-        self.label_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        layout.addWidget(self.label_input)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
-            QPushButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0c58f;
-            }}
-        ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
-
-    def get_label(self):
-        return self.label_input.text()
-
-class InputTagDialog(QtWidgets.QDialog):
-    def __init__(self, default_jd_area, default_label, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Create Tag")
-        self.setFixedWidth(300)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # jd_area input
-        self.jd_area_input = QtWidgets.QLineEdit(str(default_jd_area))
-        self.jd_area_input.setPlaceholderText("Enter jd_area (integer)")
-        self.jd_area_input.setValidator(QtGui.QIntValidator())
-        self.jd_area_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        layout.addWidget(QtWidgets.QLabel("jd_area:"))
-        layout.addWidget(self.jd_area_input)
-
-        # jd_id input (hidden for now)
-        self.jd_id_input = QtWidgets.QLineEdit()
-        self.jd_id_input.setPlaceholderText("Enter jd_id (integer, optional)")
-        self.jd_id_input.setValidator(QtGui.QIntValidator())
-        self.jd_id_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        # layout.addWidget(QtWidgets.QLabel("jd_id (optional):"))
-        # layout.addWidget(self.jd_id_input)
-
-        # jd_ext input (hidden for now)
-        self.jd_ext_input = QtWidgets.QLineEdit()
-        self.jd_ext_input.setPlaceholderText("Enter jd_ext (integer, optional)")
-        self.jd_ext_input.setValidator(QtGui.QIntValidator())
-        self.jd_ext_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        # layout.addWidget(QtWidgets.QLabel("jd_ext (optional):"))
-        # layout.addWidget(self.jd_ext_input)
-
-        # Label input
-        self.label_input = QtWidgets.QLineEdit(default_label)
-        self.label_input.setPlaceholderText("Enter tag label")
-        self.label_input.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-        ''')
-        layout.addWidget(QtWidgets.QLabel("Label:"))
-        layout.addWidget(self.label_input)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
-            QPushButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0c58f;
-            }}
-        ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        # Style labels
-        self.setStyleSheet(f'''
-            QDialog {{
-                background-color: {BACKGROUND_COLOR};
-            }}
-            QLabel {{
-                color: {TEXT_COLOR};
-            }}
-        ''')
-
-        # Focus the label input
-        self.label_input.setFocus()
-
-    def get_values(self):
-        try:
-            jd_area = int(self.jd_area_input.text()) if self.jd_area_input.text() else None
-            jd_id = int(self.jd_id_input.text()) if self.jd_id_input.text() else None
-            jd_ext = int(self.jd_ext_input.text()) if self.jd_ext_input.text() else None
-        except ValueError:
-            jd_area, jd_id, jd_ext = None, None, None
-        return jd_area, jd_id, jd_ext, self.label_input.text()
-
-class DeleteTagDialog(QtWidgets.QDialog):
-    def __init__(self, tag_name, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Confirm Delete")
-        self.setFixedWidth(600)  # User-specified width
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Confirmation message
-        self.message = QtWidgets.QLabel(f"Are you sure you want to delete the tag '{tag_name}'?")
-        self.message.setStyleSheet(f'color: {TEXT_COLOR};')
-        layout.addWidget(self.message)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
-            QPushButton {{
-                background-color: {BUTTON_COLOR};
-                color: black;
-                border: none;
-                padding: 5px;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0c58f;
-            }}
-        ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
-
-class FileItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, parent_path):
-        super().__init__()
-        self.tag_id = tag_id  # None for placeholder items
-        self.name = name if name is not None else ""
-        self.jd_area = jd_area
-        self.jd_id = jd_id
-        self.jd_ext = jd_ext
-        self.isSelected = False
-        self.isHover = False
-        self.isDimmed = False
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
-
-        # Construct display label
-        if self.jd_area is not None:
-            if self.jd_id is None:
-                prefix = f"[{self.jd_area:02d}]"
-            elif self.jd_ext is None:
-                prefix = f"[{self.jd_area:02d}.{self.jd_id:02d}]"
-            else:
-                prefix = f"[{self.jd_area:02d}.{self.jd_id:02d}+{self.jd_ext:04d}]"
-            self.display_name = f"{prefix} {self.name}" if self.name else prefix
-        else:
-            self.display_name = self.name
-
-        # Fix vertical size policy
-        self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(2)
-        layout.setContentsMargins(2, 2, 2, 2)
-
-        # Icon: Load from database BLOB or use slate placeholder
-        if icon_data:
-            pixmap = QtGui.QPixmap()
-            pixmap.loadFromData(icon_data)
-            if not pixmap.isNull():
-                self.icon = QtWidgets.QLabel()
-                rounded_pixmap = QtGui.QPixmap(240, 150)
-                rounded_pixmap.fill(QtCore.Qt.transparent)
-                painter = QtGui.QPainter(rounded_pixmap)
-                painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(0, 0, 240, 150, 10, 10)
-                painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
-                painter.drawPixmap(0, 0, scaled_pixmap)
-                painter.end()
-                self.icon.setPixmap(rounded_pixmap)
-                self.icon.setFixedSize(240, 150)
-                self.icon.setStyleSheet('background-color: transparent;')
-            else:
-                self.icon = QtWidgets.QFrame()
-                self.icon.setFixedSize(240, 150)
-                self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        else:
-            self.icon = QtWidgets.QFrame()
-            self.icon.setFixedSize(240, 150)
-            self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        self.icon.setAutoFillBackground(True)
-        layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-        # Label (single line, empty for placeholders)
-        self.label = QtWidgets.QLabel(self.display_name)
-        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.label.setFixedWidth(240)
-        self.label.setWordWrap(False)
-        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
-        self.label.setAutoFillBackground(True)
-        layout.addWidget(self.label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-        # Fixed height: icon + single line label + spacings and margins
-        fm = self.label.fontMetrics()
-        label_height = fm.height()
-        spacing = layout.spacing()
-        margins = layout.contentsMargins()
-        total_height = 150 + label_height + spacing + margins.top() + margins.bottom()
-        self.setFixedHeight(total_height)
-
-        self.updateStyle()
-
-    def updateStyle(self):
-        # Prioritize isSelected over isHover for background
-        if self.isSelected:
-            bg = HIGHLIGHT_COLOR
-        elif self.isHover:
-            bg = HOVER_COLOR
-        else:
-            bg = 'transparent'
-        # Apply dimming for non-matching items using QGraphicsOpacityEffect
-        opacity = 0.4 if self.isDimmed else 1.0
-        icon_effect = QtWidgets.QGraphicsOpacityEffect(self.icon)
-        icon_effect.setOpacity(opacity)
-        self.icon.setGraphicsEffect(icon_effect)
-        label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
-        label_effect.setOpacity(opacity)
-        self.label.setGraphicsEffect(label_effect)
-        icon_style = f'background-color: {SLATE_COLOR}; border-radius: 10px;' if isinstance(self.icon, QtWidgets.QFrame) else 'background-color: transparent;'
-        self.setStyleSheet(f'background-color: {bg}; border-radius: 10px;')
-        self.icon.setStyleSheet(icon_style)
-        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
-
-    def enterEvent(self, event):
-        self.isHover = True
-        self.updateStyle()
-        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.isHover = False
-        self.updateStyle()
-        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
-        super().leaveEvent(event)
-
-    def mousePressEvent(self, event):
-        """Select this item when clicked, including placeholders."""
-        if event.button() == QtCore.Qt.LeftButton:
-            parent = self
-            while not isinstance(parent, FileBrowser):
-                parent = parent.parent()
-                if parent is None:
-                    return
-            # Find this item in sections
-            for s, sec in enumerate(parent.sections):
-                for i, item in enumerate(sec):
-                    if item == self:
-                        parent.sec_idx = s
-                        parent.idx_in_sec = i
-                        parent.updateSelection()
-                        break
-        super().mousePressEvent(event)
-
-class SearchLineEdit(QtWidgets.QLineEdit):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent_browser = parent
-        self.setStyleSheet(f'''
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-                font-family: 'FiraCode Nerd Font';
-            }}
-        ''')
-
-    def focusOutEvent(self, event):
-        # Exit search mode like Enter when losing focus
-        self.parent_browser.exit_search_mode_select()
-        super().focusOutEvent(event)
+from PySide6 import QtWidgets, QtGui, QtCore
+from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
+from .file_item import FileItem
+from .search_line_edit import SearchLineEdit
+from .database import create_tag, rebuild_state_tags, setup_database
+from .constants import *
 
 class FileBrowser(QtWidgets.QMainWindow):
     def __init__(self, directory):
@@ -575,9 +35,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         db_dir = os.path.join(xdg_data_home, 'jdbrowser')
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, 'tag.db')
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('PRAGMA foreign_keys = ON')
-        self._setup_database()
+        self.conn = setup_database(self.db_path)
 
         # Disable window decorations
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
@@ -591,152 +49,12 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.move(settings.value("pos", type=QtCore.QPoint))
             self.resize(settings.value("size", type=QtCore.QSize))
 
-    def _setup_database(self):
-        """Initialize SQLite database tables with unique constraint and triggers."""
-        cursor = self.conn.cursor()
-        cursor.executescript("""
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE IF NOT EXISTS events (
-                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL CHECK (
-                    event_type IN (
-                        'create_tag',
-                        'set_tag_path',
-                        'set_tag_label',
-                        'set_tag_icon',
-                        'delete_tag'
-                    )
-                ),
-                timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS event_create_tag (
-                event_id INTEGER PRIMARY KEY,
-                tag_id TEXT NOT NULL,
-                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS event_set_tag_path (
-                event_id INTEGER PRIMARY KEY,
-                tag_id TEXT NOT NULL,
-                jd_area INTEGER,
-                jd_id INTEGER,
-                jd_ext INTEGER,
-                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
-                UNIQUE(jd_area, jd_id, jd_ext)
-            );
-
-            CREATE TABLE IF NOT EXISTS event_set_tag_label (
-                event_id INTEGER PRIMARY KEY,
-                tag_id TEXT NOT NULL,
-                new_label TEXT NOT NULL,
-                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS event_set_tag_icon (
-                event_id INTEGER PRIMARY KEY,
-                tag_id TEXT NOT NULL,
-                icon BLOB,
-                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS event_delete_tag (
-                event_id INTEGER PRIMARY KEY,
-                tag_id TEXT NOT NULL,
-                FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS state_tag_icons (
-                tag_id TEXT PRIMARY KEY,
-                icon BLOB
-            );
-
-            CREATE TABLE IF NOT EXISTS state_tags (
-                tag_id TEXT PRIMARY KEY,
-                jd_area INTEGER,
-                jd_id INTEGER,
-                jd_ext INTEGER,
-                label TEXT NOT NULL,
-                UNIQUE(jd_area, jd_id, jd_ext)
-            );
-
-            -- Trigger to prevent jd_id without jd_area
-            CREATE TRIGGER IF NOT EXISTS check_jd_id
-            BEFORE INSERT ON event_set_tag_path
-            WHEN NEW.jd_id IS NOT NULL AND NEW.jd_area IS NULL
-            BEGIN
-                SELECT RAISE(ABORT, 'jd_id requires jd_area');
-            END;
-
-            -- Trigger to prevent jd_ext without jd_id
-            CREATE TRIGGER IF NOT EXISTS check_jd_ext
-            BEFORE INSERT ON event_set_tag_path
-            WHEN NEW.jd_ext IS NOT NULL AND NEW.jd_id IS NULL
-            BEGIN
-                SELECT RAISE(ABORT, 'jd_ext requires jd_id');
-            END;
-        """)
-        self._rebuild_state_tags()
-        self.conn.commit()
-
-    def _rebuild_state_tags(self):
-        """Rebuild the state_tags table from the event log."""
-        cursor = self.conn.cursor()
-        cursor.executescript("""
-            DELETE FROM state_tags;
-
-            INSERT INTO state_tags (tag_id, jd_area, jd_id, jd_ext, label)
-            SELECT
-                p.tag_id,
-                p.jd_area,
-                p.jd_id,
-                p.jd_ext,
-                l.new_label
-            FROM (
-                SELECT
-                    p.tag_id,
-                    p.jd_area,
-                    p.jd_id,
-                    p.jd_ext,
-                    p.event_id
-                FROM event_set_tag_path p
-                JOIN (
-                    SELECT tag_id, MAX(event_id) AS max_event
-                    FROM event_set_tag_path
-                    GROUP BY tag_id
-                ) latest_path ON p.tag_id = latest_path.tag_id AND p.event_id = latest_path.max_event
-            ) p
-            JOIN (
-                SELECT
-                    l.tag_id,
-                    l.new_label,
-                    l.event_id
-                FROM event_set_tag_label l
-                JOIN (
-                    SELECT tag_id, MAX(event_id) AS max_event
-                    FROM event_set_tag_label
-                    GROUP BY tag_id
-                ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
-            ) l ON p.tag_id = l.tag_id
-            WHERE p.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
-        """)
-        cursor.executescript("""
-            DELETE FROM state_tag_icons;
-
-            INSERT INTO state_tag_icons (tag_id, icon)
-            SELECT
-                i.tag_id,
-                i.icon
-            FROM event_set_tag_icon i
-            JOIN (
-                SELECT tag_id, MAX(event_id) AS max_event
-                FROM event_set_tag_icon
-                GROUP BY tag_id
-            ) latest ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
-            WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
-        """)
-        self.conn.commit()
+    def set_selection(self, section_idx, item_idx):
+        """Update the current selection to the specified section and item index."""
+        if 0 <= section_idx < len(self.sections) and 0 <= item_idx < len(self.sections[section_idx]):
+            self.sec_idx = section_idx
+            self.idx_in_sec = item_idx
+            self.updateSelection()
 
     def _is_hidden_item(self, name):
         """Check if an item should be hidden based on naming patterns."""
@@ -749,31 +67,6 @@ class FileBrowser(QtWidgets.QMainWindow):
             '[0-META 0000-00-00 00.00.00].png', '[0-META 0000-00-00 00.00.00] #auto.png'
         ]
         return name.startswith('.') or name in hidden_patterns
-
-    def _create_tag(self, jd_area, jd_id, jd_ext, label):
-        """Create a new tag and return its tag_id, or None if constraints are violated."""
-        cursor = self.conn.cursor()
-        # Check for unique (jd_area, jd_id, jd_ext) constraint
-        cursor.execute("SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ?", (jd_area, jd_id, jd_ext))
-        if cursor.fetchone():
-            return None  # Conflict exists
-        # Validate constraints: no jd_id without jd_area, no jd_ext without jd_id
-        if jd_id is not None and jd_area is None:
-            return None
-        if jd_ext is not None and jd_id is None:
-            return None
-        tag_id = str(uuid.uuid4())
-        cursor.execute("INSERT INTO events (event_type) VALUES ('create_tag')")
-        event_id = cursor.lastrowid
-        cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
-        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
-        event_id = cursor.lastrowid
-        cursor.execute("INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)", (event_id, tag_id, jd_area, jd_id, jd_ext))
-        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
-        event_id = cursor.lastrowid
-        cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
-        self.conn.commit()
-        return tag_id
 
     def _set_thumbnail(self):
         """Open a file dialog to select a .png image and set it as the thumbnail for the current tag."""
@@ -863,7 +156,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 event_id = cursor.lastrowid
                 cursor.execute("INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)", (event_id, tag_id, icon_data))
                 self.conn.commit()
-                self._rebuild_state_tags()
+                rebuild_state_tags(self.conn)
                 self._rebuild_ui()
 
     def _append_tag_to_section(self):
@@ -876,9 +169,9 @@ class FileBrowser(QtWidgets.QMainWindow):
         max_jd_area = cursor.fetchone()[0]
         new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
         label = "NewTag"
-        new_tag_id = self._create_tag(new_jd_area, None, None, label)
+        new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
         if new_tag_id:  # Only rebuild if tag was created successfully
-            self._rebuild_state_tags()
+            rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
 
     def _input_tag_dialog(self):
@@ -907,9 +200,9 @@ class FileBrowser(QtWidgets.QMainWindow):
                 if not label:
                     QtWidgets.QMessageBox.warning(self, "Invalid Input", "Label cannot be empty.")
                     continue
-                new_tag_id = self._create_tag(jd_area, jd_id, jd_ext, label)
+                new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
                 if new_tag_id:
-                    self._rebuild_state_tags()
+                    rebuild_state_tags(self.conn)
                     self._rebuild_ui(new_tag_id=new_tag_id)
                     break
                 else:
@@ -944,7 +237,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 event_id = cursor.lastrowid
                 cursor.execute("INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)", (event_id, tag_id, new_icon_data))
             self.conn.commit()
-            self._rebuild_state_tags()
+            rebuild_state_tags(self.conn)
             self._rebuild_ui()
 
     def _rename_tag_label(self):
@@ -966,7 +259,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 event_id = cursor.lastrowid
                 cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
                 self.conn.commit()
-                self._rebuild_state_tags()
+                rebuild_state_tags(self.conn)
                 self._rebuild_ui()
 
     def _delete_tag(self):
@@ -997,7 +290,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             event_id = cursor.lastrowid
             cursor.execute("INSERT INTO event_delete_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
             self.conn.commit()
-            self._rebuild_state_tags()
+            rebuild_state_tags(self.conn)
             # Adjust selection to the previous item
             if self.idx_in_sec > 0:
                 self.idx_in_sec -= 1
@@ -1148,13 +441,14 @@ class FileBrowser(QtWidgets.QMainWindow):
                                 prefix = f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
                             return f"{prefix} {label}" if label else prefix
                         return label or ""
-                    for tag_id, tag_jd_area, tag_jd_id, tag_jd_ext, label in sorted(tags_by_section[name], key=get_sort_key):
+                    for i, (tag_id, tag_jd_area, tag_jd_id, tag_jd_ext, label) in enumerate(sorted(tags_by_section[name], key=get_sort_key)):
                         icon_data = icons.get(tag_id)
-                        item = FileItem(tag_id, label, tag_jd_area, tag_jd_id, tag_jd_ext, icon_data, self.directory)
+                        item = FileItem(tag_id, label, tag_jd_area, tag_jd_id, tag_jd_ext, icon_data, self.directory, self, section_index, i)
                         current_section.append(item)
                         col += 1
                 else:
-                    current_section.append(FileItem(None, None, None, None, None, None, self.directory))
+                    item = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
+                    current_section.append(item)
                 self.section_jd_areas.append(jd_area)
                 self.section_filenames.append(name)
                 section_index += 1
@@ -1550,33 +844,3 @@ class FileBrowser(QtWidgets.QMainWindow):
             if widget.styleSheet().startswith(f'background-color: {BUTTON_COLOR}'):
                 widget.setMinimumWidth(self.scroll.viewport().width() - 10)
         super().resizeEvent(event)
-
-def read_config():
-    config = configparser.ConfigParser()
-    cfg_path = os.path.expanduser('~/.config/jdbrowser/config.conf')
-    config.read(cfg_path)
-    return config.get('settings', 'repository', fallback=os.getcwd())
-
-if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        directory = sys.argv[1]
-    else:
-        directory = read_config()
-    directory = os.path.expanduser(directory)
-    if not os.path.isdir(directory):
-        print('Error:', directory, 'is not a valid directory.')
-        sys.exit(1)
-
-    app = QtWidgets.QApplication(sys.argv)
-    app.setFont(QtGui.QFont('FiraCode Nerd Font'))
-    browser = FileBrowser(directory)
-    settings = QtCore.QSettings("xAI", "jdbrowser")
-    if not (settings.contains("pos") and settings.contains("size")):
-        browser.resize(1000, 600)
-        screen = app.primaryScreen().geometry()
-        browser.move((screen.width() - 1000) // 2, (screen.height() - 600) // 2)
-    browser.show()
-    timer = QtCore.QTimer()
-    timer.timeout.connect(lambda: None)
-    timer.start(100)
-    sys.exit(app.exec())

@@ -1,0 +1,8 @@
+# TokyoNight Dark theme colors
+HIGHLIGHT_COLOR = '#44475a'
+HOVER_COLOR = '#5c6370'
+SLATE_COLOR = '#2e303e'
+TEXT_COLOR = '#c0caf5'
+BACKGROUND_COLOR = '#2e303e'
+BORDER_COLOR = '#44475a'
+BUTTON_COLOR = '#d7ba7d'
