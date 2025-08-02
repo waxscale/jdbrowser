@@ -1,19 +1,16 @@
-from PySide6 import QtWidgets
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton
+from PySide6.QtCore import Qt
 from ..constants import *
 
-class SimpleEditTagDialog(QtWidgets.QDialog):
+class SimpleEditTagDialog(QDialog):
     def __init__(self, current_label, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Rename Tag")
-        self.setFixedWidth(300)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Label input
-        self.label_input = QtWidgets.QLineEdit(current_label)
-        self.label_input.setPlaceholderText("Enter tag label")
-        self.label_input.setStyleSheet(f'''
+        self.setWindowTitle("Edit Tag Label")
+        self.setStyleSheet(f'''
+            QDialog {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+            }}
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -21,12 +18,6 @@ class SimpleEditTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
                 padding: 5px;
             }}
-        ''')
-        layout.addWidget(self.label_input)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
             QPushButton {{
                 background-color: {BUTTON_COLOR};
                 color: black;
@@ -38,11 +29,22 @@ class SimpleEditTagDialog(QtWidgets.QDialog):
                 background-color: #e0c58f;
             }}
         ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
 
-        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
+        layout = QVBoxLayout(self)
+        self.input = QLineEdit(current_label)
+        self.input.setMinimumWidth(200)
+        self.input.selectAll()  # Select all text in the input box
+        layout.addWidget(self.input)
+
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        layout.addWidget(self.ok_button)
+
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        layout.addWidget(self.cancel_button)
+
+        self.setFixedSize(self.sizeHint())
 
     def get_label(self):
-        return self.label_input.text()
+        return self.input.text().strip()

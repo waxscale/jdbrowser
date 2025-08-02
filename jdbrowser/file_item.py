@@ -119,7 +119,11 @@ class FileItem(QtWidgets.QWidget):
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
-        """Select this item when clicked, including placeholders."""
-        if event.button() == QtCore.Qt.LeftButton and self.file_browser:
-            self.file_browser.set_selection(self.section_idx, self.item_idx)
+        """Select this item on left-click, open EditTagDialog on right-click."""
+        if self.file_browser:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.file_browser.set_selection(self.section_idx, self.item_idx)
+            elif event.button() == QtCore.Qt.RightButton and self.tag_id:  # Only for non-placeholder items
+                self.file_browser.set_selection(self.section_idx, self.item_idx)
+                self.file_browser._edit_tag_label_with_icon()
         super().mousePressEvent(event)

@@ -1,52 +1,19 @@
-from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6 import QtWidgets
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QFileDialog
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath
+from PySide6.QtCore import Qt
 from ..constants import *
 
-class EditTagDialog(QtWidgets.QDialog):
-    def __init__(self, current_label, current_icon, parent=None):
+class EditTagDialog(QDialog):
+    def __init__(self, current_label, icon_data, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Edit Tag")
-        self.setFixedWidth(300)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Icon display (clickable)
-        self.icon_label = QtWidgets.QLabel()
-        self.icon_label.setMouseTracking(True)
-        self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        self.new_icon_data = None  # Track new image data
-        if current_icon:
-            pixmap = QtGui.QPixmap()
-            pixmap.loadFromData(current_icon)
-            if not pixmap.isNull():
-                rounded_pixmap = QtGui.QPixmap(240, 150)
-                rounded_pixmap.fill(QtCore.Qt.transparent)
-                painter = QtGui.QPainter(rounded_pixmap)
-                painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(0, 0, 240, 150, 10, 10)
-                painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
-                painter.drawPixmap(0, 0, scaled_pixmap)
-                painter.end()
-                self.icon_label.setPixmap(rounded_pixmap)
-            else:
-                self.icon_label = QtWidgets.QFrame()
-                self.icon_label.setFixedSize(240, 150)
-                self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        else:
-            self.icon_label = QtWidgets.QFrame()
-            self.icon_label.setFixedSize(240, 150)
-            self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
-        self.icon_label.setMouseTracking(True)
-        self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        self.icon_label.mousePressEvent = self.select_icon
-        layout.addWidget(self.icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-        # Label input
-        self.label_input = QtWidgets.QLineEdit(current_label)
-        self.label_input.setPlaceholderText("Enter tag label")
-        self.label_input.setStyleSheet(f'''
+        self.setWindowTitle("Edit Tag Label and Icon")
+        self.icon_data = icon_data
+        self.setStyleSheet(f'''
+            QDialog {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+            }}
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -54,12 +21,6 @@ class EditTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
                 padding: 5px;
             }}
-        ''')
-        layout.addWidget(self.label_input)
-
-        # Buttons
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
             QPushButton {{
                 background-color: {BUTTON_COLOR};
                 color: black;
@@ -68,19 +29,65 @@ class EditTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: #e0c58f;
+                background-color: {HIGHLIGHT_COLOR};
+            }}
+            QLabel {{
+                color: {TEXT_COLOR};
             }}
         ''')
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
 
-        self.setStyleSheet(f'background-color: {BACKGROUND_COLOR};')
+        layout = QVBoxLayout(self)
 
-    def select_icon(self, event):
-        """Open file dialog to select a new .png image and update the icon display."""
-        file_dialog = QtWidgets.QFileDialog(self)
-        file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
+        # Icon preview (clickable to change icon)
+        self.icon_label = QLabel()
+        self.icon_label.setFixedSize(240, 150)
+        self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
+        if icon_data:
+            pixmap = QPixmap()
+            pixmap.loadFromData(icon_data)
+            if not pixmap.isNull():
+                rounded_pixmap = QPixmap(240, 150)
+                rounded_pixmap.fill(Qt.transparent)
+                painter = QPainter(rounded_pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
+                path = QPainterPath()
+                path.addRoundedRect(0, 0, 240, 150, 10, 10)
+                painter.setClipPath(path)
+                scaled_pixmap = pixmap.scaled(240, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                painter.drawPixmap(0, 0, scaled_pixmap)
+                painter.end()
+                self.icon_label.setPixmap(rounded_pixmap)
+        self.icon_label.setCursor(Qt.PointingHandCursor)
+        self.icon_label.mousePressEvent = self.change_icon
+        layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        # Label input (below icon, full width)
+        self.input = QLineEdit(current_label)
+        self.input.setMinimumWidth(240)  # Match thumbnail width
+        self.input.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.input.selectAll()  # Select all text in the input box
+        layout.addWidget(self.input, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        # Buttons (side-by-side, half-width each)
+        button_layout = QHBoxLayout()
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        button_layout.addWidget(self.ok_button)
+
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_button)
+
+        # Set buttons to approximately half-width
+        button_layout.setStretch(0, 1)
+        button_layout.setStretch(1, 1)
+        layout.addLayout(button_layout)
+
+        self.setFixedSize(self.sizeHint())
+
+    def change_icon(self, event=None):
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.ExistingFile)
         file_dialog.setNameFilter("Images (*.png)")
         file_dialog.setStyleSheet(f'''
             QFileDialog {{
@@ -102,7 +109,7 @@ class EditTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: #e0c58f;
+                background-color: {HIGHLIGHT_COLOR};
             }}
             QToolButton {{
                 background-color: {BUTTON_COLOR};
@@ -112,7 +119,7 @@ class EditTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
             }}
             QToolButton:hover {{
-                background-color: #e0c58f;
+                background-color: {HIGHLIGHT_COLOR};
             }}
             QLabel {{
                 color: {TEXT_COLOR};
@@ -150,35 +157,24 @@ class EditTagDialog(QtWidgets.QDialog):
         ''')
         if file_dialog.exec():
             file_path = file_dialog.selectedFiles()[0]
-            pixmap = QtGui.QPixmap(file_path)
+            pixmap = QPixmap(file_path)
             if not pixmap.isNull():
-                rounded_pixmap = QtGui.QPixmap(240, 150)
-                rounded_pixmap.fill(QtCore.Qt.transparent)
-                painter = QtGui.QPainter(rounded_pixmap)
-                painter.setRenderHint(QtGui.QPainter.Antialiasing)
-                path = QtGui.QPainterPath()
+                with open(file_path, 'rb') as f:
+                    self.icon_data = f.read()
+                rounded_pixmap = QPixmap(240, 150)
+                rounded_pixmap.fill(Qt.transparent)
+                painter = QPainter(rounded_pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
+                path = QPainterPath()
                 path.addRoundedRect(0, 0, 240, 150, 10, 10)
                 painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(240, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 painter.drawPixmap(0, 0, scaled_pixmap)
                 painter.end()
-                # Replace QFrame with QLabel if necessary
-                if isinstance(self.icon_label, QtWidgets.QFrame):
-                    layout = self.icon_label.parent().layout()
-                    layout.removeWidget(self.icon_label)
-                    self.icon_label.deleteLater()
-                    self.icon_label = QtWidgets.QLabel()
-                    self.icon_label.setFixedSize(240, 150)
-                    self.icon_label.setMouseTracking(True)
-                    self.icon_label.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-                    self.icon_label.mousePressEvent = self.select_icon
-                    layout.insertWidget(0, self.icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
                 self.icon_label.setPixmap(rounded_pixmap)
-                with open(file_path, 'rb') as f:
-                    self.new_icon_data = f.read()
 
     def get_label(self):
-        return self.label_input.text()
+        return self.input.text().strip()
 
     def get_icon_data(self):
-        return self.new_icon_data
+        return self.icon_data
