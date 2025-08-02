@@ -380,7 +380,8 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.sections = []
         self.section_jd_areas = []
         self.section_filenames = []
-        current_section = []
+        current_section = None
+        section_index = 0
         cursor = self.conn.cursor()
         cursor.execute("SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers ORDER BY jd_area, jd_id, jd_ext")
         headers = cursor.fetchall()
@@ -410,53 +411,14 @@ class FileBrowser(QtWidgets.QMainWindow):
 
         items.sort(key=lambda x: (x[1], 0 if x[0] == "header" else 1, (x[2] or "").lower()))
 
-        section_index = 0
-        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-            display = f"{prefix} {label}" if prefix else (label or "")
-            if kind == "header":
-                if current_section:
-                    sectionWidget = QtWidgets.QWidget()
-                    sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                    sectionLayout.setSpacing(5)
-                    sectionLayout.setContentsMargins(0, 0, 0, 0)
-                    sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                    rowLayout = None
-                    for i, item in enumerate(current_section):
-                        if i % self.cols == 0:
-                            if rowLayout:
-                                sectionLayout.addLayout(rowLayout)
-                            rowLayout = QtWidgets.QHBoxLayout()
-                            rowLayout.setSpacing(5)
-                            rowLayout.setContentsMargins(0, 0, 0, 0)
-                            rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                        rowLayout.addWidget(item)
-                    if rowLayout:
-                        sectionLayout.addLayout(rowLayout)
-                    sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                    mainLayout.addWidget(sectionWidget)
-                    mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                    self.sections.append(current_section)
-                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                mainLayout.addWidget(header_item)
-                mainLayout.addSpacing(10)
-                current_section = []
-                self.section_jd_areas.append(jd_area)
-                self.section_filenames.append(obj_id)
-                section_index += 1
-            else:
-                icon_data = icons.get(obj_id)
-                item = FileItem(obj_id, label, jd_area, jd_id, jd_ext, icon_data, self.directory, self, section_index, len(current_section))
-                current_section.append(item)
-
-        if current_section:
+        def add_section(section):
             sectionWidget = QtWidgets.QWidget()
             sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
             sectionLayout.setSpacing(5)
             sectionLayout.setContentsMargins(0, 0, 0, 0)
             sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
             rowLayout = None
-            for i, item in enumerate(current_section):
+            for i, item in enumerate(section):
                 if i % self.cols == 0:
                     if rowLayout:
                         sectionLayout.addLayout(rowLayout)
@@ -470,7 +432,39 @@ class FileBrowser(QtWidgets.QMainWindow):
             sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
             mainLayout.addWidget(sectionWidget)
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-            self.sections.append(current_section)
+            self.sections.append(section)
+
+        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+            display = f"{prefix} {label}" if prefix else (label or "")
+            if kind == "header":
+                if current_section is not None:
+                    add_section(current_section)
+                    section_index += 1
+                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                mainLayout.addWidget(header_item)
+                mainLayout.addSpacing(10)
+                self.section_jd_areas.append(jd_area)
+                self.section_filenames.append(obj_id)
+                placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
+                current_section = [placeholder]
+            else:
+                if current_section is None:
+                    self.section_jd_areas.append(jd_area if jd_area is not None else 0)
+                    self.section_filenames.append(obj_id)
+                    placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
+                    current_section = [placeholder]
+                icon_data = icons.get(obj_id)
+                item = FileItem(obj_id, label, jd_area, jd_id, jd_ext, icon_data, self.directory, self, section_index, len(current_section))
+                current_section.append(item)
+
+        if current_section is not None:
+            add_section(current_section)
+        elif not items:
+            placeholder = FileItem(None, None, None, None, None, None, self.directory, self, 0, 0)
+            add_section([placeholder])
+            self.section_jd_areas.append(0)
+            self.section_filenames.append(None)
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
