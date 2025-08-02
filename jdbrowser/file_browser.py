@@ -237,9 +237,34 @@ class FileBrowser(QtWidgets.QMainWindow):
                 new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
             new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
         elif self.current_level == 1:
-            new_tag_id = create_tag(self.conn, jd_area, jd_id, None, label)
+            if jd_id is None:
+                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+                max_jd_id = cursor.fetchone()[0]
+                new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                    (jd_area, jd_id, jd_id + 10),
+                )
+                max_jd_id = cursor.fetchone()[0]
+                new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
+            new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
         else:
-            new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
+            if jd_ext is None:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
+                    (jd_area, jd_id),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
+                    (jd_area, jd_id, jd_ext, jd_ext + 10),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
+            new_tag_id = create_tag(self.conn, jd_area, jd_id, new_jd_ext, label)
         if new_tag_id:
             rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
@@ -270,7 +295,12 @@ class FileBrowser(QtWidgets.QMainWindow):
                 max_jd_id = cursor.fetchone()[0]
                 default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
             else:
-                default_jd_id = jd_id
+                cursor.execute(
+                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                    (jd_area, jd_id, jd_id + 10),
+                )
+                max_jd_id = cursor.fetchone()[0]
+                default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
             dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
         else:
             if jd_ext is None:
@@ -281,7 +311,12 @@ class FileBrowser(QtWidgets.QMainWindow):
                 max_jd_ext = cursor.fetchone()[0]
                 default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
             else:
-                default_jd_ext = jd_ext
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
+                    (jd_area, jd_id, jd_ext, jd_ext + 10),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
             dialog = InputTagDialog(jd_area, jd_id, default_jd_ext, default_label, level=2, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
