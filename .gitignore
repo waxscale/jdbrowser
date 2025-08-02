@@ -1,1 +1,53 @@
-__pycache__
+# Python byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# Python package build artifacts
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.cache
+*.tmp
+*.swp
+
+# Database files (since tag.db is stored in ~/.local/share/jdbrowser/)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment configuration
+.env
+.env.local
+*.env
+
+# Coverage reports
+coverage/
+.coverage
+*.cover
+htmlcov/
+
+# Testing artifacts
+.pytest_cache/
+.tox/
+.nox/
