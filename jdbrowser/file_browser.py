@@ -814,7 +814,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             sec = self.sections[self.sec_idx]
             row = self.idx_in_sec // self.cols
             length = min(self.cols, len(sec) - row * self.cols)
-            self.idx_in_sec = row * cols + length - 1
+            self.idx_in_sec = row * self.cols + length - 1
             self.desired_col = length - 1
             self.updateSelection()
 
