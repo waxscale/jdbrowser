@@ -186,12 +186,25 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self._rebuild_ui()
 
     def _create_header(self):
+        cursor = self.conn.cursor()
         if self.current_level == 0:
-            dialog = HeaderDialog(parent=self, level=self.current_level)
+            cursor.execute("SELECT MAX(jd_area) FROM state_headers")
+            max_jd_area = cursor.fetchone()[0]
+            default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=self.current_level)
         elif self.current_level == 1:
-            dialog = HeaderDialog(self.current_jd_area, None, None, parent=self, level=self.current_level)
+            cursor.execute("SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?", (self.current_jd_area,))
+            max_jd_id = cursor.fetchone()[0]
+            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            dialog = HeaderDialog(self.current_jd_area, default_jd_id, None, parent=self, level=self.current_level)
         else:
-            dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, None, parent=self, level=self.current_level)
+            cursor.execute(
+                "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
+                (self.current_jd_area, self.current_jd_id),
+            )
+            max_jd_ext = cursor.fetchone()[0]
+            default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=self.current_level)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
             if jd_area is None:
@@ -210,12 +223,17 @@ class FileBrowser(QtWidgets.QMainWindow):
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         label = "NewTag"
         if self.current_level == 0:
-            cursor.execute(
-                "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                (jd_area, jd_area + 10),
-            )
-            max_jd_area = cursor.fetchone()[0]
-            new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+            if jd_area is None:
+                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+                max_jd_area = cursor.fetchone()[0]
+                new_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                    (jd_area, jd_area + 10),
+                )
+                max_jd_area = cursor.fetchone()[0]
+                new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
             new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
         elif self.current_level == 1:
             cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
@@ -242,12 +260,17 @@ class FileBrowser(QtWidgets.QMainWindow):
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         default_label = "NewTag"
         if self.current_level == 0:
-            cursor.execute(
-                "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                (jd_area, jd_area + 10),
-            )
-            max_jd_area = cursor.fetchone()[0]
-            default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+            if jd_area is None:
+                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+                max_jd_area = cursor.fetchone()[0]
+                default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                    (jd_area, jd_area + 10),
+                )
+                max_jd_area = cursor.fetchone()[0]
+                default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
             dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
         elif self.current_level == 1:
             cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
@@ -290,6 +313,20 @@ class FileBrowser(QtWidgets.QMainWindow):
                     )
             else:
                 break
+
+    def ascend_level(self):
+        if self.current_level == 1:
+            self.current_level = 0
+            self.current_jd_area = None
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+            self._rebuild_ui()
+        elif self.current_level == 2:
+            self.current_level = 1
+            self.current_jd_id = None
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+            self._rebuild_ui()
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -689,6 +726,8 @@ class FileBrowser(QtWidgets.QMainWindow):
               (QtCore.Qt.Key_T, self._set_thumbnail, None),
               (QtCore.Qt.Key_Return, self.descend_level, None),
               (QtCore.Qt.Key_Enter, self.descend_level, None),
+              (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+              (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
           ]
         quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
         self.shortcuts = []

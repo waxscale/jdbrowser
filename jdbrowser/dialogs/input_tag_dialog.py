@@ -11,6 +11,8 @@ class InputTagDialog(QtWidgets.QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         row = QtWidgets.QHBoxLayout()
+        row.setSpacing(5)
+        row.setContentsMargins(0, 0, 0, 0)
         self.jd_area_input = QtWidgets.QLineEdit("" if default_jd_area is None else str(default_jd_area))
         self.jd_id_input = QtWidgets.QLineEdit("" if default_jd_id is None else str(default_jd_id))
         self.jd_ext_input = QtWidgets.QLineEdit("" if default_jd_ext is None else str(default_jd_ext))
@@ -21,7 +23,6 @@ class InputTagDialog(QtWidgets.QDialog):
         ):
             w.setPlaceholderText(placeholder)
             w.setValidator(QtGui.QIntValidator())
-            w.setFixedWidth(60)
             w.setStyleSheet(f'''
                 QLineEdit {{
                     background-color: {BACKGROUND_COLOR};
@@ -31,14 +32,17 @@ class InputTagDialog(QtWidgets.QDialog):
                     padding: 5px;
                 }}
             ''')
-            row.addWidget(w)
-        layout.addLayout(row)
-
+            w.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         if level == 0:
-            self.jd_id_input.setEnabled(False)
-            self.jd_ext_input.setEnabled(False)
+            row.addWidget(self.jd_area_input, 1)
         elif level == 1:
-            self.jd_ext_input.setEnabled(False)
+            row.addWidget(self.jd_area_input, 1)
+            row.addWidget(self.jd_id_input, 1)
+        else:
+            row.addWidget(self.jd_area_input, 1)
+            row.addWidget(self.jd_id_input, 1)
+            row.addWidget(self.jd_ext_input, 1)
+        layout.addLayout(row)
 
         self.label_input = QtWidgets.QLineEdit(default_label)
         self.label_input.setPlaceholderText("Label")
