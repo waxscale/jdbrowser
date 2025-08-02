@@ -434,33 +434,39 @@ class FileBrowser(QtWidgets.QMainWindow):
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
             self.sections.append(section)
 
+        def flush_section():
+            nonlocal current_section, section_index
+            if current_section is None:
+                return
+            if not current_section:
+                placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
+                current_section = [placeholder]
+            add_section(current_section)
+            section_index += 1
+            current_section = None
+
         for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
             display = f"{prefix} {label}" if prefix else (label or "")
             if kind == "header":
-                if current_section is not None:
-                    add_section(current_section)
-                    section_index += 1
+                flush_section()
                 header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
                 header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
                 self.section_jd_areas.append(jd_area)
                 self.section_filenames.append(obj_id)
-                placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
-                current_section = [placeholder]
+                current_section = []
             else:
                 if current_section is None:
                     self.section_jd_areas.append(jd_area if jd_area is not None else 0)
                     self.section_filenames.append(obj_id)
-                    placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
-                    current_section = [placeholder]
+                    current_section = []
                 icon_data = icons.get(obj_id)
                 item = FileItem(obj_id, label, jd_area, jd_id, jd_ext, icon_data, self.directory, self, section_index, len(current_section))
                 current_section.append(item)
 
-        if current_section is not None:
-            add_section(current_section)
-        elif not items:
+        flush_section()
+        if not items:
             placeholder = FileItem(None, None, None, None, None, None, self.directory, self, 0, 0)
             add_section([placeholder])
             self.section_jd_areas.append(0)
