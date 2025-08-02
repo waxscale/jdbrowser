@@ -17,17 +17,30 @@ from .database import (
 from .constants import *
 
 class FileBrowser(QtWidgets.QMainWindow):
-    def __init__(self, directory):
+    def __init__(self, start_id=None):
         super().__init__()
-        self.directory = directory
+        self.directory = start_id or ""
         self.setWindowTitle(f"File Browser - {self.directory}")
+        self.current_level = 0
+        self.current_jd_area = None
+        self.current_jd_id = None
+        if start_id:
+            parts = start_id.split('.')
+            if len(parts) == 1:
+                self.current_level = 1
+                self.current_jd_area = int(parts[0])
+            elif len(parts) == 2:
+                self.current_level = 2
+                self.current_jd_area = int(parts[0])
+                self.current_jd_id = int(parts[1])
         self.cols = 5
         self.sections = []
-        self.section_jd_areas = []  # Store base jd_area for each section
+        self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
         self.section_filenames = []  # Store .2do filenames for sorting
         self.sec_idx = 0
         self.idx_in_sec = 0
         self.desired_col = 0
+        self.nav_stack = []
         self.in_search_mode = False
         self.prev_sec_idx = 0
         self.prev_idx_in_sec = 0
@@ -174,7 +187,25 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self._rebuild_ui()
 
     def _create_header(self):
-        dialog = HeaderDialog(parent=self)
+        cursor = self.conn.cursor()
+        if self.current_level == 0:
+            cursor.execute("SELECT MAX(jd_area) FROM state_headers")
+            max_jd_area = cursor.fetchone()[0]
+            default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=self.current_level)
+        elif self.current_level == 1:
+            cursor.execute("SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?", (self.current_jd_area,))
+            max_jd_id = cursor.fetchone()[0]
+            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            dialog = HeaderDialog(self.current_jd_area, default_jd_id, None, parent=self, level=self.current_level)
+        else:
+            cursor.execute(
+                "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
+                (self.current_jd_area, self.current_jd_id),
+            )
+            max_jd_ext = cursor.fetchone()[0]
+            default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=self.current_level)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
             if jd_area is None:
@@ -186,17 +217,55 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self._rebuild_ui()
 
     def _append_tag_to_section(self):
-        """Append a tag to the current section with jd_area = max + 1 or section base."""
+        """Append a tag to the current section with jd parts incremented appropriately."""
         if not self.sections or self.sec_idx >= len(self.sections):
             return
         cursor = self.conn.cursor()
-        jd_area = self.section_jd_areas[self.sec_idx]
-        cursor.execute("SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?", (jd_area, jd_area + 10))
-        max_jd_area = cursor.fetchone()[0]
-        new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         label = "NewTag"
-        new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
-        if new_tag_id:  # Only rebuild if tag was created successfully
+        if self.current_level == 0:
+            if jd_area is None:
+                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+                max_jd_area = cursor.fetchone()[0]
+                new_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                    (jd_area, jd_area + 10),
+                )
+                max_jd_area = cursor.fetchone()[0]
+                new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+            new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
+        elif self.current_level == 1:
+            if jd_id is None:
+                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+                max_jd_id = cursor.fetchone()[0]
+                new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                    (jd_area, jd_id, jd_id + 10),
+                )
+                max_jd_id = cursor.fetchone()[0]
+                new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
+            new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
+        else:
+            if jd_ext is None:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
+                    (jd_area, jd_id),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
+                    (jd_area, jd_id, jd_ext, jd_ext + 10),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
+            new_tag_id = create_tag(self.conn, jd_area, jd_id, new_jd_ext, label)
+        if new_tag_id:
             rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
 
@@ -205,13 +274,51 @@ class FileBrowser(QtWidgets.QMainWindow):
         if not self.sections or self.sec_idx >= len(self.sections):
             return
         cursor = self.conn.cursor()
-        jd_area = self.section_jd_areas[self.sec_idx]
-        cursor.execute("SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?", (jd_area, jd_area + 10))
-        max_jd_area = cursor.fetchone()[0]
-        default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         default_label = "NewTag"
+        if self.current_level == 0:
+            if jd_area is None:
+                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+                max_jd_area = cursor.fetchone()[0]
+                default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                    (jd_area, jd_area + 10),
+                )
+                max_jd_area = cursor.fetchone()[0]
+                default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+            dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
+        elif self.current_level == 1:
+            if jd_id is None:
+                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+                max_jd_id = cursor.fetchone()[0]
+                default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                    (jd_area, jd_id, jd_id + 10),
+                )
+                max_jd_id = cursor.fetchone()[0]
+                default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
+            dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
+        else:
+            if jd_ext is None:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
+                    (jd_area, jd_id),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            else:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
+                    (jd_area, jd_id, jd_ext, jd_ext + 10),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
+            dialog = InputTagDialog(jd_area, jd_id, default_jd_ext, default_label, level=2, parent=self)
         while True:
-            dialog = InputTagDialog(default_jd_area, default_label, self)
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
                 if jd_area is None:
@@ -232,9 +339,25 @@ class FileBrowser(QtWidgets.QMainWindow):
                     self._rebuild_ui(new_tag_id=new_tag_id)
                     break
                 else:
-                    QtWidgets.QMessageBox.warning(self, "Constraint Violation", f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.")
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Constraint Violation",
+                        f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
+                    )
             else:
                 break
+
+    def ascend_level(self):
+        if self.current_level == 1:
+            target = self.nav_stack.pop() if self.nav_stack else None
+            self.current_level = 0
+            self.current_jd_area = None
+            self._rebuild_ui(new_tag_id=target)
+        elif self.current_level == 2:
+            target = self.nav_stack.pop() if self.nav_stack else None
+            self.current_level = 1
+            self.current_jd_id = None
+            self._rebuild_ui(new_tag_id=target)
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -329,7 +452,15 @@ class FileBrowser(QtWidgets.QMainWindow):
             self._rebuild_ui()
 
     def _edit_header(self, header_item):
-        dialog = HeaderDialog(header_item.jd_area, header_item.jd_id, header_item.jd_ext, header_item.label, True, self)
+        dialog = HeaderDialog(
+            header_item.jd_area,
+            header_item.jd_id,
+            header_item.jd_ext,
+            header_item.label,
+            True,
+            self,
+            level=self.current_level,
+        )
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
                 delete_header(self.conn, header_item.header_id)
@@ -378,15 +509,48 @@ class FileBrowser(QtWidgets.QMainWindow):
         mainLayout.setContentsMargins(5, 5, 5, 5)
 
         self.sections = []
-        self.section_jd_areas = []
+        self.section_paths = []
         self.section_filenames = []
         current_section = None
         section_index = 0
         cursor = self.conn.cursor()
-        cursor.execute("SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers ORDER BY jd_area, jd_id, jd_ext")
-        headers = cursor.fetchall()
-        cursor.execute("SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags ORDER BY jd_area, jd_id, jd_ext")
-        tags = cursor.fetchall()
+        if self.current_level == 0:
+            cursor.execute(
+                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
+                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
+            )
+            headers = cursor.fetchall()
+            cursor.execute(
+                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
+                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
+            )
+            tags = cursor.fetchall()
+        elif self.current_level == 1:
+            cursor.execute(
+                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
+                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
+                (self.current_jd_area,),
+            )
+            headers = cursor.fetchall()
+            cursor.execute(
+                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
+                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
+                (self.current_jd_area,),
+            )
+            tags = cursor.fetchall()
+        else:
+            cursor.execute(
+                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
+                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
+                (self.current_jd_area, self.current_jd_id),
+            )
+            headers = cursor.fetchall()
+            cursor.execute(
+                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
+                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
+                (self.current_jd_area, self.current_jd_id),
+            )
+            tags = cursor.fetchall()
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
         icons = {row[0]: row[1] for row in cursor.fetchall()}
 
@@ -401,8 +565,6 @@ class FileBrowser(QtWidgets.QMainWindow):
 
         items = []
         for header_id, jd_area, jd_id, jd_ext, label in headers:
-            if jd_area is None or jd_id is not None or jd_ext is not None:
-                continue
             prefix = construct_prefix(jd_area, jd_id, jd_ext)
             items.append(("header", prefix, label, header_id, jd_area, jd_id, jd_ext))
         for tag_id, jd_area, jd_id, jd_ext, label in tags:
@@ -453,23 +615,34 @@ class FileBrowser(QtWidgets.QMainWindow):
                 header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
-                self.section_jd_areas.append(jd_area)
+                self.section_paths.append((jd_area, jd_id, jd_ext))
                 self.section_filenames.append(obj_id)
                 current_section = []
             else:
                 if current_section is None:
-                    self.section_jd_areas.append(jd_area if jd_area is not None else 0)
+                    self.section_paths.append((jd_area, jd_id, jd_ext))
                     self.section_filenames.append(obj_id)
                     current_section = []
                 icon_data = icons.get(obj_id)
-                item = FileItem(obj_id, label, jd_area, jd_id, jd_ext, icon_data, self.directory, self, section_index, len(current_section))
+                item = FileItem(
+                    obj_id,
+                    label,
+                    jd_area,
+                    jd_id,
+                    jd_ext,
+                    icon_data,
+                    self.directory,
+                    self,
+                    section_index,
+                    len(current_section),
+                )
                 current_section.append(item)
 
         flush_section()
         if not items:
             placeholder = FileItem(None, None, None, None, None, None, self.directory, self, 0, 0)
             add_section([placeholder])
-            self.section_jd_areas.append(0)
+            self.section_paths.append((None, None, None))
             self.section_filenames.append(None)
 
         mainLayout.addStretch()
@@ -516,7 +689,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         if old_widget:
             old_widget.deleteLater()
         self.sections = []
-        self.section_jd_areas = []
+        self.section_paths = []
         self.section_filenames = []
         self._setup_ui()
         # Try to select the new tag or fall back to the previous selection
@@ -577,12 +750,16 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_S, self._create_header, None),
             (QtCore.Qt.Key_A, self._append_tag_to_section, None),
             (QtCore.Qt.Key_I, self._input_tag_dialog, None),
-            (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
-            (QtCore.Qt.Key_R, self._rename_tag_label, None),
-            (QtCore.Qt.Key_F2, self._rename_tag_label, None),
-            (QtCore.Qt.Key_D, self._delete_tag, None),
-            (QtCore.Qt.Key_T, self._set_thumbnail, None),
-        ]
+              (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
+              (QtCore.Qt.Key_R, self._rename_tag_label, None),
+              (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+              (QtCore.Qt.Key_D, self._delete_tag, None),
+              (QtCore.Qt.Key_T, self._set_thumbnail, None),
+              (QtCore.Qt.Key_Return, self.descend_level, None),
+              (QtCore.Qt.Key_Enter, self.descend_level, None),
+              (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+              (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
+          ]
         quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
         self.shortcuts = []
         for mapping in self.normal_shortcuts:
@@ -806,6 +983,26 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.idx_in_sec = row * self.cols + length - 1
             self.desired_col = length - 1
             self.updateSelection()
+
+    def descend_level(self):
+        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
+            return
+        current = self.sections[self.sec_idx][self.idx_in_sec]
+        if not current.tag_id:
+            return
+        self.nav_stack.append(current.tag_id)
+        if self.current_level == 0:
+            self.current_jd_area = current.jd_area
+            self.current_level = 1
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+            self._rebuild_ui()
+        elif self.current_level == 1 and current.jd_id is not None:
+            self.current_jd_id = current.jd_id
+            self.current_level = 2
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+            self._rebuild_ui()
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):

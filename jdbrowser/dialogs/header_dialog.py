@@ -2,7 +2,7 @@ from PySide6 import QtWidgets, QtGui
 from ..constants import *
 
 class HeaderDialog(QtWidgets.QDialog):
-    def __init__(self, jd_area=0, jd_id=None, jd_ext=None, label="HEADER", show_delete=False, parent=None):
+    def __init__(self, jd_area=0, jd_id=None, jd_ext=None, label="HEADER", show_delete=False, parent=None, level=0):
         super().__init__(parent)
         self.setWindowTitle("Section Header")
         self.delete_pressed = False
@@ -12,6 +12,8 @@ class HeaderDialog(QtWidgets.QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         row = QtWidgets.QHBoxLayout()
+        row.setSpacing(5)
+        row.setContentsMargins(0, 0, 0, 0)
         self.jd_area_input = QtWidgets.QLineEdit(str(jd_area))
         self.jd_area_input.setValidator(QtGui.QIntValidator())
         self.jd_area_input.setPlaceholderText("jd_area")
@@ -31,7 +33,16 @@ class HeaderDialog(QtWidgets.QDialog):
                     padding: 5px;
                 }}
             """)
-            row.addWidget(w)
+            w.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        if level == 0:
+            row.addWidget(self.jd_area_input, 1)
+        elif level == 1:
+            row.addWidget(self.jd_area_input, 1)
+            row.addWidget(self.jd_id_input, 1)
+        else:
+            row.addWidget(self.jd_area_input, 1)
+            row.addWidget(self.jd_id_input, 1)
+            row.addWidget(self.jd_ext_input, 1)
         layout.addLayout(row)
 
         self.label_input = QtWidgets.QLineEdit(label)
@@ -96,8 +107,15 @@ class HeaderDialog(QtWidgets.QDialog):
                 color: {TEXT_COLOR};
             }}
         """)
-        self.jd_area_input.setFocus()
-        self.jd_area_input.selectAll()
+        if level == 0:
+            self.jd_area_input.setFocus()
+            self.jd_area_input.selectAll()
+        elif level == 1:
+            self.jd_id_input.setFocus()
+            self.jd_id_input.selectAll()
+        else:
+            self.jd_ext_input.setFocus()
+            self.jd_ext_input.selectAll()
 
     def _on_delete(self):
         self.delete_pressed = True
