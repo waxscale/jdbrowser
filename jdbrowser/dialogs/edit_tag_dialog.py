@@ -1,7 +1,8 @@
+import os
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QFileDialog
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from ..constants import *
 
 class EditTagDialog(QDialog):
@@ -89,6 +90,10 @@ class EditTagDialog(QDialog):
         file_dialog = QFileDialog(self)
         file_dialog.setFileMode(QFileDialog.ExistingFile)
         file_dialog.setNameFilter("Images (*.png)")
+        settings = QSettings("xAI", "jdbrowser")
+        last_dir = settings.value("last_thumbnail_dir", "", type=str)
+        if last_dir:
+            file_dialog.setDirectory(last_dir)
         file_dialog.setStyleSheet(f'''
             QFileDialog {{
                 background-color: {BACKGROUND_COLOR};
@@ -157,6 +162,7 @@ class EditTagDialog(QDialog):
         ''')
         if file_dialog.exec():
             file_path = file_dialog.selectedFiles()[0]
+            settings.setValue("last_thumbnail_dir", os.path.dirname(file_path))
             pixmap = QPixmap(file_path)
             if not pixmap.isNull():
                 with open(file_path, 'rb') as f:

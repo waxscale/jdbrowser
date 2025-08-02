@@ -79,6 +79,10 @@ class FileBrowser(QtWidgets.QMainWindow):
         file_dialog = QtWidgets.QFileDialog(self)
         file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
         file_dialog.setNameFilter("Images (*.png)")
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        last_dir = settings.value("last_thumbnail_dir", "", type=str)
+        if last_dir:
+            file_dialog.setDirectory(last_dir)
         file_dialog.setStyleSheet(f'''
             QFileDialog {{
                 background-color: {BACKGROUND_COLOR};
@@ -147,6 +151,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         ''')
         if file_dialog.exec():
             file_path = file_dialog.selectedFiles()[0]
+            settings.setValue("last_thumbnail_dir", os.path.dirname(file_path))
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 with open(file_path, 'rb') as f:
