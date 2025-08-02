@@ -40,6 +40,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.sec_idx = 0
         self.idx_in_sec = 0
         self.desired_col = 0
+        self.nav_stack = []
         self.in_search_mode = False
         self.prev_sec_idx = 0
         self.prev_idx_in_sec = 0
@@ -236,18 +237,9 @@ class FileBrowser(QtWidgets.QMainWindow):
                 new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
             new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
         elif self.current_level == 1:
-            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
+            new_tag_id = create_tag(self.conn, jd_area, jd_id, None, label)
         else:
-            cursor.execute(
-                "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                (jd_area, jd_id),
-            )
-            max_jd_ext = cursor.fetchone()[0]
-            new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            new_tag_id = create_tag(self.conn, jd_area, jd_id, new_jd_ext, label)
+            new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
         if new_tag_id:
             rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
@@ -273,17 +265,23 @@ class FileBrowser(QtWidgets.QMainWindow):
                 default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
             dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
         elif self.current_level == 1:
-            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            if jd_id is None:
+                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+                max_jd_id = cursor.fetchone()[0]
+                default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+            else:
+                default_jd_id = jd_id
             dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
         else:
-            cursor.execute(
-                "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                (jd_area, jd_id),
-            )
-            max_jd_ext = cursor.fetchone()[0]
-            default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            if jd_ext is None:
+                cursor.execute(
+                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
+                    (jd_area, jd_id),
+                )
+                max_jd_ext = cursor.fetchone()[0]
+                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
+            else:
+                default_jd_ext = jd_ext
             dialog = InputTagDialog(jd_area, jd_id, default_jd_ext, default_label, level=2, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
@@ -316,17 +314,15 @@ class FileBrowser(QtWidgets.QMainWindow):
 
     def ascend_level(self):
         if self.current_level == 1:
+            target = self.nav_stack.pop() if self.nav_stack else None
             self.current_level = 0
             self.current_jd_area = None
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
+            self._rebuild_ui(new_tag_id=target)
         elif self.current_level == 2:
+            target = self.nav_stack.pop() if self.nav_stack else None
             self.current_level = 1
             self.current_jd_id = None
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
+            self._rebuild_ui(new_tag_id=target)
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -959,6 +955,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         current = self.sections[self.sec_idx][self.idx_in_sec]
         if not current.tag_id:
             return
+        self.nav_stack.append(current.tag_id)
         if self.current_level == 0:
             self.current_jd_area = current.jd_area
             self.current_level = 1
