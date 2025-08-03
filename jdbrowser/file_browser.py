@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from PySide6 import QtWidgets, QtGui, QtCore
 from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
 from .dialogs.header_dialog import HeaderDialog
@@ -463,15 +464,8 @@ class FileBrowser(QtWidgets.QMainWindow):
             cursor.execute("INSERT INTO event_delete_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
             self.conn.commit()
             rebuild_state_tags(self.conn)
-            # Adjust selection to the previous item
-            if self.idx_in_sec > 0:
-                self.idx_in_sec -= 1
-            elif self.sec_idx > 0:
-                self.sec_idx -= 1
-                self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
-            else:
-                self.sec_idx = 0
-                self.idx_in_sec = 0
+            # Preserve current indices; selection will land on placeholder
+            current_item.tag_id = None
             self._rebuild_ui()
 
     def _edit_header(self, header_item):
@@ -604,34 +598,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             )
         )
 
-        section_index = 0
-        current_section = None
-        section_base = None
-        sections_covered = set()
-
-        def add_section(section):
-            sectionWidget = QtWidgets.QWidget()
-            sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-            sectionLayout.setSpacing(5)
-            sectionLayout.setContentsMargins(0, 0, 0, 0)
-            sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-            rowLayout = None
-            for i, item in enumerate(section):
-                if i % self.cols == 0:
-                    if rowLayout:
-                        sectionLayout.addLayout(rowLayout)
-                    rowLayout = QtWidgets.QHBoxLayout()
-                    rowLayout.setSpacing(2)
-                    rowLayout.setContentsMargins(0, 0, 0, 0)
-                    rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                rowLayout.addWidget(item)
-            if rowLayout:
-                sectionLayout.addLayout(rowLayout)
-            sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-            mainLayout.addWidget(sectionWidget)
-            mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-            self.sections.append(section)
-
+        # Build sections and placeholders
         def placeholder_item(val, sec_idx, item_idx):
             if self.current_level == 0:
                 pa, pi, pe = val, None, None
@@ -643,90 +610,167 @@ class FileBrowser(QtWidgets.QMainWindow):
             item.updateLabel(self.show_prefix)
             return item
 
-        def start_section(base, base_path, filename_id):
-            nonlocal current_section, section_base
-            current_section = [
-                placeholder_item(val, section_index, i)
-                for i, val in enumerate(range(base, base + 10))
-            ]
-            self.section_paths.append(base_path)
-            self.section_filenames.append(filename_id)
-            section_base = base
-            sections_covered.add(base)
+        section_index = 0
 
-        def flush_section():
-            nonlocal current_section, section_index, section_base
-            if current_section is None:
-                return
-            add_section(current_section)
-            section_index += 1
+        if self.current_level < 2:
+            headers_by_base = defaultdict(list)
+            tags_by_base = defaultdict(list)
+            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+                value = jd_area if self.current_level == 0 else jd_id
+                base = (value // 10) * 10 if value is not None else 0
+                if kind == "header":
+                    headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
+                else:
+                    tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
+
+            for base in range(0, 100, 10):
+                for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
+                    display = f"{prefix} {label}" if prefix else (label or "")
+                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                    mainLayout.addWidget(header_item)
+                    mainLayout.addSpacing(10)
+                section = [
+                    placeholder_item(val, section_index, i)
+                    for i, val in enumerate(range(base, base + 10))
+                ]
+                for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
+                    value = jd_area if self.current_level == 0 else jd_id
+                    index = value - base
+                    icon_data = icons.get(obj_id)
+                    item = FileItem(
+                        obj_id,
+                        label,
+                        jd_area,
+                        jd_id,
+                        jd_ext,
+                        icon_data,
+                        self.directory,
+                        self,
+                        section_index,
+                        index,
+                    )
+                    item.updateLabel(self.show_prefix)
+                    section[index] = item
+                sectionWidget = QtWidgets.QWidget()
+                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+                sectionLayout.setSpacing(5)
+                sectionLayout.setContentsMargins(0, 0, 0, 0)
+                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                rowLayout = None
+                for i, item in enumerate(section):
+                    if i % self.cols == 0:
+                        if rowLayout:
+                            sectionLayout.addLayout(rowLayout)
+                        rowLayout = QtWidgets.QHBoxLayout()
+                        rowLayout.setSpacing(2)
+                        rowLayout.setContentsMargins(0, 0, 0, 0)
+                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                    rowLayout.addWidget(item)
+                if rowLayout:
+                    sectionLayout.addLayout(rowLayout)
+                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                mainLayout.addWidget(sectionWidget)
+                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
+                self.sections.append(section)
+                if self.current_level == 0:
+                    base_path = (base, None, None)
+                else:
+                    base_path = (self.current_jd_area, base, None)
+                self.section_paths.append(base_path)
+                self.section_filenames.append(None)
+                section_index += 1
+        else:
             current_section = None
             section_base = None
+            sections_covered = set()
 
-        def add_empty_section(base):
-            if self.current_level == 0:
-                base_path = (base, None, None)
-            elif self.current_level == 1:
-                base_path = (self.current_jd_area, base, None)
-            else:
+            def add_section(section):
+                sectionWidget = QtWidgets.QWidget()
+                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+                sectionLayout.setSpacing(5)
+                sectionLayout.setContentsMargins(0, 0, 0, 0)
+                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                rowLayout = None
+                for i, item in enumerate(section):
+                    if i % self.cols == 0:
+                        if rowLayout:
+                            sectionLayout.addLayout(rowLayout)
+                        rowLayout = QtWidgets.QHBoxLayout()
+                        rowLayout.setSpacing(2)
+                        rowLayout.setContentsMargins(0, 0, 0, 0)
+                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                    rowLayout.addWidget(item)
+                if rowLayout:
+                    sectionLayout.addLayout(rowLayout)
+                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                mainLayout.addWidget(sectionWidget)
+                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
+                self.sections.append(section)
+
+            def start_section(base, base_path, filename_id):
+                nonlocal current_section, section_base
+                current_section = [
+                    placeholder_item(val, section_index, i)
+                    for i, val in enumerate(range(base, base + 10))
+                ]
+                self.section_paths.append(base_path)
+                self.section_filenames.append(filename_id)
+                section_base = base
+                sections_covered.add(base)
+
+            def flush_section():
+                nonlocal current_section, section_index, section_base
+                if current_section is None:
+                    return
+                add_section(current_section)
+                section_index += 1
+                current_section = None
+                section_base = None
+
+            def add_empty_section(base):
                 base_path = (self.current_jd_area, self.current_jd_id, base)
-            start_section(base, base_path, None)
-            flush_section()
-
-        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-            display = f"{prefix} {label}" if prefix else (label or "")
-            if kind == "header":
+                start_section(base, base_path, None)
                 flush_section()
-                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                mainLayout.addWidget(header_item)
-                mainLayout.addSpacing(10)
-                if self.current_level == 0:
-                    base_path = (jd_area, None, None)
-                    base_val = (jd_area // 10) * 10 if jd_area is not None else 0
-                elif self.current_level == 1:
-                    base_path = (jd_area, jd_id, None)
-                    base_val = (jd_id // 10) * 10 if jd_id is not None else 0
-                else:
+
+            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+                display = f"{prefix} {label}" if prefix else (label or "")
+                if kind == "header":
+                    flush_section()
+                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                    mainLayout.addWidget(header_item)
+                    mainLayout.addSpacing(10)
                     base_path = (jd_area, jd_id, jd_ext)
                     base_val = (jd_ext // 10) * 10 if jd_ext is not None else 0
-                start_section(base_val, base_path, obj_id)
-            else:
-                value = jd_area if self.current_level == 0 else (jd_id if self.current_level == 1 else jd_ext)
-                base = (value // 10) * 10 if value is not None else 0
-                if current_section is None or base != section_base:
-                    flush_section()
-                    if self.current_level == 0:
-                        base_path = (base, None, None)
-                    elif self.current_level == 1:
-                        base_path = (self.current_jd_area, base, None)
-                    else:
+                    start_section(base_val, base_path, obj_id)
+                else:
+                    value = jd_ext
+                    base = (value // 10) * 10 if value is not None else 0
+                    if current_section is None or base != section_base:
+                        flush_section()
                         base_path = (self.current_jd_area, self.current_jd_id, base)
-                    start_section(base, base_path, obj_id)
-                index = value - section_base
-                icon_data = icons.get(obj_id)
-                item = FileItem(
-                    obj_id,
-                    label,
-                    jd_area,
-                    jd_id,
-                    jd_ext,
-                    icon_data,
-                    self.directory,
-                    self,
-                    section_index,
-                    index,
-                )
-                item.updateLabel(self.show_prefix)
-                current_section[index] = item
+                        start_section(base, base_path, obj_id)
+                    index = value - section_base
+                    icon_data = icons.get(obj_id)
+                    item = FileItem(
+                        obj_id,
+                        label,
+                        jd_area,
+                        jd_id,
+                        jd_ext,
+                        icon_data,
+                        self.directory,
+                        self,
+                        section_index,
+                        index,
+                    )
+                    item.updateLabel(self.show_prefix)
+                    current_section[index] = item
 
-        flush_section()
-        if self.current_level < 2:
-            for base in range(0, 100, 10):
-                if base not in sections_covered:
-                    add_empty_section(base)
-        elif not items:
-            add_empty_section(0)
+            flush_section()
+            if not items:
+                add_empty_section(0)
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
@@ -775,7 +819,6 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.section_paths = []
         self.section_filenames = []
         self._setup_ui()
-        # Try to select the new tag or fall back to the previous selection
         if new_tag_id or current_tag_id:
             target_tag_id = new_tag_id or current_tag_id
             found = False
@@ -788,11 +831,15 @@ class FileBrowser(QtWidgets.QMainWindow):
                         break
                 if found:
                     break
-            if not found:
-                # Fall back to first item in first section
-                if self.sections:
-                    self.sec_idx = 0
-                    self.idx_in_sec = 0
+        # Ensure indices remain within bounds
+        if not self.sections:
+            self.sec_idx = 0
+            self.idx_in_sec = 0
+        else:
+            if self.sec_idx >= len(self.sections):
+                self.sec_idx = len(self.sections) - 1
+            if self.idx_in_sec >= len(self.sections[self.sec_idx]):
+                self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
         self.updateSelection()
 
     def toggle_hidden(self):
