@@ -206,6 +206,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             "INSERT INTO event_set_tag_path (event_id, tag_id, parent_tag_id, jd_id) VALUES (?, ?, ?, ?)",
             (event_id, dst_tag_id, dst_parent, src_jd),
         )
+        self.conn.commit()
         rebuild_state_tags(self.conn)
         self.load_items()
 
