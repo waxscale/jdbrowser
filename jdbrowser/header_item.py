@@ -1,13 +1,15 @@
 from PySide6 import QtWidgets, QtCore
 from .constants import BUTTON_COLOR
 
+
 class HeaderItem(QtWidgets.QLabel):
-    def __init__(self, header_id, jd_area, jd_id, jd_ext, label, file_browser, section_idx, text):
+    """Simple label used for section headers."""
+
+    def __init__(self, header_id, parent_id, item_order, label, file_browser, section_idx, text):
         super().__init__(text)
         self.header_id = header_id
-        self.jd_area = jd_area
-        self.jd_id = jd_id
-        self.jd_ext = jd_ext
+        self.parent_id = parent_id
+        self.item_order = item_order
         self.label = label
         self.file_browser = file_browser
         self.section_idx = section_idx
@@ -25,3 +27,4 @@ class HeaderItem(QtWidgets.QLabel):
         if event.button() == QtCore.Qt.RightButton and self.file_browser:
             self.file_browser._edit_header(self)
         super().mousePressEvent(event)
+

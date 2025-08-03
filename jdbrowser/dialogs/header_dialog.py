@@ -3,50 +3,28 @@ from ..constants import *
 
 
 class HeaderDialog(QtWidgets.QDialog):
+    """Dialog for creating or editing headers."""
+
     def __init__(
         self,
-        jd_area=0,
-        jd_id=None,
-        jd_ext=None,
-        label="HEADER",
-        show_delete=False,
+        order: int | None = 0,
+        label: str = "HEADER",
+        show_delete: bool = False,
         parent=None,
-        level=0,
     ):
         super().__init__(parent)
         self.setWindowTitle("Section Header")
         self.delete_pressed = False
         self.setFixedWidth(300)
 
-        # Store the incoming values so they can be returned for levels that hide
-        # those fields.
-        self.level = level
-        self.jd_area = jd_area
-        self.jd_id = jd_id
-        self.jd_ext = jd_ext
-
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        # Single prefix input depending on the level being edited. The width of
-        # the field is set to expand to 100% of the dialog width.
-        if level == 0:
-            prefix_val = jd_area
-            placeholder = "jd_area"
-        elif level == 1:
-            prefix_val = jd_id
-            placeholder = "jd_id"
-        else:
-            prefix_val = jd_ext
-            placeholder = "jd_ext"
-
-        self.prefix_input = QtWidgets.QLineEdit(
-            "" if prefix_val is None else str(prefix_val)
-        )
-        self.prefix_input.setValidator(QtGui.QIntValidator())
-        self.prefix_input.setPlaceholderText(placeholder)
-        self.prefix_input.setStyleSheet(
+        self.order_input = QtWidgets.QLineEdit("" if order is None else str(order))
+        self.order_input.setValidator(QtGui.QIntValidator())
+        self.order_input.setPlaceholderText("order")
+        self.order_input.setStyleSheet(
             f"""
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
@@ -57,10 +35,7 @@ class HeaderDialog(QtWidgets.QDialog):
             }}
             """
         )
-        self.prefix_input.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
-        )
-        layout.addWidget(self.prefix_input)
+        layout.addWidget(self.order_input)
 
         self.label_input = QtWidgets.QLineEdit(label)
         self.label_input.setPlaceholderText("Label")
@@ -137,8 +112,8 @@ class HeaderDialog(QtWidgets.QDialog):
             """
         )
 
-        self.prefix_input.setFocus()
-        self.prefix_input.selectAll()
+        self.order_input.setFocus()
+        self.order_input.selectAll()
 
     def _on_delete(self):
         self.delete_pressed = True
@@ -146,20 +121,8 @@ class HeaderDialog(QtWidgets.QDialog):
 
     def get_values(self):
         try:
-            prefix_val = (
-                int(self.prefix_input.text()) if self.prefix_input.text() else None
-            )
+            order_val = int(self.order_input.text()) if self.order_input.text() else None
         except ValueError:
-            prefix_val = None
-
-        jd_area, jd_id, jd_ext = self.jd_area, self.jd_id, self.jd_ext
-
-        if self.level == 0:
-            jd_area = prefix_val
-        elif self.level == 1:
-            jd_id = prefix_val
-        else:
-            jd_ext = prefix_val
-
-        return jd_area, jd_id, jd_ext, self.label_input.text()
+            order_val = None
+        return order_val, self.label_input.text()
 

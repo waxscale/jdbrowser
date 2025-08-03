@@ -3,7 +3,9 @@ from ..constants import *
 
 
 class InputTagDialog(QtWidgets.QDialog):
-    def __init__(self, default_jd_area=None, default_jd_id=None, default_jd_ext=None, default_label="", level=0, parent=None):
+    """Dialog asking for ``item_order`` and label when creating a tag."""
+
+    def __init__(self, default_order: int | None = None, default_label: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Tag")
         self.setFixedWidth(300)
@@ -11,15 +13,10 @@ class InputTagDialog(QtWidgets.QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        self.level = level
-        self.fixed_jd_area = default_jd_area if level >= 1 else None
-        self.fixed_jd_id = default_jd_id if level >= 2 else None
-        default_prefix = [default_jd_area, default_jd_id, default_jd_ext][level]
-        placeholder = ["jd_area", "jd_id", "jd_ext"][level]
-        self.prefix_input = QtWidgets.QLineEdit("" if default_prefix is None else str(default_prefix))
-        self.prefix_input.setPlaceholderText(placeholder)
-        self.prefix_input.setValidator(QtGui.QIntValidator())
-        self.prefix_input.setStyleSheet(f'''
+        self.order_input = QtWidgets.QLineEdit("" if default_order is None else str(default_order))
+        self.order_input.setPlaceholderText("order")
+        self.order_input.setValidator(QtGui.QIntValidator())
+        self.order_input.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -27,13 +24,12 @@ class InputTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
                 padding: 5px;
             }}
-        ''')
-        self.prefix_input.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
-        layout.addWidget(self.prefix_input)
+        """)
+        layout.addWidget(self.order_input)
 
         self.label_input = QtWidgets.QLineEdit(default_label)
         self.label_input.setPlaceholderText("Label")
-        self.label_input.setStyleSheet(f'''
+        self.label_input.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -41,11 +37,11 @@ class InputTagDialog(QtWidgets.QDialog):
                 border-radius: 5px;
                 padding: 5px;
             }}
-        ''')
+        """)
         layout.addWidget(self.label_input)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.setStyleSheet(f'''
+        buttons.setStyleSheet(f"""
             QPushButton {{
                 background-color: {BUTTON_COLOR};
                 color: black;
@@ -56,33 +52,27 @@ class InputTagDialog(QtWidgets.QDialog):
             QPushButton:hover {{
                 background-color: #e0c58f;
             }}
-        ''')
+        """)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        self.setStyleSheet(f'''
+        self.setStyleSheet(f"""
             QDialog {{
                 background-color: {BACKGROUND_COLOR};
             }}
             QLabel {{
                 color: {TEXT_COLOR};
             }}
-        ''')
+        """)
 
         self.label_input.setFocus()
         self.label_input.selectAll()
 
     def get_values(self):
         try:
-            prefix = int(self.prefix_input.text()) if self.prefix_input.text() else None
+            order = int(self.order_input.text()) if self.order_input.text() else None
         except ValueError:
-            prefix = None
-        if self.level == 0:
-            jd_area, jd_id, jd_ext = prefix, None, None
-        elif self.level == 1:
-            jd_area, jd_id, jd_ext = self.fixed_jd_area, prefix, None
-        else:
-            jd_area, jd_id, jd_ext = self.fixed_jd_area, self.fixed_jd_id, prefix
-        return jd_area, jd_id, jd_ext, self.label_input.text()
+            order = None
+        return order, self.label_input.text()
 

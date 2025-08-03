@@ -1,112 +1,110 @@
+"""Database layer for jdbrowser using parent based hierarchy.
+
+This module replaces the previous jd_area/jd_id/jd_ext numbering
+scheme with a simple parent/child relationship.  Each item (tag or
+header) keeps a reference to the UUID of its parent and an integer
+``item_order`` used for sorting amongst its siblings.
+
+The schema is implemented using an append only event log similar to the
+previous design.  Convenience helper functions are provided for common
+operations used by the application.
+"""
+
+from __future__ import annotations
+
 import os
 import sqlite3
 import uuid
+from typing import Optional
 
-def setup_database(db_path):
-    """Initialize SQLite database tables with triggers and state constraints."""
+
+def _latest_event(table: str, id_col: str) -> str:
+    """Helper returning SQL for selecting latest event per id."""
+
+    return f"""
+        SELECT {id_col}, MAX(event_id) AS max_event
+        FROM {table}
+        GROUP BY {id_col}
+    """
+
+
+def setup_database(db_path: str) -> sqlite3.Connection:
+    """Initialise database and rebuild state tables."""
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
-    conn.execute('PRAGMA foreign_keys = ON')
+    conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
-    cursor.executescript("""
+    cursor.executescript(
+        """
         PRAGMA foreign_keys = ON;
 
         CREATE TABLE IF NOT EXISTS events (
             event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL CHECK (
-                event_type IN (
-                    'create_tag',
-                    'set_tag_path',
-                    'set_tag_label',
-                    'set_tag_icon',
-                    'delete_tag',
-                    'create_header',
-                    'set_header_path',
-                    'set_header_label',
-                    'delete_header'
-                )
-            ),
-            timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            event_type TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         );
 
         CREATE TABLE IF NOT EXISTS event_create_tag (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_set_tag_path (
+        CREATE TABLE IF NOT EXISTS event_set_tag_parent (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
-            jd_area INTEGER,
-            jd_id INTEGER,
-            jd_ext INTEGER,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            parent_id TEXT,
+            item_order INTEGER NOT NULL,
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_set_tag_label (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
             new_label TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_set_tag_icon (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
             icon BLOB,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_delete_tag (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_create_header (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_set_header_path (
+        CREATE TABLE IF NOT EXISTS event_set_header_parent (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
-            jd_area INTEGER NOT NULL,
-            jd_id INTEGER,
-            jd_ext INTEGER,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            parent_id TEXT,
+            item_order INTEGER NOT NULL,
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_set_header_label (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
             new_label TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_delete_header (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
-
-        CREATE TABLE IF NOT EXISTS state_headers (
-            header_id TEXT PRIMARY KEY,
-            jd_area INTEGER NOT NULL,
-            jd_id INTEGER,
-            jd_ext INTEGER,
-            label TEXT NOT NULL,
-            UNIQUE(jd_area, jd_id, jd_ext)
-        );
-
-        -- Trigger to prevent jd_ext without jd_id for headers
-        CREATE TRIGGER IF NOT EXISTS check_header_jd_ext
-        BEFORE INSERT ON event_set_header_path
-        WHEN NEW.jd_ext IS NOT NULL AND NEW.jd_id IS NULL
-        BEGIN
-            SELECT RAISE(ABORT, 'jd_ext requires jd_id');
-        END;
 
         CREATE TABLE IF NOT EXISTS state_tag_icons (
             tag_id TEXT PRIMARY KEY,
@@ -115,227 +113,270 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_tags (
             tag_id TEXT PRIMARY KEY,
-            jd_area INTEGER,
-            jd_id INTEGER,
-            jd_ext INTEGER,
+            parent_id TEXT,
+            item_order INTEGER NOT NULL,
             label TEXT NOT NULL,
-            UNIQUE(jd_area, jd_id, jd_ext)
+            UNIQUE(parent_id, item_order)
         );
 
-        -- Trigger to prevent jd_id without jd_area
-        CREATE TRIGGER IF NOT EXISTS check_jd_id
-        BEFORE INSERT ON event_set_tag_path
-        WHEN NEW.jd_id IS NOT NULL AND NEW.jd_area IS NULL
-        BEGIN
-            SELECT RAISE(ABORT, 'jd_id requires jd_area');
-        END;
+        CREATE TABLE IF NOT EXISTS state_headers (
+            header_id TEXT PRIMARY KEY,
+            parent_id TEXT,
+            item_order INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            UNIQUE(parent_id, item_order)
+        );
+        """
+    )
 
-        -- Trigger to prevent jd_ext without jd_id
-        CREATE TRIGGER IF NOT EXISTS check_jd_ext
-        BEFORE INSERT ON event_set_tag_path
-        WHEN NEW.jd_ext IS NOT NULL AND NEW.jd_id IS NULL
-        BEGIN
-            SELECT RAISE(ABORT, 'jd_ext requires jd_id');
-        END;
-    """)
     rebuild_state_tags(conn)
     rebuild_state_headers(conn)
     conn.commit()
     return conn
 
-def rebuild_state_tags(conn):
-    """Rebuild the state_tags table from the event log."""
+
+def rebuild_state_tags(conn: sqlite3.Connection) -> None:
+    """Rebuild ``state_tags`` from the event log."""
+
     cursor = conn.cursor()
-    cursor.executescript("""
+    cursor.executescript(
+        f"""
         DELETE FROM state_tags;
 
-        INSERT INTO state_tags (tag_id, jd_area, jd_id, jd_ext, label)
-        SELECT
-            p.tag_id,
-            p.jd_area,
-            p.jd_id,
-            p.jd_ext,
-            l.new_label
+        INSERT INTO state_tags(tag_id, parent_id, item_order, label)
+        SELECT p.tag_id, p.parent_id, p.item_order, l.new_label
         FROM (
-            SELECT
-                p.tag_id,
-                p.jd_area,
-                p.jd_id,
-                p.jd_ext,
-                p.event_id
-            FROM event_set_tag_path p
-            JOIN (
-                SELECT tag_id, MAX(event_id) AS max_event
-                FROM event_set_tag_path
-                GROUP BY tag_id
-            ) latest_path ON p.tag_id = latest_path.tag_id AND p.event_id = latest_path.max_event
+            SELECT p.tag_id, p.parent_id, p.item_order, p.event_id
+            FROM event_set_tag_parent p
+            JOIN ({_latest_event('event_set_tag_parent','tag_id')}) latest
+            ON p.tag_id = latest.tag_id AND p.event_id = latest.max_event
         ) p
         JOIN (
-            SELECT
-                l.tag_id,
-                l.new_label,
-                l.event_id
+            SELECT l.tag_id, l.new_label, l.event_id
             FROM event_set_tag_label l
-            JOIN (
-                SELECT tag_id, MAX(event_id) AS max_event
-                FROM event_set_tag_label
-                GROUP BY tag_id
-            ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
+            JOIN ({_latest_event('event_set_tag_label','tag_id')}) latest
+            ON l.tag_id = latest.tag_id AND l.event_id = latest.max_event
         ) l ON p.tag_id = l.tag_id
         WHERE p.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
-    """)
-    cursor.executescript("""
+
         DELETE FROM state_tag_icons;
 
-        INSERT INTO state_tag_icons (tag_id, icon)
-        SELECT
-            i.tag_id,
-            i.icon
+        INSERT INTO state_tag_icons(tag_id, icon)
+        SELECT i.tag_id, i.icon
         FROM event_set_tag_icon i
-        JOIN (
-            SELECT tag_id, MAX(event_id) AS max_event
-            FROM event_set_tag_icon
-            GROUP BY tag_id
-        ) latest ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
+        JOIN ({_latest_event('event_set_tag_icon','tag_id')}) latest
+          ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_tag);
-    """)
+        """
+    )
     conn.commit()
 
-def rebuild_state_headers(conn):
-    """Rebuild the state_headers table from the event log."""
+
+def rebuild_state_headers(conn: sqlite3.Connection) -> None:
+    """Rebuild ``state_headers`` from the event log."""
+
     cursor = conn.cursor()
-    cursor.executescript("""
+    cursor.executescript(
+        f"""
         DELETE FROM state_headers;
 
-        INSERT INTO state_headers (header_id, jd_area, jd_id, jd_ext, label)
-        SELECT
-            p.header_id,
-            p.jd_area,
-            p.jd_id,
-            p.jd_ext,
-            l.new_label
+        INSERT INTO state_headers(header_id, parent_id, item_order, label)
+        SELECT p.header_id, p.parent_id, p.item_order, l.new_label
         FROM (
-            SELECT
-                p.header_id,
-                p.jd_area,
-                p.jd_id,
-                p.jd_ext,
-                p.event_id
-            FROM event_set_header_path p
-            JOIN (
-                SELECT header_id, MAX(event_id) AS max_event
-                FROM event_set_header_path
-                GROUP BY header_id
-            ) latest_path ON p.header_id = latest_path.header_id AND p.event_id = latest_path.max_event
+            SELECT p.header_id, p.parent_id, p.item_order, p.event_id
+            FROM event_set_header_parent p
+            JOIN ({_latest_event('event_set_header_parent','header_id')}) latest
+              ON p.header_id = latest.header_id AND p.event_id = latest.max_event
         ) p
         JOIN (
-            SELECT
-                l.header_id,
-                l.new_label,
-                l.event_id
+            SELECT l.header_id, l.new_label, l.event_id
             FROM event_set_header_label l
-            JOIN (
-                SELECT header_id, MAX(event_id) AS max_event
-                FROM event_set_header_label
-                GROUP BY header_id
-            ) latest_label ON l.header_id = latest_label.header_id AND l.event_id = latest_label.max_event
+            JOIN ({_latest_event('event_set_header_label','header_id')}) latest
+              ON l.header_id = latest.header_id AND l.event_id = latest.max_event
         ) l ON p.header_id = l.header_id
         WHERE p.header_id NOT IN (SELECT header_id FROM event_delete_header);
-    """)
+        """
+    )
     conn.commit()
 
-def create_tag(conn, jd_area, jd_id, jd_ext, label):
-    """Create a new tag and return its tag_id, or None if constraints are violated."""
+
+def _check_parent_depth(cursor: sqlite3.Cursor, parent_id: Optional[str]) -> bool:
+    """Return True if ``parent_id`` represents a valid parent (depth <= 2)."""
+
+    if parent_id is None:
+        return True
+
+    cursor.execute(
+        "SELECT parent_id FROM state_tags WHERE tag_id = ?", (parent_id,)
+    )
+    row = cursor.fetchone()
+    if row is None:
+        cursor.execute(
+            "SELECT parent_id FROM state_headers WHERE header_id = ?", (parent_id,)
+        )
+        row = cursor.fetchone()
+
+    if row is None:
+        return False  # parent does not exist
+
+    if row[0] is None:
+        return True  # parent at top level
+
+    # check grandparent
+    cursor.execute(
+        "SELECT parent_id FROM state_tags WHERE tag_id = ?", (row[0],)
+    )
+    gp = cursor.fetchone()
+    if gp is None:
+        cursor.execute(
+            "SELECT parent_id FROM state_headers WHERE header_id = ?", (row[0],)
+        )
+        gp = cursor.fetchone()
+
+    # grandparent exists but has its own parent -> depth > 2
+    return gp is not None and gp[0] is None
+
+
+def create_tag(
+    conn: sqlite3.Connection,
+    parent_id: Optional[str],
+    item_order: int,
+    label: str,
+) -> Optional[str]:
+    """Create a tag.  Returns the new tag_id or ``None`` on failure."""
+
     cursor = conn.cursor()
-    # Check for unique (jd_area, jd_id, jd_ext) constraint
-    cursor.execute("SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ?", (jd_area, jd_id, jd_ext))
+    if not _check_parent_depth(cursor, parent_id):
+        return None
+
+    cursor.execute(
+        "SELECT tag_id FROM state_tags WHERE parent_id IS ? AND item_order = ?",
+        (parent_id, item_order),
+    )
     if cursor.fetchone():
-        return None  # Conflict exists
-    # Validate constraints: no jd_id without jd_area, no jd_ext without jd_id
-    if jd_id is not None and jd_area is None:
         return None
-    if jd_ext is not None and jd_id is None:
-        return None
+
     tag_id = str(uuid.uuid4())
-    cursor.execute("INSERT INTO events (event_type) VALUES ('create_tag')")
+    cursor.execute("INSERT INTO events(event_type) VALUES('create_tag')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+    cursor.execute(
+        "INSERT INTO event_create_tag(event_id, tag_id) VALUES(?, ?)",
+        (event_id, tag_id),
+    )
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_tag_parent')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)", (event_id, tag_id, jd_area, jd_id, jd_ext))
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+    cursor.execute(
+        "INSERT INTO event_set_tag_parent(event_id, tag_id, parent_id, item_order) VALUES(?, ?, ?, ?)",
+        (event_id, tag_id, parent_id, item_order),
+    )
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_tag_label')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
+    cursor.execute(
+        "INSERT INTO event_set_tag_label(event_id, tag_id, new_label) VALUES(?, ?, ?)",
+        (event_id, tag_id, label),
+    )
     conn.commit()
     return tag_id
 
-def create_header(conn, jd_area, jd_id, jd_ext, label):
-    """Create a new header and return its header_id, or None if constraints are violated."""
+
+def create_header(
+    conn: sqlite3.Connection,
+    parent_id: Optional[str],
+    item_order: int,
+    label: str,
+) -> Optional[str]:
+    """Create a header.  Returns ``header_id`` or ``None`` on failure."""
+
     cursor = conn.cursor()
-    # Enforce jd_area not null
-    if jd_area is None:
+    if not _check_parent_depth(cursor, parent_id):
         return None
-    # Check unique (jd_area, jd_id, jd_ext)
+
     cursor.execute(
-        "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id IS ? AND jd_ext IS ?",
-        (jd_area, jd_id, jd_ext),
+        "SELECT header_id FROM state_headers WHERE parent_id IS ? AND item_order = ?",
+        (parent_id, item_order),
     )
     if cursor.fetchone():
         return None
-    if jd_ext is not None and jd_id is None:
-        return None
+
     header_id = str(uuid.uuid4())
-    cursor.execute("INSERT INTO events (event_type) VALUES ('create_header')")
-    event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_create_header (event_id, header_id) VALUES (?, ?)", (event_id, header_id))
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_path')")
+    cursor.execute("INSERT INTO events(event_type) VALUES('create_header')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_set_header_path (event_id, header_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-        (event_id, header_id, jd_area, jd_id, jd_ext),
+        "INSERT INTO event_create_header(event_id, header_id) VALUES(?, ?)",
+        (event_id, header_id),
     )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_label')")
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_header_parent')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_set_header_label (event_id, header_id, new_label) VALUES (?, ?, ?)",
+        "INSERT INTO event_set_header_parent(event_id, header_id, parent_id, item_order) VALUES(?, ?, ?, ?)",
+        (event_id, header_id, parent_id, item_order),
+    )
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_header_label')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_set_header_label(event_id, header_id, new_label) VALUES(?, ?, ?)",
         (event_id, header_id, label),
     )
     conn.commit()
     return header_id
 
-def update_header(conn, header_id, jd_area, jd_id, jd_ext, label):
-    """Update an existing header. Returns True on success."""
+
+def update_header(
+    conn: sqlite3.Connection,
+    header_id: str,
+    parent_id: Optional[str],
+    item_order: int,
+    label: str,
+) -> bool:
+    """Update an existing header.  Returns ``True`` on success."""
+
     cursor = conn.cursor()
-    if jd_area is None or (jd_ext is not None and jd_id is None):
+    if not _check_parent_depth(cursor, parent_id):
         return False
+
     cursor.execute(
-        "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id IS ? AND jd_ext IS ? AND header_id != ?",
-        (jd_area, jd_id, jd_ext, header_id),
+        "SELECT header_id FROM state_headers WHERE parent_id IS ? AND item_order = ? AND header_id != ?",
+        (parent_id, item_order, header_id),
     )
     if cursor.fetchone():
         return False
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_path')")
+
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_header_parent')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_set_header_path (event_id, header_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-        (event_id, header_id, jd_area, jd_id, jd_ext),
+        "INSERT INTO event_set_header_parent(event_id, header_id, parent_id, item_order) VALUES(?, ?, ?, ?)",
+        (event_id, header_id, parent_id, item_order),
     )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_label')")
+    cursor.execute("INSERT INTO events(event_type) VALUES('set_header_label')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_set_header_label (event_id, header_id, new_label) VALUES (?, ?, ?)",
+        "INSERT INTO event_set_header_label(event_id, header_id, new_label) VALUES(?, ?, ?)",
         (event_id, header_id, label),
     )
     conn.commit()
     return True
 
-def delete_header(conn, header_id):
-    """Delete an existing header."""
+
+def delete_header(conn: sqlite3.Connection, header_id: str) -> None:
+    """Delete a header."""
+
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO events (event_type) VALUES ('delete_header')")
+    cursor.execute("INSERT INTO events(event_type) VALUES('delete_header')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_delete_header (event_id, header_id) VALUES (?, ?)",
+        "INSERT INTO event_delete_header(event_id, header_id) VALUES(?, ?)",
         (event_id, header_id),
     )
     conn.commit()
+
+
+__all__ = [
+    "setup_database",
+    "rebuild_state_tags",
+    "rebuild_state_headers",
+    "create_tag",
+    "create_header",
+    "update_header",
+    "delete_header",
+]
+
