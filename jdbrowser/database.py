@@ -37,9 +37,8 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_tag_path (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
-            jd_area INTEGER,
+            parent_tag_id TEXT,
             jd_id INTEGER,
-            jd_ext INTEGER,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
@@ -115,28 +114,11 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_tags (
             tag_id TEXT PRIMARY KEY,
-            jd_area INTEGER,
+            parent_tag_id TEXT,
             jd_id INTEGER,
-            jd_ext INTEGER,
             label TEXT NOT NULL,
-            UNIQUE(jd_area, jd_id, jd_ext)
+            FOREIGN KEY(parent_tag_id) REFERENCES state_tags(tag_id) ON DELETE CASCADE
         );
-
-        -- Trigger to prevent jd_id without jd_area
-        CREATE TRIGGER IF NOT EXISTS check_jd_id
-        BEFORE INSERT ON event_set_tag_path
-        WHEN NEW.jd_id IS NOT NULL AND NEW.jd_area IS NULL
-        BEGIN
-            SELECT RAISE(ABORT, 'jd_id requires jd_area');
-        END;
-
-        -- Trigger to prevent jd_ext without jd_id
-        CREATE TRIGGER IF NOT EXISTS check_jd_ext
-        BEFORE INSERT ON event_set_tag_path
-        WHEN NEW.jd_ext IS NOT NULL AND NEW.jd_id IS NULL
-        BEGIN
-            SELECT RAISE(ABORT, 'jd_ext requires jd_id');
-        END;
     """)
     rebuild_state_tags(conn)
     rebuild_state_headers(conn)
@@ -149,19 +131,17 @@ def rebuild_state_tags(conn):
     cursor.executescript("""
         DELETE FROM state_tags;
 
-        INSERT INTO state_tags (tag_id, jd_area, jd_id, jd_ext, label)
+        INSERT INTO state_tags (tag_id, parent_tag_id, jd_id, label)
         SELECT
             p.tag_id,
-            p.jd_area,
+            p.parent_tag_id,
             p.jd_id,
-            p.jd_ext,
             l.new_label
         FROM (
             SELECT
                 p.tag_id,
-                p.jd_area,
+                p.parent_tag_id,
                 p.jd_id,
-                p.jd_ext,
                 p.event_id
             FROM event_set_tag_path p
             JOIN (
@@ -244,28 +224,35 @@ def rebuild_state_headers(conn):
     """)
     conn.commit()
 
-def create_tag(conn, jd_area, jd_id, jd_ext, label):
+def create_tag(conn, parent_tag_id, jd_id, label):
     """Create a new tag and return its tag_id, or None if constraints are violated."""
     cursor = conn.cursor()
-    # Check for unique (jd_area, jd_id, jd_ext) constraint
-    cursor.execute("SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ?", (jd_area, jd_id, jd_ext))
+    # Enforce unique jd_id within the same parent scope
+    cursor.execute(
+        "SELECT tag_id FROM state_tags WHERE parent_tag_id IS ? AND jd_id IS ?",
+        (parent_tag_id, jd_id),
+    )
     if cursor.fetchone():
-        return None  # Conflict exists
-    # Validate constraints: no jd_id without jd_area, no jd_ext without jd_id
-    if jd_id is not None and jd_area is None:
-        return None
-    if jd_ext is not None and jd_id is None:
         return None
     tag_id = str(uuid.uuid4())
     cursor.execute("INSERT INTO events (event_type) VALUES ('create_tag')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
+    cursor.execute(
+        "INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)",
+        (event_id, tag_id),
+    )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)", (event_id, tag_id, jd_area, jd_id, jd_ext))
+    cursor.execute(
+        "INSERT INTO event_set_tag_path (event_id, tag_id, parent_tag_id, jd_id) VALUES (?, ?, ?, ?)",
+        (event_id, tag_id, parent_tag_id, jd_id),
+    )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
+    cursor.execute(
+        "INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+        (event_id, tag_id, label),
+    )
     conn.commit()
     return tag_id
 
