@@ -365,7 +365,37 @@ class FileBrowser(QtWidgets.QMainWindow):
         if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
             return
         current_item = self.sections[self.sec_idx][self.idx_in_sec]
-        if not current_item.tag_id:  # Skip placeholder items
+        if not current_item.tag_id:
+            default_label = "NewTag"
+            dialog = InputTagDialog(current_item.jd_area, current_item.jd_id, current_item.jd_ext, default_label, level=self.current_level, parent=self)
+            while True:
+                if dialog.exec() == QtWidgets.QDialog.Accepted:
+                    jd_area, jd_id, jd_ext, label = dialog.get_values()
+                    if jd_area is None:
+                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                        continue
+                    if jd_id is not None and jd_area is None:
+                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                        continue
+                    if jd_ext is not None and jd_id is None:
+                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                        continue
+                    if not label:
+                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "Label cannot be empty.")
+                        continue
+                    new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
+                    if new_tag_id:
+                        rebuild_state_tags(self.conn)
+                        self._rebuild_ui(new_tag_id=new_tag_id)
+                        break
+                    else:
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Constraint Violation",
+                            f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
+                        )
+                else:
+                    break
             return
         tag_id = current_item.tag_id
         cursor = self.conn.cursor()
@@ -573,6 +603,8 @@ class FileBrowser(QtWidgets.QMainWindow):
             items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
 
         items.sort(key=lambda x: (x[1], 0 if x[0] == "header" else 1, (x[2] or "").lower()))
+        expected_value = None
+        section_base = None
 
         def add_section(section):
             sectionWidget = QtWidgets.QWidget()
@@ -597,16 +629,27 @@ class FileBrowser(QtWidgets.QMainWindow):
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
             self.sections.append(section)
 
+        def create_placeholder(val):
+            if self.current_level == 0:
+                pa, pi, pe = val, None, None
+            elif self.current_level == 1:
+                pa, pi, pe = self.current_jd_area, val, None
+            else:
+                pa, pi, pe = self.current_jd_area, self.current_jd_id, val
+            return FileItem(None, None, pa, pi, pe, None, self.directory, self, section_index, len(current_section))
+
         def flush_section():
-            nonlocal current_section, section_index
+            nonlocal current_section, section_index, expected_value, section_base
             if current_section is None:
                 return
-            if not current_section:
-                placeholder = FileItem(None, None, None, None, None, None, self.directory, self, section_index, 0)
-                current_section = [placeholder]
+            if expected_value is not None:
+                for val in range(expected_value, section_base + 10):
+                    current_section.append(create_placeholder(val))
             add_section(current_section)
             section_index += 1
             current_section = None
+            expected_value = None
+            section_base = None
 
         for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
             display = f"{prefix} {label}" if prefix else (label or "")
@@ -616,14 +659,37 @@ class FileBrowser(QtWidgets.QMainWindow):
                 header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
-                self.section_paths.append((jd_area, jd_id, jd_ext))
+                if self.current_level == 0:
+                    base_path = (jd_area, None, None)
+                    section_base = (jd_area // 10) * 10 if jd_area is not None else 0
+                elif self.current_level == 1:
+                    base_path = (jd_area, jd_id, None)
+                    section_base = (jd_id // 10) * 10 if jd_id is not None else 0
+                else:
+                    base_path = (jd_area, jd_id, jd_ext)
+                    section_base = (jd_ext // 10) * 10 if jd_ext is not None else 0
+                expected_value = section_base
+                self.section_paths.append(base_path)
                 self.section_filenames.append(obj_id)
                 current_section = []
             else:
+                value = jd_area if self.current_level == 0 else (jd_id if self.current_level == 1 else jd_ext)
                 if current_section is None:
-                    self.section_paths.append((jd_area, jd_id, jd_ext))
+                    if self.current_level == 0:
+                        section_base = (jd_area // 10) * 10
+                        base_path = (section_base, None, None)
+                    elif self.current_level == 1:
+                        section_base = (jd_id // 10) * 10
+                        base_path = (self.current_jd_area, section_base, None)
+                    else:
+                        section_base = (jd_ext // 10) * 10
+                        base_path = (self.current_jd_area, self.current_jd_id, section_base)
+                    expected_value = section_base
+                    self.section_paths.append(base_path)
                     self.section_filenames.append(obj_id)
                     current_section = []
+                for val in range(expected_value, value):
+                    current_section.append(create_placeholder(val))
                 icon_data = icons.get(obj_id)
                 item = FileItem(
                     obj_id,
@@ -638,12 +704,23 @@ class FileBrowser(QtWidgets.QMainWindow):
                     len(current_section),
                 )
                 current_section.append(item)
+                expected_value = value + 1
 
         flush_section()
         if not items:
-            placeholder = FileItem(None, None, None, None, None, None, self.directory, self, 0, 0)
-            add_section([placeholder])
-            self.section_paths.append((None, None, None))
+            current_section = []
+            section_index = 0
+            section_base = 0
+            expected_value = 0
+            for val in range(0, 10):
+                current_section.append(create_placeholder(val))
+            add_section(current_section)
+            if self.current_level == 0:
+                self.section_paths.append((0, None, None))
+            elif self.current_level == 1:
+                self.section_paths.append((self.current_jd_area, 0, None))
+            else:
+                self.section_paths.append((self.current_jd_area, self.current_jd_id, 0))
             self.section_filenames.append(None)
 
         mainLayout.addStretch()
