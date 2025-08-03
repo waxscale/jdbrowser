@@ -613,6 +613,70 @@ class FileBrowser(QtWidgets.QMainWindow):
             current_item.tag_id = None
             self._rebuild_ui()
 
+    def handle_item_drop(self, source_tag_id, target_item):
+        """Handle drag-and-drop operations between items."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?",
+            (source_tag_id,),
+        )
+        source_row = cursor.fetchone()
+        if not source_row:
+            return
+        s_area, s_id, s_ext = source_row
+        if target_item.tag_id is None:
+            new_area, new_id, new_ext = s_area, s_id, s_ext
+            if self.current_level == 0:
+                new_area = target_item.jd_area
+            elif self.current_level == 1:
+                new_id = target_item.jd_id
+            else:
+                new_ext = target_item.jd_ext
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, new_area, new_id, new_ext),
+            )
+        else:
+            target_tag_id = target_item.tag_id
+            if target_tag_id == source_tag_id:
+                return
+            cursor.execute(
+                "SELECT jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?",
+                (target_tag_id,),
+            )
+            t_area, t_id, t_ext = cursor.fetchone()
+            new_s_area, new_s_id, new_s_ext = s_area, s_id, s_ext
+            new_t_area, new_t_id, new_t_ext = t_area, t_id, t_ext
+            if self.current_level == 0:
+                new_s_area, new_t_area = t_area, s_area
+            elif self.current_level == 1:
+                new_s_id, new_t_id = t_id, s_id
+            else:
+                new_s_ext, new_t_ext = t_ext, s_ext
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, None, None, None),
+            )
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
+                (event_id, target_tag_id, new_t_area, new_t_id, new_t_ext),
+            )
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, new_s_area, new_s_id, new_s_ext),
+            )
+        self.conn.commit()
+        rebuild_state_tags(self.conn)
+        self._rebuild_ui(new_tag_id=source_tag_id)
+
     def _edit_header(self, header_item):
         dialog = HeaderDialog(
             header_item.jd_area,
