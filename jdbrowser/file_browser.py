@@ -595,7 +595,14 @@ class FileBrowser(QtWidgets.QMainWindow):
             prefix = construct_prefix(jd_area, jd_id, jd_ext)
             items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
 
-        items.sort(key=lambda x: (x[1], 0 if x[0] == "header" else 1, (x[2] or "").lower()))
+        # Sort numerically by jd components to ensure placeholders don't duplicate real items
+        items.sort(
+            key=lambda x: (
+                x[4] if self.current_level == 0 else (x[5] if self.current_level == 1 else x[6]),
+                0 if x[0] == "header" else 1,
+                (x[2] or "").lower(),
+            )
+        )
         expected_value = None
         section_base = None
 
@@ -629,7 +636,9 @@ class FileBrowser(QtWidgets.QMainWindow):
                 pa, pi, pe = self.current_jd_area, val, None
             else:
                 pa, pi, pe = self.current_jd_area, self.current_jd_id, val
-            return FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+            item = FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+            item.updateLabel(self.show_prefix)
+            return item
 
         def add_empty_section(base):
             nonlocal section_index, current_base
@@ -720,6 +729,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     section_index,
                     len(current_section),
                 )
+                item.updateLabel(self.show_prefix)
                 current_section.append(item)
                 expected_value = value + 1
 
