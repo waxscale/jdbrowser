@@ -902,7 +902,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
                 display = f"{prefix} {label}" if prefix else (label or "")
                 if kind == "header":
-                    flush_section(fill_full=True)
+                    flush_section()
                     header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
                     header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                     mainLayout.addWidget(header_item)
@@ -914,7 +914,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     value = jd_ext
                     base = (value // 10) * 10 if value is not None else 0
                     if current_section is None or base != section_base:
-                        flush_section(fill_full=True)
+                        flush_section()
                         base_path = (self.current_jd_area, self.current_jd_id, base)
                         start_section(base, base_path, obj_id)
                     index = value - section_base
