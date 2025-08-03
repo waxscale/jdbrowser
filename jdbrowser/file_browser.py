@@ -595,7 +595,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             prefix = construct_prefix(jd_area, jd_id, jd_ext)
             items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
 
-        # Sort numerically by jd components to ensure placeholders don't duplicate real items
+        # Sort numerically by jd components to ensure consistent ordering
         items.sort(
             key=lambda x: (
                 x[4] if self.current_level == 0 else (x[5] if self.current_level == 1 else x[6]),
@@ -603,8 +603,11 @@ class FileBrowser(QtWidgets.QMainWindow):
                 (x[2] or "").lower(),
             )
         )
-        expected_value = None
+
+        section_index = 0
+        current_section = None
         section_base = None
+        sections_covered = set()
 
         def add_section(section):
             sectionWidget = QtWidgets.QWidget()
@@ -640,44 +643,37 @@ class FileBrowser(QtWidgets.QMainWindow):
             item.updateLabel(self.show_prefix)
             return item
 
-        def add_empty_section(base):
-            nonlocal section_index, current_base
-            section = []
-            for i, val in enumerate(range(base, base + 10)):
-                section.append(placeholder_item(val, section_index, i))
-            add_section(section)
-            if self.current_level == 0:
-                self.section_paths.append((base, None, None))
-            else:
-                self.section_paths.append((self.current_jd_area, base, None))
-            self.section_filenames.append(None)
-            section_index += 1
-            current_base = base + 10
+        def start_section(base, base_path, filename_id):
+            nonlocal current_section, section_base
+            current_section = [
+                placeholder_item(val, section_index, i)
+                for i, val in enumerate(range(base, base + 10))
+            ]
+            self.section_paths.append(base_path)
+            self.section_filenames.append(filename_id)
+            section_base = base
+            sections_covered.add(base)
 
         def flush_section():
-            nonlocal current_section, section_index, expected_value, section_base, current_base
+            nonlocal current_section, section_index, section_base
             if current_section is None:
                 return
-            if expected_value is not None:
-                if self.current_level < 2:
-                    for val in range(expected_value, section_base + 10):
-                        current_section.append(placeholder_item(val, section_index, len(current_section)))
-                elif not current_section:
-                    current_section.append(placeholder_item(section_base, section_index, 0))
             add_section(current_section)
             section_index += 1
-            if self.current_level < 2:
-                current_base = section_base + 10
             current_section = None
-            expected_value = None
             section_base = None
 
+        def add_empty_section(base):
+            if self.current_level == 0:
+                base_path = (base, None, None)
+            elif self.current_level == 1:
+                base_path = (self.current_jd_area, base, None)
+            else:
+                base_path = (self.current_jd_area, self.current_jd_id, base)
+            start_section(base, base_path, None)
+            flush_section()
+
         for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-            if self.current_level < 2:
-                value = jd_area if self.current_level == 0 else jd_id
-                base = (value // 10) * 10 if value is not None else 0
-                while current_base < base:
-                    add_empty_section(current_base)
             display = f"{prefix} {label}" if prefix else (label or "")
             if kind == "header":
                 flush_section()
@@ -687,35 +683,27 @@ class FileBrowser(QtWidgets.QMainWindow):
                 mainLayout.addSpacing(10)
                 if self.current_level == 0:
                     base_path = (jd_area, None, None)
-                    section_base = (jd_area // 10) * 10 if jd_area is not None else 0
+                    base_val = (jd_area // 10) * 10 if jd_area is not None else 0
                 elif self.current_level == 1:
                     base_path = (jd_area, jd_id, None)
-                    section_base = (jd_id // 10) * 10 if jd_id is not None else 0
+                    base_val = (jd_id // 10) * 10 if jd_id is not None else 0
                 else:
                     base_path = (jd_area, jd_id, jd_ext)
-                    section_base = (jd_ext // 10) * 10 if jd_ext is not None else 0
-                expected_value = section_base
-                self.section_paths.append(base_path)
-                self.section_filenames.append(obj_id)
-                current_section = []
+                    base_val = (jd_ext // 10) * 10 if jd_ext is not None else 0
+                start_section(base_val, base_path, obj_id)
             else:
                 value = jd_area if self.current_level == 0 else (jd_id if self.current_level == 1 else jd_ext)
-                if current_section is None:
+                base = (value // 10) * 10 if value is not None else 0
+                if current_section is None or base != section_base:
+                    flush_section()
                     if self.current_level == 0:
-                        section_base = (jd_area // 10) * 10
-                        base_path = (section_base, None, None)
+                        base_path = (base, None, None)
                     elif self.current_level == 1:
-                        section_base = (jd_id // 10) * 10
-                        base_path = (self.current_jd_area, section_base, None)
+                        base_path = (self.current_jd_area, base, None)
                     else:
-                        section_base = (jd_ext // 10) * 10
-                        base_path = (self.current_jd_area, self.current_jd_id, section_base)
-                    expected_value = section_base
-                    self.section_paths.append(base_path)
-                    self.section_filenames.append(obj_id)
-                    current_section = []
-                for val in range(expected_value, value):
-                    current_section.append(placeholder_item(val, section_index, len(current_section)))
+                        base_path = (self.current_jd_area, self.current_jd_id, base)
+                    start_section(base, base_path, obj_id)
+                index = value - section_base
                 icon_data = icons.get(obj_id)
                 item = FileItem(
                     obj_id,
@@ -727,22 +715,18 @@ class FileBrowser(QtWidgets.QMainWindow):
                     self.directory,
                     self,
                     section_index,
-                    len(current_section),
+                    index,
                 )
                 item.updateLabel(self.show_prefix)
-                current_section.append(item)
-                expected_value = value + 1
+                current_section[index] = item
 
         flush_section()
         if self.current_level < 2:
-            while current_base < 100:
-                add_empty_section(current_base)
+            for base in range(0, 100, 10):
+                if base not in sections_covered:
+                    add_empty_section(base)
         elif not items:
-            section = [placeholder_item(0, section_index, 0)]
-            add_section(section)
-            self.section_paths.append((self.current_jd_area, self.current_jd_id, 0))
-            self.section_filenames.append(None)
-            section_index += 1
+            add_empty_section(0)
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')

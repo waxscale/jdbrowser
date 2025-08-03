@@ -123,7 +123,7 @@ class FileItem(QtWidgets.QWidget):
             icon_style = f'background-color: {icon_color}; border-radius: 5px;'
         else:
             icon_style = 'background-color: transparent;'
-        label_color = PLACEHOLDER_COLOR if self.tag_id is None else TEXT_COLOR
+        label_color = PLACEHOLDER_TEXT_COLOR if self.tag_id is None else TEXT_COLOR
         self.setStyleSheet(f'background-color: {bg}; border-radius: 5px;')
         self.icon.setStyleSheet(icon_style)
         self.label.setStyleSheet(f'color: {label_color};')
