@@ -15,6 +15,8 @@ class FileItem(QtWidgets.QWidget):
         self.isSelected = False
         self.isHover = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
+        self.setAcceptDrops(True)
+        self.drag_start_pos = QtCore.QPoint()
 
         self.prefix = f"[{jd_id:02d}]" if jd_id is not None else ""
         self.display_name = self.name or ""
@@ -116,6 +118,8 @@ class FileItem(QtWidgets.QWidget):
         super().mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.drag_start_pos = event.pos()
         if (
             self.file_browser
             and event.button() == QtCore.Qt.RightButton
@@ -123,4 +127,31 @@ class FileItem(QtWidgets.QWidget):
         ):
             self.file_browser._edit_tag(self.tag_id)
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & QtCore.Qt.LeftButton:
+            if (
+                event.pos() - self.drag_start_pos
+            ).manhattanLength() >= QtWidgets.QApplication.startDragDistance():
+                drag = QtGui.QDrag(self)
+                mime = QtCore.QMimeData()
+                mime.setText(self.tag_id or "")
+                drag.setMimeData(mime)
+                drag.exec(QtCore.Qt.DropAction.MoveAction)
+                return
+        super().mouseMoveEvent(event)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().text():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().text():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        src_id = event.mimeData().text()
+        if src_id and self.file_browser and src_id != self.tag_id:
+            self.file_browser.swap_tags(src_id, self.tag_id)
+        event.acceptProposedAction()
 

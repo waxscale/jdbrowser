@@ -176,3 +176,36 @@ class FileBrowser(QtWidgets.QMainWindow):
         rebuild_state_tags(self.conn)
         self.load_items()
 
+    def swap_tags(self, src_tag_id, dst_tag_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT parent_tag_id, jd_id FROM state_tags WHERE tag_id = ?",
+            (src_tag_id,),
+        )
+        src = cursor.fetchone()
+        cursor.execute(
+            "SELECT parent_tag_id, jd_id FROM state_tags WHERE tag_id = ?",
+            (dst_tag_id,),
+        )
+        dst = cursor.fetchone()
+        if not src or not dst:
+            return
+        src_parent, src_jd = src
+        dst_parent, dst_jd = dst
+        if src_parent != dst_parent:
+            return
+        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+        event_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO event_set_tag_path (event_id, tag_id, parent_tag_id, jd_id) VALUES (?, ?, ?, ?)",
+            (event_id, src_tag_id, src_parent, dst_jd),
+        )
+        cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+        event_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO event_set_tag_path (event_id, tag_id, parent_tag_id, jd_id) VALUES (?, ?, ?, ?)",
+            (event_id, dst_tag_id, dst_parent, src_jd),
+        )
+        rebuild_state_tags(self.conn)
+        self.load_items()
+
