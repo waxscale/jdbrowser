@@ -3,7 +3,7 @@ import sqlite3
 import uuid
 
 def setup_database(db_path):
-    """Initialize SQLite database tables with unique constraint and triggers."""
+    """Initialize SQLite database tables with triggers and state constraints."""
     conn = sqlite3.connect(db_path)
     conn.execute('PRAGMA foreign_keys = ON')
     cursor = conn.cursor()
@@ -40,8 +40,7 @@ def setup_database(db_path):
             jd_area INTEGER,
             jd_id INTEGER,
             jd_ext INTEGER,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
-            UNIQUE(jd_area, jd_id, jd_ext)
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_set_tag_label (
@@ -76,8 +75,7 @@ def setup_database(db_path):
             jd_area INTEGER NOT NULL,
             jd_id INTEGER,
             jd_ext INTEGER,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
-            UNIQUE(jd_area, jd_id, jd_ext)
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS event_set_header_label (
