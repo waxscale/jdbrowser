@@ -97,10 +97,10 @@ class FileBrowser(QtWidgets.QMainWindow):
             SELECT t.tag_id, t.jd_id, t.label, i.icon
             FROM state_tags t
             LEFT JOIN state_tag_icons i ON t.tag_id = i.tag_id
-            WHERE t.parent_tag_id IS ?
+            WHERE ((? IS NULL AND t.parent_tag_id IS NULL) OR t.parent_tag_id = ?)
             ORDER BY t.jd_id
             """,
-            (self.current_parent_id,),
+            (self.current_parent_id, self.current_parent_id),
         )
         rows = cursor.fetchall()
         for idx, (tag_id, jd_id, label, icon) in enumerate(rows):
@@ -148,8 +148,8 @@ class FileBrowser(QtWidgets.QMainWindow):
             self._warn("Invalid Input", "jd_id must be an integer.")
             return
         cursor.execute(
-            "SELECT tag_id FROM state_tags WHERE parent_tag_id IS ? AND jd_id = ? AND tag_id != ?",
-            (self.current_parent_id, new_jd_id, tag_id),
+            "SELECT tag_id FROM state_tags WHERE ((? IS NULL AND parent_tag_id IS NULL) OR parent_tag_id = ?) AND jd_id = ? AND tag_id != ?",
+            (self.current_parent_id, self.current_parent_id, new_jd_id, tag_id),
         )
         if cursor.fetchone():
             self._warn("Duplicate jd_id", "jd_id already exists in this parent.")

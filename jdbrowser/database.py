@@ -229,8 +229,8 @@ def create_tag(conn, parent_tag_id, jd_id, label):
     cursor = conn.cursor()
     # Enforce unique jd_id within the same parent scope
     cursor.execute(
-        "SELECT tag_id FROM state_tags WHERE parent_tag_id IS ? AND jd_id IS ?",
-        (parent_tag_id, jd_id),
+        "SELECT tag_id FROM state_tags WHERE ((? IS NULL AND parent_tag_id IS NULL) OR parent_tag_id = ?) AND jd_id = ?",
+        (parent_tag_id, parent_tag_id, jd_id),
     )
     if cursor.fetchone():
         return None
