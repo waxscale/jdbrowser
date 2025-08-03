@@ -276,8 +276,14 @@ class FileBrowser(QtWidgets.QMainWindow):
             dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=self.current_level)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
-            if jd_area is None:
+            if self.current_level == 0 and jd_area is None:
                 self._warn("Invalid Input", "jd_area must be an integer.")
+                return
+            if self.current_level == 1 and jd_id is None:
+                self._warn("Invalid Input", "jd_id must be an integer.")
+                return
+            if self.current_level == 2 and jd_ext is None:
+                self._warn("Invalid Input", "jd_ext must be an integer.")
                 return
             header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
             if header_id:
@@ -622,10 +628,18 @@ class FileBrowser(QtWidgets.QMainWindow):
                 delete_header(self.conn, header_item.header_id)
             else:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if jd_area is None:
+                if self.current_level == 0 and jd_area is None:
                     self._warn("Invalid Input", "jd_area must be an integer.")
                     return
-                if not update_header(self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label):
+                if self.current_level == 1 and jd_id is None:
+                    self._warn("Invalid Input", "jd_id must be an integer.")
+                    return
+                if self.current_level == 2 and jd_ext is None:
+                    self._warn("Invalid Input", "jd_ext must be an integer.")
+                    return
+                if not update_header(
+                    self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label
+                ):
                     self._warn("Invalid Input", "Header path conflicts or invalid.")
                     return
             rebuild_state_headers(self.conn)
