@@ -122,7 +122,12 @@ class FileBrowser(QtWidgets.QMainWindow):
                 border: 1px solid {BORDER_COLOR};
             }}
             QLabel {{
+                background-color: transparent;
                 color: {TEXT_COLOR};
+            }}
+            QLabel#qt_msgbox_label,
+            QLabel#qt_msgboxex_icon_label {{
+                background-color: transparent;
             }}
             QPushButton {{
                 background-color: {BUTTON_COLOR};
