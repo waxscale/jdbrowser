@@ -331,9 +331,6 @@ class FileBrowser(QtWidgets.QMainWindow):
                 if jd_ext is not None and jd_id is None:
                     QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
                     continue
-                if not label:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "Label cannot be empty.")
-                    continue
                 new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
                 if new_tag_id:
                     rebuild_state_tags(self.conn)
@@ -380,9 +377,6 @@ class FileBrowser(QtWidgets.QMainWindow):
                     if jd_ext is not None and jd_id is None:
                         QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
                         continue
-                    if not label:
-                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "Label cannot be empty.")
-                        continue
                     new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
                     if new_tag_id:
                         rebuild_state_tags(self.conn)
@@ -408,10 +402,9 @@ class FileBrowser(QtWidgets.QMainWindow):
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             new_label = dialog.get_label()
             new_icon_data = dialog.get_icon_data()
-            if new_label:
-                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
-                event_id = cursor.lastrowid
-                cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+            event_id = cursor.lastrowid
+            cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
             if new_icon_data:
                 cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_icon')")
                 event_id = cursor.lastrowid
@@ -434,13 +427,12 @@ class FileBrowser(QtWidgets.QMainWindow):
         dialog = SimpleEditTagDialog(current_label, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             new_label = dialog.get_label()
-            if new_label:
-                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
-                event_id = cursor.lastrowid
-                cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
-                self.conn.commit()
-                rebuild_state_tags(self.conn)
-                self._rebuild_ui()
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+            event_id = cursor.lastrowid
+            cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
+            self.conn.commit()
+            rebuild_state_tags(self.conn)
+            self._rebuild_ui()
 
     def _delete_tag(self):
         """Delete the current tag with a confirmation dialog."""
@@ -544,6 +536,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.section_filenames = []
         current_section = None
         section_index = 0
+        current_base = 0 if self.current_level < 2 else None
         cursor = self.conn.cursor()
         if self.current_level == 0:
             cursor.execute(
@@ -629,29 +622,53 @@ class FileBrowser(QtWidgets.QMainWindow):
             mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
             self.sections.append(section)
 
-        def create_placeholder(val):
+        def placeholder_item(val, sec_idx, item_idx):
             if self.current_level == 0:
                 pa, pi, pe = val, None, None
             elif self.current_level == 1:
                 pa, pi, pe = self.current_jd_area, val, None
             else:
                 pa, pi, pe = self.current_jd_area, self.current_jd_id, val
-            return FileItem(None, None, pa, pi, pe, None, self.directory, self, section_index, len(current_section))
+            return FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+
+        def add_empty_section(base):
+            nonlocal section_index, current_base
+            section = []
+            for i, val in enumerate(range(base, base + 10)):
+                section.append(placeholder_item(val, section_index, i))
+            add_section(section)
+            if self.current_level == 0:
+                self.section_paths.append((base, None, None))
+            else:
+                self.section_paths.append((self.current_jd_area, base, None))
+            self.section_filenames.append(None)
+            section_index += 1
+            current_base = base + 10
 
         def flush_section():
-            nonlocal current_section, section_index, expected_value, section_base
+            nonlocal current_section, section_index, expected_value, section_base, current_base
             if current_section is None:
                 return
             if expected_value is not None:
-                for val in range(expected_value, section_base + 10):
-                    current_section.append(create_placeholder(val))
+                if self.current_level < 2:
+                    for val in range(expected_value, section_base + 10):
+                        current_section.append(placeholder_item(val, section_index, len(current_section)))
+                elif not current_section:
+                    current_section.append(placeholder_item(section_base, section_index, 0))
             add_section(current_section)
             section_index += 1
+            if self.current_level < 2:
+                current_base = section_base + 10
             current_section = None
             expected_value = None
             section_base = None
 
         for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+            if self.current_level < 2:
+                value = jd_area if self.current_level == 0 else jd_id
+                base = (value // 10) * 10 if value is not None else 0
+                while current_base < base:
+                    add_empty_section(current_base)
             display = f"{prefix} {label}" if prefix else (label or "")
             if kind == "header":
                 flush_section()
@@ -689,7 +706,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     self.section_filenames.append(obj_id)
                     current_section = []
                 for val in range(expected_value, value):
-                    current_section.append(create_placeholder(val))
+                    current_section.append(placeholder_item(val, section_index, len(current_section)))
                 icon_data = icons.get(obj_id)
                 item = FileItem(
                     obj_id,
@@ -707,21 +724,15 @@ class FileBrowser(QtWidgets.QMainWindow):
                 expected_value = value + 1
 
         flush_section()
-        if not items:
-            current_section = []
-            section_index = 0
-            section_base = 0
-            expected_value = 0
-            for val in range(0, 10):
-                current_section.append(create_placeholder(val))
-            add_section(current_section)
-            if self.current_level == 0:
-                self.section_paths.append((0, None, None))
-            elif self.current_level == 1:
-                self.section_paths.append((self.current_jd_area, 0, None))
-            else:
-                self.section_paths.append((self.current_jd_area, self.current_jd_id, 0))
+        if self.current_level < 2:
+            while current_base < 100:
+                add_empty_section(current_base)
+        elif not items:
+            section = [placeholder_item(0, section_index, 0)]
+            add_section(section)
+            self.section_paths.append((self.current_jd_area, self.current_jd_id, 0))
             self.section_filenames.append(None)
+            section_index += 1
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
