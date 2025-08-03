@@ -708,25 +708,38 @@ class FileBrowser(QtWidgets.QMainWindow):
                 mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
                 self.sections.append(section)
 
+            next_index = 0
+
             def start_section(base, base_path, filename_id):
-                nonlocal current_section, section_base
-                current_section = [
-                    placeholder_item(val, section_index, i)
-                    for i, val in enumerate(range(base, base + 10))
-                ]
+                nonlocal current_section, section_base, next_index
+                current_section = []
                 self.section_paths.append(base_path)
                 self.section_filenames.append(filename_id)
                 section_base = base
                 sections_covered.add(base)
+                next_index = 0
 
-            def flush_section():
-                nonlocal current_section, section_index, section_base
+            def add_placeholders_until(end_index):
+                nonlocal next_index
+                for i in range(next_index, end_index):
+                    val = section_base + i
+                    current_section.append(placeholder_item(val, section_index, i))
+                next_index = end_index
+
+            def flush_section(fill_full=False):
+                nonlocal current_section, section_index, section_base, next_index
                 if current_section is None:
                     return
+                if not current_section:
+                    end = 10 if fill_full else 1
+                    for i in range(end):
+                        val = section_base + i
+                        current_section.append(placeholder_item(val, section_index, i))
                 add_section(current_section)
                 section_index += 1
                 current_section = None
                 section_base = None
+                next_index = 0
 
             def add_empty_section(base):
                 base_path = (self.current_jd_area, self.current_jd_id, base)
@@ -736,7 +749,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
                 display = f"{prefix} {label}" if prefix else (label or "")
                 if kind == "header":
-                    flush_section()
+                    flush_section(fill_full=True)
                     header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
                     header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                     mainLayout.addWidget(header_item)
@@ -748,10 +761,11 @@ class FileBrowser(QtWidgets.QMainWindow):
                     value = jd_ext
                     base = (value // 10) * 10 if value is not None else 0
                     if current_section is None or base != section_base:
-                        flush_section()
+                        flush_section(fill_full=True)
                         base_path = (self.current_jd_area, self.current_jd_id, base)
                         start_section(base, base_path, obj_id)
                     index = value - section_base
+                    add_placeholders_until(index)
                     icon_data = icons.get(obj_id)
                     item = FileItem(
                         obj_id,
@@ -766,7 +780,8 @@ class FileBrowser(QtWidgets.QMainWindow):
                         index,
                     )
                     item.updateLabel(self.show_prefix)
-                    current_section[index] = item
+                    current_section.append(item)
+                    next_index = index + 1
 
             flush_section()
             if not items:
