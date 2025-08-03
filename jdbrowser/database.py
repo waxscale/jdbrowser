@@ -31,7 +31,9 @@ def _latest_event(table: str, id_col: str) -> str:
 def setup_database(db_path: str) -> sqlite3.Connection:
     """Initialise database and rebuild state tables."""
 
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    dirpath = os.path.dirname(db_path)
+    if dirpath:
+        os.makedirs(dirpath, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
@@ -276,6 +278,7 @@ def create_tag(
         (event_id, tag_id, label),
     )
     conn.commit()
+    rebuild_state_tags(conn)
     return tag_id
 
 
@@ -318,6 +321,7 @@ def create_header(
         (event_id, header_id, label),
     )
     conn.commit()
+    rebuild_state_headers(conn)
     return header_id
 
 
@@ -354,6 +358,7 @@ def update_header(
         (event_id, header_id, label),
     )
     conn.commit()
+    rebuild_state_headers(conn)
     return True
 
 
@@ -368,6 +373,7 @@ def delete_header(conn: sqlite3.Connection, header_id: str) -> None:
         (event_id, header_id),
     )
     conn.commit()
+    rebuild_state_headers(conn)
 
 
 __all__ = [
