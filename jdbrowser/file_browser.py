@@ -586,7 +586,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     if rowLayout:
                         sectionLayout.addLayout(rowLayout)
                     rowLayout = QtWidgets.QHBoxLayout()
-                    rowLayout.setSpacing(5)
+                    rowLayout.setSpacing(2)
                     rowLayout.setContentsMargins(0, 0, 0, 0)
                     rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
                 rowLayout.addWidget(item)
