@@ -81,6 +81,7 @@ class EditTagDialog(QDialog):
         self.input.setMinimumWidth(240)  # Match thumbnail width
         self.input.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
         self.input.selectAll()  # Select all text in the input box
+        self.input.setFocus()  # Focus label field by default
         layout.addWidget(self.input, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         # Buttons (side-by-side, half-width each)

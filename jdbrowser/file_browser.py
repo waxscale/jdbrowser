@@ -64,6 +64,31 @@ class FileBrowser(QtWidgets.QMainWindow):
         # Disable window decorations
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
+        app = QtWidgets.QApplication.instance()
+        if app:
+            app.setStyleSheet(
+                app.styleSheet()
+                + f"""
+                QMessageBox {{
+                    background-color: {BACKGROUND_COLOR};
+                    color: {TEXT_COLOR};
+                }}
+                QMessageBox QLabel {{
+                    color: {TEXT_COLOR};
+                }}
+                QMessageBox QPushButton {{
+                    background-color: {BUTTON_COLOR};
+                    color: black;
+                    border: none;
+                    padding: 5px;
+                    border-radius: 5px;
+                }}
+                QMessageBox QPushButton:hover {{
+                    background-color: {HIGHLIGHT_COLOR};
+                }}
+                """
+            )
+
         self._setup_ui()
         self._setup_shortcuts()
         self.updateSelection()

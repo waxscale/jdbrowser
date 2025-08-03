@@ -71,6 +71,7 @@ class InputTagDialog(QtWidgets.QDialog):
         ''')
 
         self.label_input.setFocus()
+        self.label_input.selectAll()
 
     def get_values(self):
         try:
