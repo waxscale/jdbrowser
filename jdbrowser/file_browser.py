@@ -275,6 +275,14 @@ class FileBrowser(QtWidgets.QMainWindow):
         """Open a dialog to input jd_area, jd_id, jd_ext, and label for a new tag."""
         if not self.sections or self.sec_idx >= len(self.sections):
             return
+        # If the current selection is a placeholder, reuse the same behaviour as
+        # the 'c' shortcut or right-click: pre-fill the dialog with the
+        # placeholder's prefix values.
+        if self.idx_in_sec < len(self.sections[self.sec_idx]):
+            current_item = self.sections[self.sec_idx][self.idx_in_sec]
+            if not current_item.tag_id:  # placeholder item
+                self._edit_tag_label_with_icon()
+                return
         cursor = self.conn.cursor()
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         default_label = "NewTag"
