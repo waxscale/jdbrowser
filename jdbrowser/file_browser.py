@@ -888,6 +888,9 @@ class FileBrowser(QtWidgets.QMainWindow):
                     for i in range(end):
                         val = section_base + i
                         current_section.append(placeholder_item(val, section_index, i))
+                else:
+                    # Ensure a placeholder exists after the last actual item
+                    add_placeholders_until(next_index + 1)
                 add_section(current_section)
                 section_index += 1
                 current_section = None
