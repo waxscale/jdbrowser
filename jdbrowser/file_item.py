@@ -16,6 +16,8 @@ class FileItem(QtWidgets.QWidget):
         self.section_idx = section_idx  # Store section index
         self.item_idx = item_idx  # Store item index within section
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
+        self.setAcceptDrops(True)
+        self.drag_start_pos = None
 
         # Construct display label
         if self.jd_area is not None:
@@ -144,8 +146,62 @@ class FileItem(QtWidgets.QWidget):
         """Select on left-click; right-click edits or creates a tag."""
         if self.file_browser:
             if event.button() == QtCore.Qt.LeftButton:
+                self.drag_start_pos = event.position().toPoint()
                 self.file_browser.set_selection(self.section_idx, self.item_idx)
             elif event.button() == QtCore.Qt.RightButton:
                 self.file_browser.set_selection(self.section_idx, self.item_idx)
                 self.file_browser._edit_tag_label_with_icon()
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self.tag_id is None
+            or not (event.buttons() & QtCore.Qt.LeftButton)
+            or self.drag_start_pos is None
+        ):
+            super().mouseMoveEvent(event)
+            return
+        if (
+            event.position().toPoint() - self.drag_start_pos
+        ).manhattanLength() < QtWidgets.QApplication.startDragDistance():
+            super().mouseMoveEvent(event)
+            return
+        drag = QtGui.QDrag(self)
+        mime = QtCore.QMimeData()
+        mime.setText(self.tag_id)
+        drag.setMimeData(mime)
+
+        pixmap = self.grab()
+        if not pixmap.isNull():
+            transparent = QtGui.QPixmap(pixmap.size())
+            transparent.fill(QtCore.Qt.transparent)
+            painter = QtGui.QPainter(transparent)
+            painter.setOpacity(0.6)
+            painter.drawPixmap(0, 0, pixmap)
+            painter.end()
+            drag.setPixmap(transparent)
+            drag.setHotSpot(self.drag_start_pos)
+
+        drag.exec(QtCore.Qt.MoveAction)
+        super().mouseMoveEvent(event)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasText() and self.file_browser:
+            source_tag_id = event.mimeData().text()
+            self.file_browser.handle_item_drop(source_tag_id, self)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
