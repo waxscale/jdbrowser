@@ -33,7 +33,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 self.current_level = 2
                 self.current_jd_area = int(parts[0])
                 self.current_jd_id = int(parts[1])
-        self.cols = 5
+        self.cols = 10
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
         self.section_filenames = []  # Store .2do filenames for sorting
@@ -48,6 +48,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         self.current_match_idx = -1
         self.shortcuts = []
         self.search_shortcut_instances = []
+        self.show_prefix = False
         # Load show_hidden state from QSettings
         settings = QtCore.QSettings("xAI", "jdbrowser")
         self.show_hidden = settings.value("show_hidden", False, type=bool)
@@ -719,6 +720,13 @@ class FileBrowser(QtWidgets.QMainWindow):
         settings.setValue("show_hidden", self.show_hidden)
         self._rebuild_ui()
 
+    def toggle_label_prefix(self):
+        self.show_prefix = not self.show_prefix
+        for sec in self.sections:
+            for item in sec:
+                item.updateLabel(self.show_prefix)
+        self.updateSelection()
+
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.normal_shortcuts = [
@@ -742,6 +750,7 @@ class FileBrowser(QtWidgets.QMainWindow):
             (QtCore.Qt.Key_Y, self.copySelectedName, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
             (QtCore.Qt.Key_Home, self.firstInRow, None),
