@@ -170,6 +170,18 @@ class FileItem(QtWidgets.QWidget):
         mime = QtCore.QMimeData()
         mime.setText(self.tag_id)
         drag.setMimeData(mime)
+
+        pixmap = self.grab()
+        if not pixmap.isNull():
+            transparent = QtGui.QPixmap(pixmap.size())
+            transparent.fill(QtCore.Qt.transparent)
+            painter = QtGui.QPainter(transparent)
+            painter.setOpacity(0.6)
+            painter.drawPixmap(0, 0, pixmap)
+            painter.end()
+            drag.setPixmap(transparent)
+            drag.setHotSpot(self.drag_start_pos)
+
         drag.exec(QtCore.Qt.MoveAction)
         super().mouseMoveEvent(event)
 
