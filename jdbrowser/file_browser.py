@@ -331,8 +331,16 @@ class FileBrowser(QtWidgets.QMainWindow):
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if jd_area is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                if (
+                    (self.current_level == 0 and jd_area is None)
+                    or (self.current_level == 1 and jd_id is None)
+                    or (self.current_level == 2 and jd_ext is None)
+                ):
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Invalid Input",
+                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
+                    )
                     continue
                 if jd_id is not None and jd_area is None:
                     QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
@@ -377,8 +385,16 @@ class FileBrowser(QtWidgets.QMainWindow):
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
                     jd_area, jd_id, jd_ext, label = dialog.get_values()
-                    if jd_area is None:
-                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                    if (
+                        (self.current_level == 0 and jd_area is None)
+                        or (self.current_level == 1 and jd_id is None)
+                        or (self.current_level == 2 and jd_ext is None)
+                    ):
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Invalid Input",
+                            ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
+                        )
                         continue
                     if jd_id is not None and jd_area is None:
                         QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
@@ -402,25 +418,80 @@ class FileBrowser(QtWidgets.QMainWindow):
             return
         tag_id = current_item.tag_id
         cursor = self.conn.cursor()
-        cursor.execute("SELECT label FROM state_tags WHERE tag_id = ?", (tag_id,))
-        current_label = cursor.fetchone()[0]
+        cursor.execute("SELECT jd_area, jd_id, jd_ext, label FROM state_tags WHERE tag_id = ?", (tag_id,))
+        jd_area, jd_id, jd_ext, current_label = cursor.fetchone()
         cursor.execute("SELECT icon FROM state_tag_icons WHERE tag_id = ?", (tag_id,))
         icon_data = cursor.fetchone()
         icon_data = icon_data[0] if icon_data else None
-        dialog = EditTagDialog(current_label, icon_data, self)
-        if dialog.exec() == QtWidgets.QDialog.Accepted:
-            new_label = dialog.get_label()
-            new_icon_data = dialog.get_icon_data()
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
-            event_id = cursor.lastrowid
-            cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
-            if new_icon_data:
-                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_icon')")
-                event_id = cursor.lastrowid
-                cursor.execute("INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)", (event_id, tag_id, new_icon_data))
-            self.conn.commit()
-            rebuild_state_tags(self.conn)
-            self._rebuild_ui()
+        while True:
+            dialog = EditTagDialog(current_label, icon_data, self.current_level, jd_area, jd_id, jd_ext, self)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                new_jd_area, new_jd_id, new_jd_ext = dialog.get_path()
+                new_label = dialog.get_label()
+                new_icon_data = dialog.get_icon_data()
+                if (
+                    (self.current_level == 0 and new_jd_area is None)
+                    or (self.current_level == 1 and new_jd_id is None)
+                    or (self.current_level == 2 and new_jd_ext is None)
+                ):
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Invalid Input",
+                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
+                    )
+                    current_label, icon_data = new_label, new_icon_data
+                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
+                    continue
+                if new_jd_id is not None and new_jd_area is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                    current_label, icon_data = new_label, new_icon_data
+                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
+                    continue
+                if new_jd_ext is not None and new_jd_id is None:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                    current_label, icon_data = new_label, new_icon_data
+                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
+                    continue
+                cursor.execute(
+                    "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ? AND tag_id != ?",
+                    (new_jd_area, new_jd_id, new_jd_ext, tag_id),
+                )
+                if cursor.fetchone():
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Constraint Violation",
+                        f"The combination (jd_area={new_jd_area}, jd_id={new_jd_id}, jd_ext={new_jd_ext}) is already in use.",
+                    )
+                    current_label, icon_data = new_label, new_icon_data
+                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
+                    continue
+                if (new_jd_area, new_jd_id, new_jd_ext) != (jd_area, jd_id, jd_ext):
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
+                        (event_id, tag_id, new_jd_area, new_jd_id, new_jd_ext),
+                    )
+                if new_label != current_label:
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+                        (event_id, tag_id, new_label),
+                    )
+                if new_icon_data:
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_icon')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)",
+                        (event_id, tag_id, new_icon_data),
+                    )
+                self.conn.commit()
+                rebuild_state_tags(self.conn)
+                self._rebuild_ui()
+                break
+            else:
+                break
 
     def _rename_tag_label(self):
         """Edit the current tag's label with a simple dialog."""
