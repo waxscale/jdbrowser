@@ -109,6 +109,38 @@ class FileBrowser(QtWidgets.QMainWindow):
             self.idx_in_sec = item_idx
             self.updateSelection()
 
+    def _warn(self, title: str, message: str) -> None:
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Warning)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.setStyleSheet(
+            f"""
+            QMessageBox {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+            }}
+            QLabel {{
+                color: {TEXT_COLOR};
+            }}
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: {HIGHLIGHT_COLOR};
+            }}
+            QPushButton:pressed {{
+                background-color: {HOVER_COLOR};
+            }}
+            """
+        )
+        box.exec()
+
     def _is_hidden_item(self, name):
         """Check if an item should be hidden based on naming patterns."""
         if self.show_hidden:
@@ -240,7 +272,7 @@ class FileBrowser(QtWidgets.QMainWindow):
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
             if jd_area is None:
-                QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                self._warn("Invalid Input", "jd_area must be an integer.")
                 return
             header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
             if header_id:
@@ -365,17 +397,16 @@ class FileBrowser(QtWidgets.QMainWindow):
                     or (self.current_level == 1 and jd_id is None)
                     or (self.current_level == 2 and jd_ext is None)
                 ):
-                    QtWidgets.QMessageBox.warning(
-                        self,
+                    self._warn(
                         "Invalid Input",
                         ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
                     )
                     continue
                 if jd_id is not None and jd_area is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                    self._warn("Invalid Input", "jd_id requires jd_area.")
                     continue
                 if jd_ext is not None and jd_id is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                    self._warn("Invalid Input", "jd_ext requires jd_id.")
                     continue
                 new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
                 if new_tag_id:
@@ -383,8 +414,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     self._rebuild_ui(new_tag_id=new_tag_id)
                     break
                 else:
-                    QtWidgets.QMessageBox.warning(
-                        self,
+                    self._warn(
                         "Constraint Violation",
                         f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
                     )
@@ -419,17 +449,16 @@ class FileBrowser(QtWidgets.QMainWindow):
                         or (self.current_level == 1 and jd_id is None)
                         or (self.current_level == 2 and jd_ext is None)
                     ):
-                        QtWidgets.QMessageBox.warning(
-                            self,
+                        self._warn(
                             "Invalid Input",
                             ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
                         )
                         continue
                     if jd_id is not None and jd_area is None:
-                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                        self._warn("Invalid Input", "jd_id requires jd_area.")
                         continue
                     if jd_ext is not None and jd_id is None:
-                        QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                        self._warn("Invalid Input", "jd_ext requires jd_id.")
                         continue
                     new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
                     if new_tag_id:
@@ -437,8 +466,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                         self._rebuild_ui(new_tag_id=new_tag_id)
                         break
                     else:
-                        QtWidgets.QMessageBox.warning(
-                            self,
+                        self._warn(
                             "Constraint Violation",
                             f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
                         )
@@ -463,8 +491,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     or (self.current_level == 1 and new_jd_id is None)
                     or (self.current_level == 2 and new_jd_ext is None)
                 ):
-                    QtWidgets.QMessageBox.warning(
-                        self,
+                    self._warn(
                         "Invalid Input",
                         ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
                     )
@@ -472,12 +499,12 @@ class FileBrowser(QtWidgets.QMainWindow):
                     jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
                     continue
                 if new_jd_id is not None and new_jd_area is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_id requires jd_area.")
+                    self._warn("Invalid Input", "jd_id requires jd_area.")
                     current_label, icon_data = new_label, new_icon_data
                     jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
                     continue
                 if new_jd_ext is not None and new_jd_id is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_ext requires jd_id.")
+                    self._warn("Invalid Input", "jd_ext requires jd_id.")
                     current_label, icon_data = new_label, new_icon_data
                     jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
                     continue
@@ -486,8 +513,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                     (new_jd_area, new_jd_id, new_jd_ext, tag_id),
                 )
                 if cursor.fetchone():
-                    QtWidgets.QMessageBox.warning(
-                        self,
+                    self._warn(
                         "Constraint Violation",
                         f"The combination (jd_area={new_jd_area}, jd_id={new_jd_id}, jd_ext={new_jd_ext}) is already in use.",
                     )
@@ -592,10 +618,10 @@ class FileBrowser(QtWidgets.QMainWindow):
             else:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
                 if jd_area is None:
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "jd_area must be an integer.")
+                    self._warn("Invalid Input", "jd_area must be an integer.")
                     return
                 if not update_header(self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label):
-                    QtWidgets.QMessageBox.warning(self, "Invalid Input", "Header path conflicts or invalid.")
+                    self._warn("Invalid Input", "Header path conflicts or invalid.")
                     return
             rebuild_state_headers(self.conn)
             self._rebuild_ui()
