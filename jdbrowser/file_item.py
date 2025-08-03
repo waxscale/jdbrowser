@@ -27,7 +27,7 @@ class FileItem(QtWidgets.QWidget):
                 self.prefix = f"[{self.jd_area:02d}.{self.jd_id:02d}+{self.jd_ext:04d}]"
         else:
             self.prefix = ""
-        self.display_name = self.name or self.prefix
+        self.display_name = self.name or ""
 
         # Fix vertical size policy
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
@@ -36,7 +36,7 @@ class FileItem(QtWidgets.QWidget):
         layout.setSpacing(2)
         layout.setContentsMargins(2, 2, 2, 2)
 
-        # Icon: Load from database BLOB or use slate placeholder
+        # Icon: Load from database BLOB or use slate/placeholder color
         if icon_data:
             pixmap = QtGui.QPixmap()
             pixmap.loadFromData(icon_data)
@@ -58,11 +58,13 @@ class FileItem(QtWidgets.QWidget):
             else:
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(120, 75)
-                self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 5px;')
+                color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
+                self.icon.setStyleSheet(f'background-color: {color}; border-radius: 5px;')
         else:
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(120, 75)
-            self.icon.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 5px;')
+            color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
+            self.icon.setStyleSheet(f'background-color: {color}; border-radius: 5px;')
         self.icon.setAutoFillBackground(True)
         layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
@@ -90,7 +92,13 @@ class FileItem(QtWidgets.QWidget):
         self.updateStyle()
 
     def updateLabel(self, show_prefix):
-        text = self.prefix if (show_prefix or not self.name) else self.name
+        if self.tag_id is None:
+            text = self.prefix if show_prefix else ""
+        else:
+            if self.name == "":
+                text = self.prefix if show_prefix else ""
+            else:
+                text = self.prefix if show_prefix else self.name
         self.display_name = text
         self.label.setText(text)
 
@@ -110,10 +118,15 @@ class FileItem(QtWidgets.QWidget):
         label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
         label_effect.setOpacity(opacity)
         self.label.setGraphicsEffect(label_effect)
-        icon_style = f'background-color: {SLATE_COLOR}; border-radius: 5px;' if isinstance(self.icon, QtWidgets.QFrame) else 'background-color: transparent;'
+        if isinstance(self.icon, QtWidgets.QFrame):
+            icon_color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
+            icon_style = f'background-color: {icon_color}; border-radius: 5px;'
+        else:
+            icon_style = 'background-color: transparent;'
+        label_color = PLACEHOLDER_TEXT_COLOR if self.tag_id is None else TEXT_COLOR
         self.setStyleSheet(f'background-color: {bg}; border-radius: 5px;')
         self.icon.setStyleSheet(icon_style)
-        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
+        self.label.setStyleSheet(f'color: {label_color};')
 
     def enterEvent(self, event):
         self.isHover = True
@@ -128,11 +141,11 @@ class FileItem(QtWidgets.QWidget):
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
-        """Select this item on left-click, open EditTagDialog on right-click."""
+        """Select on left-click; right-click edits or creates a tag."""
         if self.file_browser:
             if event.button() == QtCore.Qt.LeftButton:
                 self.file_browser.set_selection(self.section_idx, self.item_idx)
-            elif event.button() == QtCore.Qt.RightButton and self.tag_id:  # Only for non-placeholder items
+            elif event.button() == QtCore.Qt.RightButton:
                 self.file_browser.set_selection(self.section_idx, self.item_idx)
                 self.file_browser._edit_tag_label_with_icon()
         super().mousePressEvent(event)
