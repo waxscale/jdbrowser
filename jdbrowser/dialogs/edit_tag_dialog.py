@@ -1,20 +1,25 @@
 import os
 from PySide6 import QtWidgets
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QFileDialog
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QLabel,
+    QFileDialog,
+)
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QIntValidator
 from PySide6.QtCore import Qt, QSettings, QTimer
 from ..constants import *
 
 
 class EditTagDialog(QDialog):
-    def __init__(self, current_label, icon_data, level, jd_area=None, jd_id=None, jd_ext=None, parent=None):
+    def __init__(self, current_label, icon_data, jd_id=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Tag Label and Icon")
         self.icon_data = icon_data
-        self.level = level
-        self.jd_area = jd_area
-        self.jd_id = jd_id
-        self.setStyleSheet(f'''
+        self.setStyleSheet(f"""
             QDialog {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -39,14 +44,14 @@ class EditTagDialog(QDialog):
             QLabel {{
                 color: {TEXT_COLOR};
             }}
-        ''')
+        """)
 
         layout = QVBoxLayout(self)
 
         # Icon preview (clickable to change icon)
         self.icon_label = QLabel()
         self.icon_label.setFixedSize(240, 150)
-        self.icon_label.setStyleSheet(f'background-color: {SLATE_COLOR}; border-radius: 10px;')
+        self.icon_label.setStyleSheet(f"background-color: {SLATE_COLOR}; border-radius: 10px;")
         if icon_data:
             pixmap = QPixmap()
             pixmap.loadFromData(icon_data)
@@ -58,7 +63,12 @@ class EditTagDialog(QDialog):
                 path = QPainterPath()
                 path.addRoundedRect(0, 0, 240, 150, 10, 10)
                 painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(
+                    240,
+                    150,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
                 painter.drawPixmap(0, 0, scaled_pixmap)
                 painter.end()
                 self.icon_label.setPixmap(rounded_pixmap)
@@ -66,21 +76,19 @@ class EditTagDialog(QDialog):
         self.icon_label.mousePressEvent = self.change_icon
         layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        # Prefix input (below icon, full width)
-        default_prefix = [jd_area, jd_id, jd_ext][level]
-        placeholder = ["jd_area", "jd_id", "jd_ext"][level]
-        self.prefix_input = QLineEdit("" if default_prefix is None else str(default_prefix))
-        self.prefix_input.setPlaceholderText(placeholder)
-        self.prefix_input.setValidator(QIntValidator())
-        self.prefix_input.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-        layout.addWidget(self.prefix_input)
+        # jd_id input
+        self.jd_id_input = QLineEdit("" if jd_id is None else str(jd_id))
+        self.jd_id_input.setPlaceholderText("jd_id")
+        self.jd_id_input.setValidator(QIntValidator())
+        self.jd_id_input.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.jd_id_input)
 
-        # Label input (below prefix, full width)
+        # Label input
         self.input = QLineEdit(current_label)
         self.input.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
         layout.addWidget(self.input)
 
-        # Buttons (side-by-side, half-width each)
+        # Buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton("OK")
         self.ok_button.clicked.connect(self.accept)
@@ -90,7 +98,6 @@ class EditTagDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
 
-        # Set buttons to approximately half-width
         button_layout.setStretch(0, 1)
         button_layout.setStretch(1, 1)
         layout.addLayout(button_layout)
@@ -112,7 +119,7 @@ class EditTagDialog(QDialog):
         last_dir = settings.value("last_thumbnail_dir", "", type=str)
         if last_dir:
             file_dialog.setDirectory(last_dir)
-        file_dialog.setStyleSheet(f'''
+        file_dialog.setStyleSheet(f"""
             QFileDialog {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
@@ -159,31 +166,13 @@ class EditTagDialog(QDialog):
             QTreeView::item:hover, QListView::item:hover {{
                 background-color: {HOVER_COLOR};
             }}
-            QComboBox {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-                padding: 5px;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-            }}
-            QComboBox::down-arrow {{
-                image: none;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                selection-background-color: {HIGHLIGHT_COLOR};
-            }}
-        ''')
+        """)
         if file_dialog.exec():
             file_path = file_dialog.selectedFiles()[0]
             settings.setValue("last_thumbnail_dir", os.path.dirname(file_path))
             pixmap = QPixmap(file_path)
             if not pixmap.isNull():
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     self.icon_data = f.read()
                 rounded_pixmap = QPixmap(240, 150)
                 rounded_pixmap.fill(Qt.transparent)
@@ -192,7 +181,12 @@ class EditTagDialog(QDialog):
                 path = QPainterPath()
                 path.addRoundedRect(0, 0, 240, 150, 10, 10)
                 painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(240, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(
+                    240,
+                    150,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
                 painter.drawPixmap(0, 0, scaled_pixmap)
                 painter.end()
                 self.icon_label.setPixmap(rounded_pixmap)
@@ -203,14 +197,9 @@ class EditTagDialog(QDialog):
     def get_icon_data(self):
         return self.icon_data
 
-    def get_path(self):
+    def get_jd_id(self):
         try:
-            prefix = int(self.prefix_input.text()) if self.prefix_input.text() else None
+            return int(self.jd_id_input.text()) if self.jd_id_input.text() else None
         except ValueError:
-            prefix = None
-        if self.level == 0:
-            return prefix, None, None
-        elif self.level == 1:
-            return self.jd_area, prefix, None
-        else:
-            return self.jd_area, self.jd_id, prefix
+            return None
+

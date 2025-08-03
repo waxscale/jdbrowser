@@ -2,3 +2,4 @@ from .edit_tag_dialog import EditTagDialog
 from .simple_edit_tag_dialog import SimpleEditTagDialog
 from .input_tag_dialog import InputTagDialog
 from .delete_tag_dialog import DeleteTagDialog
+
