@@ -72,6 +72,7 @@ class FileBrowser(QtWidgets.QMainWindow):
                 QMessageBox {{
                     background-color: {BACKGROUND_COLOR};
                     color: {TEXT_COLOR};
+                    border: 1px solid {BORDER_COLOR};
                 }}
                 QMessageBox QLabel {{
                     color: {TEXT_COLOR};
@@ -85,6 +86,9 @@ class FileBrowser(QtWidgets.QMainWindow):
                 }}
                 QMessageBox QPushButton:hover {{
                     background-color: {HIGHLIGHT_COLOR};
+                }}
+                QMessageBox QPushButton:pressed {{
+                    background-color: {HOVER_COLOR};
                 }}
                 """
             )
