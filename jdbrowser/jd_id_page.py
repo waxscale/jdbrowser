@@ -18,22 +18,13 @@ from .database import (
 from .constants import *
 
 class JdIdPage(QtWidgets.QMainWindow):
-    def __init__(self, start_id=None):
+    def __init__(self, parent_uuid=None, jd_area=None):
         super().__init__()
-        self.directory = start_id or ""
-        self.setWindowTitle(f"File Browser - {self.directory}")
-        self.current_level = 0
-        self.current_jd_area = None
+        self.parent_uuid = parent_uuid
+        self.current_jd_area = jd_area
         self.current_jd_id = None
-        if start_id:
-            parts = start_id.split('.')
-            if len(parts) == 1:
-                self.current_level = 1
-                self.current_jd_area = int(parts[0])
-            elif len(parts) == 2:
-                self.current_level = 2
-                self.current_jd_area = int(parts[0])
-                self.current_jd_id = int(parts[1])
+        self.directory = str(jd_area) if jd_area is not None else ""
+        self.setWindowTitle(f"File Browser - {self.directory}")
         self.cols = 10
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
@@ -101,6 +92,10 @@ class JdIdPage(QtWidgets.QMainWindow):
         if settings.contains("pos") and settings.contains("size"):
             self.move(settings.value("pos", type=QtCore.QPoint))
             self.resize(settings.value("size", type=QtCore.QSize))
+
+    @property
+    def current_level(self):
+        return 1
 
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
@@ -273,34 +268,14 @@ class JdIdPage(QtWidgets.QMainWindow):
 
     def _create_header(self):
         cursor = self.conn.cursor()
-        if self.current_level == 0:
-            cursor.execute("SELECT MAX(jd_area) FROM state_headers")
-            max_jd_area = cursor.fetchone()[0]
-            default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=self.current_level)
-        elif self.current_level == 1:
-            cursor.execute("SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?", (self.current_jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            dialog = HeaderDialog(self.current_jd_area, default_jd_id, None, parent=self, level=self.current_level)
-        else:
-            cursor.execute(
-                "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            max_jd_ext = cursor.fetchone()[0]
-            default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=self.current_level)
+        cursor.execute("SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?", (self.current_jd_area,))
+        max_jd_id = cursor.fetchone()[0]
+        default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
+        dialog = HeaderDialog(self.current_jd_area, default_jd_id, None, parent=self, level=1)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
-            if self.current_level == 0 and jd_area is None:
-                self._warn("Invalid Input", "jd_area must be an integer.")
-                return
-            if self.current_level == 1 and jd_id is None:
+            if jd_id is None:
                 self._warn("Invalid Input", "jd_id must be an integer.")
-                return
-            if self.current_level == 2 and jd_ext is None:
-                self._warn("Invalid Input", "jd_ext must be an integer.")
                 return
             header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
             if header_id:
@@ -314,48 +289,18 @@ class JdIdPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         label = "NewTag"
-        if self.current_level == 0:
-            if jd_area is None:
-                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
-                max_jd_area = cursor.fetchone()[0]
-                new_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                    (jd_area, jd_area + 10),
-                )
-                max_jd_area = cursor.fetchone()[0]
-                new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
-            new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
-        elif self.current_level == 1:
-            if jd_id is None:
-                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-                max_jd_id = cursor.fetchone()[0]
-                new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                    (jd_area, jd_id, jd_id + 10),
-                )
-                max_jd_id = cursor.fetchone()[0]
-                new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-            new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
+        if jd_id is None:
+            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+            max_jd_id = cursor.fetchone()[0]
+            new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
         else:
-            if jd_ext is None:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                    (jd_area, jd_id),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
-                    (jd_area, jd_id, jd_ext, jd_ext + 10),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
-            new_tag_id = create_tag(self.conn, jd_area, jd_id, new_jd_ext, label)
+            cursor.execute(
+                "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                (jd_area, jd_id, jd_id + 10),
+            )
+            max_jd_id = cursor.fetchone()[0]
+            new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
+        new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
         if new_tag_id:
             rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
@@ -375,60 +320,23 @@ class JdIdPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         default_label = "NewTag"
-        if self.current_level == 0:
-            if jd_area is None:
-                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
-                max_jd_area = cursor.fetchone()[0]
-                default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                    (jd_area, jd_area + 10),
-                )
-                max_jd_area = cursor.fetchone()[0]
-                default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
-            dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
-        elif self.current_level == 1:
-            if jd_id is None:
-                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-                max_jd_id = cursor.fetchone()[0]
-                default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                    (jd_area, jd_id, jd_id + 10),
-                )
-                max_jd_id = cursor.fetchone()[0]
-                default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-            dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
+        if jd_id is None:
+            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
+            max_jd_id = cursor.fetchone()[0]
+            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
         else:
-            if jd_ext is None:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                    (jd_area, jd_id),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
-                    (jd_area, jd_id, jd_ext, jd_ext + 10),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
-            dialog = InputTagDialog(jd_area, jd_id, default_jd_ext, default_label, level=2, parent=self)
+            cursor.execute(
+                "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
+                (jd_area, jd_id, jd_id + 10),
+            )
+            max_jd_id = cursor.fetchone()[0]
+            default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
+        dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if (
-                    (self.current_level == 0 and jd_area is None)
-                    or (self.current_level == 1 and jd_id is None)
-                    or (self.current_level == 2 and jd_ext is None)
-                ):
-                    self._warn(
-                        "Invalid Input",
-                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                    )
+                if jd_id is None:
+                    self._warn("Invalid Input", "jd_id must be an integer.")
                     continue
                 if jd_id is not None and jd_area is None:
                     self._warn("Invalid Input", "jd_id requires jd_area.")
@@ -450,16 +358,7 @@ class JdIdPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        if self.current_level == 1:
-            target = self.nav_stack.pop() if self.nav_stack else None
-            self.current_level = 0
-            self.current_jd_area = None
-            self._rebuild_ui(new_tag_id=target)
-        elif self.current_level == 2:
-            target = self.nav_stack.pop() if self.nav_stack else None
-            self.current_level = 1
-            self.current_jd_id = None
-            self._rebuild_ui(new_tag_id=target)
+        pass
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -468,19 +367,19 @@ class JdIdPage(QtWidgets.QMainWindow):
         current_item = self.sections[self.sec_idx][self.idx_in_sec]
         if not current_item.tag_id:
             default_label = "NewTag"
-            dialog = InputTagDialog(current_item.jd_area, current_item.jd_id, current_item.jd_ext, default_label, level=self.current_level, parent=self)
+            dialog = InputTagDialog(
+                current_item.jd_area,
+                current_item.jd_id,
+                current_item.jd_ext,
+                default_label,
+                level=1,
+                parent=self,
+            )
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
                     jd_area, jd_id, jd_ext, label = dialog.get_values()
-                    if (
-                        (self.current_level == 0 and jd_area is None)
-                        or (self.current_level == 1 and jd_id is None)
-                        or (self.current_level == 2 and jd_ext is None)
-                    ):
-                        self._warn(
-                            "Invalid Input",
-                            ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                        )
+                    if jd_id is None:
+                        self._warn("Invalid Input", "jd_id must be an integer.")
                         continue
                     if jd_id is not None and jd_area is None:
                         self._warn("Invalid Input", "jd_id requires jd_area.")
@@ -509,20 +408,13 @@ class JdIdPage(QtWidgets.QMainWindow):
         icon_data = cursor.fetchone()
         icon_data = icon_data[0] if icon_data else None
         while True:
-            dialog = EditTagDialog(current_label, icon_data, self.current_level, jd_area, jd_id, jd_ext, self)
+            dialog = EditTagDialog(current_label, icon_data, 1, jd_area, jd_id, jd_ext, self)
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 new_jd_area, new_jd_id, new_jd_ext = dialog.get_path()
                 new_label = dialog.get_label()
                 new_icon_data = dialog.get_icon_data()
-                if (
-                    (self.current_level == 0 and new_jd_area is None)
-                    or (self.current_level == 1 and new_jd_id is None)
-                    or (self.current_level == 2 and new_jd_ext is None)
-                ):
-                    self._warn(
-                        "Invalid Input",
-                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                    )
+                if new_jd_id is None:
+                    self._warn("Invalid Input", "jd_id must be an integer.")
                     current_label, icon_data = new_label, new_icon_data
                     jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
                     continue
@@ -644,12 +536,7 @@ class JdIdPage(QtWidgets.QMainWindow):
         s_area, s_id, s_ext = source_row
         if target_item.tag_id is None:
             new_area, new_id, new_ext = s_area, s_id, s_ext
-            if self.current_level == 0:
-                new_area = target_item.jd_area
-            elif self.current_level == 1:
-                new_id = target_item.jd_id
-            else:
-                new_ext = target_item.jd_ext
+            new_id = target_item.jd_id
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
             parent_uuid = self._get_parent_uuid(cursor, new_area, new_id, new_ext)
@@ -668,12 +555,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             t_area, t_id, t_ext = cursor.fetchone()
             new_s_area, new_s_id, new_s_ext = s_area, s_id, s_ext
             new_t_area, new_t_id, new_t_ext = t_area, t_id, t_ext
-            if self.current_level == 0:
-                new_s_area, new_t_area = t_area, s_area
-            elif self.current_level == 1:
-                new_s_id, new_t_id = t_id, s_id
-            else:
-                new_s_ext, new_t_ext = t_ext, s_ext
+            new_s_id, new_t_id = t_id, s_id
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
             cursor.execute(
@@ -706,21 +588,15 @@ class JdIdPage(QtWidgets.QMainWindow):
             header_item.label,
             True,
             self,
-            level=self.current_level,
+            level=1,
         )
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
                 delete_header(self.conn, header_item.header_id)
             else:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if self.current_level == 0 and jd_area is None:
-                    self._warn("Invalid Input", "jd_area must be an integer.")
-                    return
-                if self.current_level == 1 and jd_id is None:
+                if jd_id is None:
                     self._warn("Invalid Input", "jd_id must be an integer.")
-                    return
-                if self.current_level == 2 and jd_ext is None:
-                    self._warn("Invalid Input", "jd_ext must be an integer.")
                     return
                 if not update_header(
                     self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label
@@ -1379,24 +1255,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def descend_level(self):
-        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
-            return
-        current = self.sections[self.sec_idx][self.idx_in_sec]
-        if not current.tag_id:
-            return
-        self.nav_stack.append(current.tag_id)
-        if self.current_level == 0:
-            self.current_jd_area = current.jd_area
-            self.current_level = 1
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
-        elif self.current_level == 1 and current.jd_id is not None:
-            self.current_jd_id = current.jd_id
-            self.current_level = 2
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
+        pass
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
