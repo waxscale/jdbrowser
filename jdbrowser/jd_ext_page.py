@@ -19,10 +19,11 @@ from .database import (
 from .constants import *
 
 class JdExtPage(QtWidgets.QMainWindow):
-    def __init__(self, parent_uuid, jd_area, jd_id):
+    def __init__(self, parent_uuid, jd_area, jd_id, grandparent_uuid):
         super().__init__()
         self.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
         self.parent_uuid = parent_uuid
+        self.grandparent_uuid = grandparent_uuid
         self.current_jd_area = jd_area
         self.current_jd_id = jd_id
         self.cols = 10
@@ -348,8 +349,7 @@ class JdExtPage(QtWidgets.QMainWindow):
     def ascend_level(self):
         from .jd_id_page import JdIdPage
 
-        cursor = self.conn.cursor()
-        new_page = JdIdPage(parent_uuid=self.parent_uuid, jd_area=self.current_jd_area)
+        new_page = JdIdPage(parent_uuid=self.grandparent_uuid, jd_area=self.current_jd_area)
         jdbrowser.current_page = new_page
         new_page.show()
         self.close()

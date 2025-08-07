@@ -1108,6 +1108,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             parent_uuid=current_item.tag_id,
             jd_area=current_item.jd_area,
             jd_id=current_item.jd_id,
+            grandparent_uuid=self.parent_uuid,
         )
         jdbrowser.current_page = new_page
         new_page.show()
