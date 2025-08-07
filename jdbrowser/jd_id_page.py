@@ -92,10 +92,6 @@ class JdIdPage(QtWidgets.QMainWindow):
             self.move(settings.value("pos", type=QtCore.QPoint))
             self.resize(settings.value("size", type=QtCore.QSize))
 
-    @property
-    def current_level(self):
-        return 1
-
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
         if 0 <= section_idx < len(self.sections) and 0 <= item_idx < len(self.sections[section_idx]):
@@ -643,45 +639,19 @@ class JdIdPage(QtWidgets.QMainWindow):
         self.section_filenames = []
         current_section = None
         section_index = 0
-        current_base = 0 if self.current_level < 2 else None
         cursor = self.conn.cursor()
-        if self.current_level == 0:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
-            )
-            tags = cursor.fetchall()
-        elif self.current_level == 1:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-                (self.current_jd_area,),
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-                (self.current_jd_area,),
-            )
-            tags = cursor.fetchall()
-        else:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            tags = cursor.fetchall()
+        cursor.execute(
+            "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
+            "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
+            (self.current_jd_area,),
+        )
+        headers = cursor.fetchall()
+        cursor.execute(
+            "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
+            "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
+            (self.current_jd_area,),
+        )
+        tags = cursor.fetchall()
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
         icons = {row[0]: row[1] for row in cursor.fetchall()}
 
@@ -705,7 +675,7 @@ class JdIdPage(QtWidgets.QMainWindow):
         # Sort numerically by jd components to ensure consistent ordering
         items.sort(
             key=lambda x: (
-                x[4] if self.current_level == 0 else (x[5] if self.current_level == 1 else x[6]),
+                x[5],
                 0 if x[0] == "header" else 1,
                 (x[2] or "").lower(),
             )
@@ -713,193 +683,76 @@ class JdIdPage(QtWidgets.QMainWindow):
 
         # Build sections and placeholders
         def placeholder_item(val, sec_idx, item_idx):
-            if self.current_level == 0:
-                pa, pi, pe = val, None, None
-            elif self.current_level == 1:
-                pa, pi, pe = self.current_jd_area, val, None
-            else:
-                pa, pi, pe = self.current_jd_area, self.current_jd_id, val
+            pa, pi, pe = self.current_jd_area, val, None
             item = FileItem(None, None, pa, pi, pe, None, self, sec_idx, item_idx)
             item.updateLabel(self.show_prefix)
             return item
 
         section_index = 0
 
-        if self.current_level < 2:
-            headers_by_base = defaultdict(list)
-            tags_by_base = defaultdict(list)
-            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-                value = jd_area if self.current_level == 0 else jd_id
-                base = (value // 10) * 10 if value is not None else 0
-                if kind == "header":
-                    headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
-                else:
-                    tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
+        headers_by_base = defaultdict(list)
+        tags_by_base = defaultdict(list)
+        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+            value = jd_id
+            base = (value // 10) * 10 if value is not None else 0
+            if kind == "header":
+                headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
+            else:
+                tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
 
-            for base in range(0, 100, 10):
-                for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
-                    display = f"{prefix} {label}" if prefix else (label or "")
-                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                    mainLayout.addWidget(header_item)
-                    mainLayout.addSpacing(10)
-                section = [
-                    placeholder_item(val, section_index, i)
-                    for i, val in enumerate(range(base, base + 10))
-                ]
-                for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
-                    value = jd_area if self.current_level == 0 else jd_id
-                    index = value - base
-                    icon_data = icons.get(obj_id)
-                    item = FileItem(
-                        obj_id,
-                        label,
-                        jd_area,
-                        jd_id,
-                        jd_ext,
-                        icon_data,
-                        self,
-                        section_index,
-                        index,
-                    )
-                    item.updateLabel(self.show_prefix)
-                    section[index] = item
-                sectionWidget = QtWidgets.QWidget()
-                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                sectionLayout.setSpacing(5)
-                sectionLayout.setContentsMargins(0, 0, 0, 0)
-                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                rowLayout = None
-                for i, item in enumerate(section):
-                    if i % self.cols == 0:
-                        if rowLayout:
-                            sectionLayout.addLayout(rowLayout)
-                        rowLayout = QtWidgets.QHBoxLayout()
-                        rowLayout.setSpacing(2)
-                        rowLayout.setContentsMargins(0, 0, 0, 0)
-                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                    rowLayout.addWidget(item)
-                if rowLayout:
-                    sectionLayout.addLayout(rowLayout)
-                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                mainLayout.addWidget(sectionWidget)
-                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                self.sections.append(section)
-                if self.current_level == 0:
-                    base_path = (base, None, None)
-                else:
-                    base_path = (self.current_jd_area, base, None)
-                self.section_paths.append(base_path)
-                self.section_filenames.append(None)
-                section_index += 1
-        else:
-            current_section = None
-            section_base = None
-            sections_covered = set()
-
-            def add_section(section):
-                sectionWidget = QtWidgets.QWidget()
-                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                sectionLayout.setSpacing(5)
-                sectionLayout.setContentsMargins(0, 0, 0, 0)
-                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                rowLayout = None
-                for i, item in enumerate(section):
-                    if i % self.cols == 0:
-                        if rowLayout:
-                            sectionLayout.addLayout(rowLayout)
-                        rowLayout = QtWidgets.QHBoxLayout()
-                        rowLayout.setSpacing(2)
-                        rowLayout.setContentsMargins(0, 0, 0, 0)
-                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                    rowLayout.addWidget(item)
-                if rowLayout:
-                    sectionLayout.addLayout(rowLayout)
-                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                mainLayout.addWidget(sectionWidget)
-                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                self.sections.append(section)
-
-            next_index = 0
-
-            def start_section(base, base_path, filename_id):
-                nonlocal current_section, section_base, next_index
-                current_section = []
-                self.section_paths.append(base_path)
-                self.section_filenames.append(filename_id)
-                section_base = base
-                sections_covered.add(base)
-                next_index = 0
-
-            def add_placeholders_until(end_index):
-                nonlocal next_index
-                for i in range(next_index, end_index):
-                    val = section_base + i
-                    current_section.append(placeholder_item(val, section_index, i))
-                next_index = end_index
-
-            def flush_section(fill_full=False):
-                nonlocal current_section, section_index, section_base, next_index
-                if current_section is None:
-                    return
-                if not current_section:
-                    end = 10 if fill_full else 1
-                    for i in range(end):
-                        val = section_base + i
-                        current_section.append(placeholder_item(val, section_index, i))
-                else:
-                    # Ensure a placeholder exists after the last actual item
-                    add_placeholders_until(next_index + 1)
-                add_section(current_section)
-                section_index += 1
-                current_section = None
-                section_base = None
-                next_index = 0
-
-            def add_empty_section(base):
-                base_path = (self.current_jd_area, self.current_jd_id, base)
-                start_section(base, base_path, None)
-                flush_section()
-
-            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+        for base in range(0, 100, 10):
+            for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
                 display = f"{prefix} {label}" if prefix else (label or "")
-                if kind == "header":
-                    flush_section()
-                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                    mainLayout.addWidget(header_item)
-                    mainLayout.addSpacing(10)
-                    base_path = (jd_area, jd_id, jd_ext)
-                    base_val = (jd_ext // 10) * 10 if jd_ext is not None else 0
-                    start_section(base_val, base_path, obj_id)
-                else:
-                    value = jd_ext
-                    base = (value // 10) * 10 if value is not None else 0
-                    if current_section is None or base != section_base:
-                        flush_section()
-                        base_path = (self.current_jd_area, self.current_jd_id, base)
-                        start_section(base, base_path, obj_id)
-                    index = value - section_base
-                    add_placeholders_until(index)
-                    icon_data = icons.get(obj_id)
-                    item = FileItem(
-                        obj_id,
-                        label,
-                        jd_area,
-                        jd_id,
-                        jd_ext,
-                        icon_data,
-                        self,
-                        section_index,
-                        index,
-                    )
-                    item.updateLabel(self.show_prefix)
-                    current_section.append(item)
-                    next_index = index + 1
-
-            flush_section()
-            if not items:
-                add_empty_section(0)
+                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                mainLayout.addWidget(header_item)
+                mainLayout.addSpacing(10)
+            section = [
+                placeholder_item(val, section_index, i)
+                for i, val in enumerate(range(base, base + 10))
+            ]
+            for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
+                value = jd_id
+                index = value - base
+                icon_data = icons.get(obj_id)
+                item = FileItem(
+                    obj_id,
+                    label,
+                    jd_area,
+                    jd_id,
+                    jd_ext,
+                    icon_data,
+                    self,
+                    section_index,
+                    index,
+                )
+                item.updateLabel(self.show_prefix)
+                section[index] = item
+            sectionWidget = QtWidgets.QWidget()
+            sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+            sectionLayout.setSpacing(5)
+            sectionLayout.setContentsMargins(0, 0, 0, 0)
+            sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+            rowLayout = None
+            for i, item in enumerate(section):
+                if i % self.cols == 0:
+                    if rowLayout:
+                        sectionLayout.addLayout(rowLayout)
+                    rowLayout = QtWidgets.QHBoxLayout()
+                    rowLayout.setSpacing(2)
+                    rowLayout.setContentsMargins(0, 0, 0, 0)
+                    rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                rowLayout.addWidget(item)
+            if rowLayout:
+                sectionLayout.addLayout(rowLayout)
+            sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            mainLayout.addWidget(sectionWidget)
+            mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
+            self.sections.append(section)
+            base_path = (self.current_jd_area, base, None)
+            self.section_paths.append(base_path)
+            self.section_filenames.append(None)
+            section_index += 1
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
