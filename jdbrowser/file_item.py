@@ -2,7 +2,7 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from .constants import *
 
 class FileItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, parent_path, page, section_idx, item_idx):
+    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, page, section_idx, item_idx):
         super().__init__()
         self.tag_id = tag_id  # None for placeholder items
         self.name = name if name is not None else ""

@@ -23,8 +23,7 @@ class JdIdPage(QtWidgets.QMainWindow):
         self.parent_uuid = parent_uuid
         self.current_jd_area = jd_area
         self.current_jd_id = None
-        self.directory = str(jd_area) if jd_area is not None else ""
-        self.setWindowTitle(f"File Browser - {self.directory}")
+        self.setWindowTitle(f"File Browser - [{jd_area:02d}]")
         self.cols = 10
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
@@ -720,7 +719,7 @@ class JdIdPage(QtWidgets.QMainWindow):
                 pa, pi, pe = self.current_jd_area, val, None
             else:
                 pa, pi, pe = self.current_jd_area, self.current_jd_id, val
-            item = FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+            item = FileItem(None, None, pa, pi, pe, None, self, sec_idx, item_idx)
             item.updateLabel(self.show_prefix)
             return item
 
@@ -759,7 +758,6 @@ class JdIdPage(QtWidgets.QMainWindow):
                         jd_id,
                         jd_ext,
                         icon_data,
-                        self.directory,
                         self,
                         section_index,
                         index,
@@ -891,7 +889,6 @@ class JdIdPage(QtWidgets.QMainWindow):
                         jd_id,
                         jd_ext,
                         icon_data,
-                        self.directory,
                         self,
                         section_index,
                         index,

@@ -20,8 +20,7 @@ from .constants import *
 class JdExtPage(QtWidgets.QMainWindow):
     def __init__(self, parent_uuid, jd_area, jd_id):
         super().__init__()
-        self.directory = f"{jd_area}.{jd_id}" if jd_area is not None and jd_id is not None else ""
-        self.setWindowTitle(f"File Browser - {self.directory}")
+        self.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
         self.current_jd_area = jd_area
         self.current_jd_id = jd_id
         self.cols = 10
@@ -691,7 +690,7 @@ class JdExtPage(QtWidgets.QMainWindow):
         # Build sections and placeholders
         def placeholder_item(val, sec_idx, item_idx):
             pa, pi, pe = self.current_jd_area, self.current_jd_id, val
-            item = FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+            item = FileItem(None, None, pa, pi, pe, None, self, sec_idx, item_idx)
             item.updateLabel(self.show_prefix)
             return item
 
@@ -791,7 +790,6 @@ class JdExtPage(QtWidgets.QMainWindow):
                     jd_id,
                     jd_ext,
                     icon_data,
-                    self.directory,
                     self,
                     section_index,
                     index,
