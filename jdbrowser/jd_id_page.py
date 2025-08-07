@@ -642,14 +642,14 @@ class JdIdPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-            "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-            (self.current_jd_area,),
+            "WHERE parent_uuid IS ? ORDER BY jd_id",
+            (self.parent_uuid,),
         )
         headers = cursor.fetchall()
         cursor.execute(
             "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-            "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-            (self.current_jd_area,),
+            "WHERE parent_uuid IS ? ORDER BY jd_id",
+            (self.parent_uuid,),
         )
         tags = cursor.fetchall()
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
