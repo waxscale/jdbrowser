@@ -137,23 +137,6 @@ class JdIdPage(QtWidgets.QMainWindow):
         )
         box.exec()
 
-    def _get_parent_uuid(self, cursor, jd_area, jd_id, jd_ext):
-        """Return the UUID of the parent tag for the given path."""
-        if jd_id is None:
-            return None
-        if jd_ext is None:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS NULL AND jd_ext IS NULL",
-                (jd_area,),
-            )
-        else:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL",
-                (jd_area, jd_id),
-            )
-        row = cursor.fetchone()
-        return row[0] if row else None
-
     def _is_hidden_item(self, name):
         """Check if an item should be hidden based on naming patterns."""
         if self.show_hidden:
@@ -443,7 +426,7 @@ class JdIdPage(QtWidgets.QMainWindow):
                 if (new_jd_area, new_jd_id, new_jd_ext) != (jd_area, jd_id, jd_ext):
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
                     event_id = cursor.lastrowid
-                    parent_uuid = self._get_parent_uuid(cursor, new_jd_area, new_jd_id, new_jd_ext)
+                    parent_uuid = self.parent_uuid
                     cursor.execute(
                         "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
                         (event_id, tag_id, parent_uuid, new_jd_area, new_jd_id, new_jd_ext),
@@ -539,7 +522,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             new_id = target_item.jd_id
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
-            parent_uuid = self._get_parent_uuid(cursor, new_area, new_id, new_ext)
+            parent_uuid = self.parent_uuid
             cursor.execute(
                 "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
                 (event_id, source_tag_id, parent_uuid, new_area, new_id, new_ext),
@@ -564,14 +547,14 @@ class JdIdPage(QtWidgets.QMainWindow):
             )
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
-            parent_uuid = self._get_parent_uuid(cursor, new_t_area, new_t_id, new_t_ext)
+            parent_uuid = self.parent_uuid
             cursor.execute(
                 "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
                 (event_id, target_tag_id, parent_uuid, new_t_area, new_t_id, new_t_ext),
             )
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
-            parent_uuid = self._get_parent_uuid(cursor, new_s_area, new_s_id, new_s_ext)
+            parent_uuid = self.parent_uuid
             cursor.execute(
                 "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
                 (event_id, source_tag_id, parent_uuid, new_s_area, new_s_id, new_s_ext),
@@ -1125,6 +1108,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             parent_uuid=current_item.tag_id,
             jd_area=current_item.jd_area,
             jd_id=current_item.jd_id,
+            grandparent_uuid=self.parent_uuid,
         )
         jdbrowser.current_page = new_page
         new_page.show()
