@@ -2,7 +2,7 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from .constants import *
 
 class FileItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, parent_path, file_browser, section_idx, item_idx):
+    def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, parent_path, page, section_idx, item_idx):
         super().__init__()
         self.tag_id = tag_id  # None for placeholder items
         self.name = name if name is not None else ""
@@ -12,7 +12,7 @@ class FileItem(QtWidgets.QWidget):
         self.isSelected = False
         self.isHover = False
         self.isDimmed = False
-        self.file_browser = file_browser  # Reference to FileBrowser instance
+        self.page = page  # Reference to the parent page instance
         self.section_idx = section_idx  # Store section index
         self.item_idx = item_idx  # Store item index within section
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
@@ -144,13 +144,13 @@ class FileItem(QtWidgets.QWidget):
 
     def mousePressEvent(self, event):
         """Select on left-click; right-click edits or creates a tag."""
-        if self.file_browser:
+        if self.page:
             if event.button() == QtCore.Qt.LeftButton:
                 self.drag_start_pos = event.position().toPoint()
-                self.file_browser.set_selection(self.section_idx, self.item_idx)
+                self.page.set_selection(self.section_idx, self.item_idx)
             elif event.button() == QtCore.Qt.RightButton:
-                self.file_browser.set_selection(self.section_idx, self.item_idx)
-                self.file_browser._edit_tag_label_with_icon()
+                self.page.set_selection(self.section_idx, self.item_idx)
+                self.page._edit_tag_label_with_icon()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -198,9 +198,9 @@ class FileItem(QtWidgets.QWidget):
             event.ignore()
 
     def dropEvent(self, event):
-        if event.mimeData().hasText() and self.file_browser:
+        if event.mimeData().hasText() and self.page:
             source_tag_id = event.mimeData().text()
-            self.file_browser.handle_item_drop(source_tag_id, self)
+            self.page.handle_item_drop(source_tag_id, self)
             event.acceptProposedAction()
         else:
             event.ignore()
