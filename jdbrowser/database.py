@@ -142,6 +142,20 @@ def setup_database(db_path):
             SELECT RAISE(ABORT, 'jd_ext requires jd_id');
         END;
     """)
+    # Ensure existing databases have the parent_uuid column
+    def ensure_parent_uuid(table_name):
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        if 'parent_uuid' not in [row[1] for row in cursor.fetchall()]:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN parent_uuid TEXT")
+
+    for table in (
+        "event_set_tag_path",
+        "state_tags",
+        "event_set_header_path",
+        "state_headers",
+    ):
+        ensure_parent_uuid(table)
+
     rebuild_state_tags(conn)
     rebuild_state_headers(conn)
     conn.commit()
