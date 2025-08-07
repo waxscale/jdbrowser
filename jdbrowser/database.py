@@ -141,6 +141,20 @@ def setup_database(db_path):
         BEGIN
             SELECT RAISE(ABORT, 'jd_ext requires jd_id');
         END;
+
+        -- Indexes to accelerate lookups by parent_uuid
+        CREATE INDEX IF NOT EXISTS idx_event_set_tag_path_parent_uuid
+            ON event_set_tag_path(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_event_set_header_path_parent_uuid
+            ON event_set_header_path(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_state_tags_parent_uuid_jd_id
+            ON state_tags(parent_uuid, jd_id);
+        CREATE INDEX IF NOT EXISTS idx_state_tags_parent_uuid_jd_ext
+            ON state_tags(parent_uuid, jd_ext);
+        CREATE INDEX IF NOT EXISTS idx_state_headers_parent_uuid_jd_id
+            ON state_headers(parent_uuid, jd_id);
+        CREATE INDEX IF NOT EXISTS idx_state_headers_parent_uuid_jd_ext
+            ON state_headers(parent_uuid, jd_ext);
     """)
     # Ensure existing databases have the parent_uuid column
     def ensure_parent_uuid(table_name):
