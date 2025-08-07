@@ -20,8 +20,7 @@ from .constants import *
 class JdAreaPage(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.directory = ""
-        self.setWindowTitle(f"File Browser - {self.directory}")
+        self.setWindowTitle("File Browser")
         self.current_jd_area = None
         self.current_jd_id = None
         self.cols = 10
@@ -670,7 +669,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
 
         def placeholder_item(val, sec_idx, item_idx):
             pa, pi, pe = val, None, None
-            item = FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
+            item = FileItem(None, None, pa, pi, pe, None, self, sec_idx, item_idx)
             item.updateLabel(self.show_prefix)
             return item
 
@@ -706,7 +705,6 @@ class JdAreaPage(QtWidgets.QMainWindow):
                     jd_id,
                     jd_ext,
                     icon_data,
-                    self.directory,
                     self,
                     section_index,
                     index,
