@@ -37,6 +37,7 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_tag_path (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
+            parent_uuid TEXT,
             jd_area INTEGER,
             jd_id INTEGER,
             jd_ext INTEGER,
@@ -72,6 +73,7 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_header_path (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
+            parent_uuid TEXT,
             jd_area INTEGER NOT NULL,
             jd_id INTEGER,
             jd_ext INTEGER,
@@ -93,6 +95,7 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_headers (
             header_id TEXT PRIMARY KEY,
+            parent_uuid TEXT,
             jd_area INTEGER NOT NULL,
             jd_id INTEGER,
             jd_ext INTEGER,
@@ -115,6 +118,7 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_tags (
             tag_id TEXT PRIMARY KEY,
+            parent_uuid TEXT,
             jd_area INTEGER,
             jd_id INTEGER,
             jd_ext INTEGER,
@@ -138,6 +142,20 @@ def setup_database(db_path):
             SELECT RAISE(ABORT, 'jd_ext requires jd_id');
         END;
     """)
+    # Ensure existing databases have the parent_uuid column
+    def ensure_parent_uuid(table_name):
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        if 'parent_uuid' not in [row[1] for row in cursor.fetchall()]:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN parent_uuid TEXT")
+
+    for table in (
+        "event_set_tag_path",
+        "state_tags",
+        "event_set_header_path",
+        "state_headers",
+    ):
+        ensure_parent_uuid(table)
+
     rebuild_state_tags(conn)
     rebuild_state_headers(conn)
     conn.commit()
@@ -149,9 +167,10 @@ def rebuild_state_tags(conn):
     cursor.executescript("""
         DELETE FROM state_tags;
 
-        INSERT INTO state_tags (tag_id, jd_area, jd_id, jd_ext, label)
+        INSERT INTO state_tags (tag_id, parent_uuid, jd_area, jd_id, jd_ext, label)
         SELECT
             p.tag_id,
+            p.parent_uuid,
             p.jd_area,
             p.jd_id,
             p.jd_ext,
@@ -159,6 +178,7 @@ def rebuild_state_tags(conn):
         FROM (
             SELECT
                 p.tag_id,
+                p.parent_uuid,
                 p.jd_area,
                 p.jd_id,
                 p.jd_ext,
@@ -207,9 +227,10 @@ def rebuild_state_headers(conn):
     cursor.executescript("""
         DELETE FROM state_headers;
 
-        INSERT INTO state_headers (header_id, jd_area, jd_id, jd_ext, label)
+        INSERT INTO state_headers (header_id, parent_uuid, jd_area, jd_id, jd_ext, label)
         SELECT
             p.header_id,
+            p.parent_uuid,
             p.jd_area,
             p.jd_id,
             p.jd_ext,
@@ -217,6 +238,7 @@ def rebuild_state_headers(conn):
         FROM (
             SELECT
                 p.header_id,
+                p.parent_uuid,
                 p.jd_area,
                 p.jd_id,
                 p.jd_ext,
@@ -262,7 +284,24 @@ def create_tag(conn, jd_area, jd_id, jd_ext, label):
     cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
     event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)", (event_id, tag_id, jd_area, jd_id, jd_ext))
+    parent_uuid = None
+    if jd_id is not None:
+        if jd_ext is None:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS NULL AND jd_ext IS NULL",
+                (jd_area,),
+            )
+        else:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL",
+                (jd_area, jd_id),
+            )
+        row = cursor.fetchone()
+        parent_uuid = row[0] if row else None
+    cursor.execute(
+        "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+        (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext),
+    )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
     event_id = cursor.lastrowid
     cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
@@ -290,9 +329,23 @@ def create_header(conn, jd_area, jd_id, jd_ext, label):
     cursor.execute("INSERT INTO event_create_header (event_id, header_id) VALUES (?, ?)", (event_id, header_id))
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_path')")
     event_id = cursor.lastrowid
+    parent_uuid = None
+    if jd_id is not None:
+        if jd_ext is None:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
+                (jd_area,),
+            )
+        else:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
+                (jd_area, jd_id),
+            )
+        row = cursor.fetchone()
+        parent_uuid = row[0] if row else None
     cursor.execute(
-        "INSERT INTO event_set_header_path (event_id, header_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-        (event_id, header_id, jd_area, jd_id, jd_ext),
+        "INSERT INTO event_set_header_path (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+        (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_label')")
     event_id = cursor.lastrowid
@@ -316,9 +369,23 @@ def update_header(conn, header_id, jd_area, jd_id, jd_ext, label):
         return False
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_path')")
     event_id = cursor.lastrowid
+    parent_uuid = None
+    if jd_id is not None:
+        if jd_ext is None:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
+                (jd_area,),
+            )
+        else:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
+                (jd_area, jd_id),
+            )
+        row = cursor.fetchone()
+        parent_uuid = row[0] if row else None
     cursor.execute(
-        "INSERT INTO event_set_header_path (event_id, header_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-        (event_id, header_id, jd_area, jd_id, jd_ext),
+        "INSERT INTO event_set_header_path (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+        (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_label')")
     event_id = cursor.lastrowid

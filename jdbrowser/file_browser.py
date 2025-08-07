@@ -146,6 +146,23 @@ class FileBrowser(QtWidgets.QMainWindow):
         )
         box.exec()
 
+    def _get_parent_uuid(self, cursor, jd_area, jd_id, jd_ext):
+        """Return the UUID of the parent tag for the given path."""
+        if jd_id is None:
+            return None
+        if jd_ext is None:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS NULL AND jd_ext IS NULL",
+                (jd_area,),
+            )
+        else:
+            cursor.execute(
+                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL",
+                (jd_area, jd_id),
+            )
+        row = cursor.fetchone()
+        return row[0] if row else None
+
     def _is_hidden_item(self, name):
         """Check if an item should be hidden based on naming patterns."""
         if self.show_hidden:
@@ -534,9 +551,10 @@ class FileBrowser(QtWidgets.QMainWindow):
                 if (new_jd_area, new_jd_id, new_jd_ext) != (jd_area, jd_id, jd_ext):
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
                     event_id = cursor.lastrowid
+                    parent_uuid = self._get_parent_uuid(cursor, new_jd_area, new_jd_id, new_jd_ext)
                     cursor.execute(
-                        "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-                        (event_id, tag_id, new_jd_area, new_jd_id, new_jd_ext),
+                        "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+                        (event_id, tag_id, parent_uuid, new_jd_area, new_jd_id, new_jd_ext),
                     )
                 if new_label != current_label:
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
@@ -634,9 +652,10 @@ class FileBrowser(QtWidgets.QMainWindow):
                 new_ext = target_item.jd_ext
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
+            parent_uuid = self._get_parent_uuid(cursor, new_area, new_id, new_ext)
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, new_area, new_id, new_ext),
+                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, parent_uuid, new_area, new_id, new_ext),
             )
         else:
             target_tag_id = target_item.tag_id
@@ -658,20 +677,22 @@ class FileBrowser(QtWidgets.QMainWindow):
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, None, None, None),
+                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, None, None, None, None),
             )
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
+            parent_uuid = self._get_parent_uuid(cursor, new_t_area, new_t_id, new_t_ext)
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-                (event_id, target_tag_id, new_t_area, new_t_id, new_t_ext),
+                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+                (event_id, target_tag_id, parent_uuid, new_t_area, new_t_id, new_t_ext),
             )
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
+            parent_uuid = self._get_parent_uuid(cursor, new_s_area, new_s_id, new_s_ext)
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, new_s_area, new_s_id, new_s_ext),
+                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
+                (event_id, source_tag_id, parent_uuid, new_s_area, new_s_id, new_s_ext),
             )
         self.conn.commit()
         rebuild_state_tags(self.conn)
