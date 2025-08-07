@@ -18,22 +18,12 @@ from .database import (
 from .constants import *
 
 class JdAreaPage(QtWidgets.QMainWindow):
-    def __init__(self, start_id=None):
+    def __init__(self):
         super().__init__()
-        self.directory = start_id or ""
+        self.directory = ""
         self.setWindowTitle(f"File Browser - {self.directory}")
-        self.current_level = 0
         self.current_jd_area = None
         self.current_jd_id = None
-        if start_id:
-            parts = start_id.split('.')
-            if len(parts) == 1:
-                self.current_level = 1
-                self.current_jd_area = int(parts[0])
-            elif len(parts) == 2:
-                self.current_level = 2
-                self.current_jd_area = int(parts[0])
-                self.current_jd_id = int(parts[1])
         self.cols = 10
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
@@ -273,34 +263,14 @@ class JdAreaPage(QtWidgets.QMainWindow):
 
     def _create_header(self):
         cursor = self.conn.cursor()
-        if self.current_level == 0:
-            cursor.execute("SELECT MAX(jd_area) FROM state_headers")
-            max_jd_area = cursor.fetchone()[0]
-            default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=self.current_level)
-        elif self.current_level == 1:
-            cursor.execute("SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?", (self.current_jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            dialog = HeaderDialog(self.current_jd_area, default_jd_id, None, parent=self, level=self.current_level)
-        else:
-            cursor.execute(
-                "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            max_jd_ext = cursor.fetchone()[0]
-            default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=self.current_level)
+        cursor.execute("SELECT MAX(jd_area) FROM state_headers")
+        max_jd_area = cursor.fetchone()[0]
+        default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
+        dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=0)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
             jd_area, jd_id, jd_ext, label = dialog.get_values()
-            if self.current_level == 0 and jd_area is None:
+            if jd_area is None:
                 self._warn("Invalid Input", "jd_area must be an integer.")
-                return
-            if self.current_level == 1 and jd_id is None:
-                self._warn("Invalid Input", "jd_id must be an integer.")
-                return
-            if self.current_level == 2 and jd_ext is None:
-                self._warn("Invalid Input", "jd_ext must be an integer.")
                 return
             header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
             if header_id:
@@ -314,48 +284,18 @@ class JdAreaPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         label = "NewTag"
-        if self.current_level == 0:
-            if jd_area is None:
-                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
-                max_jd_area = cursor.fetchone()[0]
-                new_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                    (jd_area, jd_area + 10),
-                )
-                max_jd_area = cursor.fetchone()[0]
-                new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
-            new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
-        elif self.current_level == 1:
-            if jd_id is None:
-                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-                max_jd_id = cursor.fetchone()[0]
-                new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                    (jd_area, jd_id, jd_id + 10),
-                )
-                max_jd_id = cursor.fetchone()[0]
-                new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-            new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
+        if jd_area is None:
+            cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+            max_jd_area = cursor.fetchone()[0]
+            new_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
         else:
-            if jd_ext is None:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                    (jd_area, jd_id),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
-                    (jd_area, jd_id, jd_ext, jd_ext + 10),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                new_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
-            new_tag_id = create_tag(self.conn, jd_area, jd_id, new_jd_ext, label)
+            cursor.execute(
+                "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                (jd_area, jd_area + 10),
+            )
+            max_jd_area = cursor.fetchone()[0]
+            new_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        new_tag_id = create_tag(self.conn, new_jd_area, None, None, label)
         if new_tag_id:
             rebuild_state_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
@@ -375,60 +315,23 @@ class JdAreaPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
         default_label = "NewTag"
-        if self.current_level == 0:
-            if jd_area is None:
-                cursor.execute("SELECT MAX(jd_area) FROM state_tags")
-                max_jd_area = cursor.fetchone()[0]
-                default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
-                    (jd_area, jd_area + 10),
-                )
-                max_jd_area = cursor.fetchone()[0]
-                default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
-            dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
-        elif self.current_level == 1:
-            if jd_id is None:
-                cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-                max_jd_id = cursor.fetchone()[0]
-                default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                    (jd_area, jd_id, jd_id + 10),
-                )
-                max_jd_id = cursor.fetchone()[0]
-                default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-            dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
+        if jd_area is None:
+            cursor.execute("SELECT MAX(jd_area) FROM state_tags")
+            max_jd_area = cursor.fetchone()[0]
+            default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
         else:
-            if jd_ext is None:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ?",
-                    (jd_area, jd_id),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-            else:
-                cursor.execute(
-                    "SELECT MAX(jd_ext) FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext >= ? AND jd_ext < ?",
-                    (jd_area, jd_id, jd_ext, jd_ext + 10),
-                )
-                max_jd_ext = cursor.fetchone()[0]
-                default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else jd_ext
-            dialog = InputTagDialog(jd_area, jd_id, default_jd_ext, default_label, level=2, parent=self)
+            cursor.execute(
+                "SELECT MAX(jd_area) FROM state_tags WHERE jd_area >= ? AND jd_area < ?",
+                (jd_area, jd_area + 10),
+            )
+            max_jd_area = cursor.fetchone()[0]
+            default_jd_area = max_jd_area + 1 if max_jd_area is not None else jd_area
+        dialog = InputTagDialog(default_jd_area, None, None, default_label, level=0, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if (
-                    (self.current_level == 0 and jd_area is None)
-                    or (self.current_level == 1 and jd_id is None)
-                    or (self.current_level == 2 and jd_ext is None)
-                ):
-                    self._warn(
-                        "Invalid Input",
-                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                    )
+                if jd_area is None:
+                    self._warn("Invalid Input", "jd_area must be an integer.")
                     continue
                 if jd_id is not None and jd_area is None:
                     self._warn("Invalid Input", "jd_id requires jd_area.")
@@ -450,16 +353,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        if self.current_level == 1:
-            target = self.nav_stack.pop() if self.nav_stack else None
-            self.current_level = 0
-            self.current_jd_area = None
-            self._rebuild_ui(new_tag_id=target)
-        elif self.current_level == 2:
-            target = self.nav_stack.pop() if self.nav_stack else None
-            self.current_level = 1
-            self.current_jd_id = None
-            self._rebuild_ui(new_tag_id=target)
+        pass
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -468,19 +362,12 @@ class JdAreaPage(QtWidgets.QMainWindow):
         current_item = self.sections[self.sec_idx][self.idx_in_sec]
         if not current_item.tag_id:
             default_label = "NewTag"
-            dialog = InputTagDialog(current_item.jd_area, current_item.jd_id, current_item.jd_ext, default_label, level=self.current_level, parent=self)
+            dialog = InputTagDialog(current_item.jd_area, current_item.jd_id, current_item.jd_ext, default_label, level=0, parent=self)
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
                     jd_area, jd_id, jd_ext, label = dialog.get_values()
-                    if (
-                        (self.current_level == 0 and jd_area is None)
-                        or (self.current_level == 1 and jd_id is None)
-                        or (self.current_level == 2 and jd_ext is None)
-                    ):
-                        self._warn(
-                            "Invalid Input",
-                            ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                        )
+                    if jd_area is None:
+                        self._warn("Invalid Input", "jd_area must be an integer.")
                         continue
                     if jd_id is not None and jd_area is None:
                         self._warn("Invalid Input", "jd_id requires jd_area.")
@@ -509,20 +396,13 @@ class JdAreaPage(QtWidgets.QMainWindow):
         icon_data = cursor.fetchone()
         icon_data = icon_data[0] if icon_data else None
         while True:
-            dialog = EditTagDialog(current_label, icon_data, self.current_level, jd_area, jd_id, jd_ext, self)
+            dialog = EditTagDialog(current_label, icon_data, 0, jd_area, jd_id, jd_ext, self)
             if dialog.exec() == QtWidgets.QDialog.Accepted:
                 new_jd_area, new_jd_id, new_jd_ext = dialog.get_path()
                 new_label = dialog.get_label()
                 new_icon_data = dialog.get_icon_data()
-                if (
-                    (self.current_level == 0 and new_jd_area is None)
-                    or (self.current_level == 1 and new_jd_id is None)
-                    or (self.current_level == 2 and new_jd_ext is None)
-                ):
-                    self._warn(
-                        "Invalid Input",
-                        ["jd_area", "jd_id", "jd_ext"][self.current_level] + " must be an integer.",
-                    )
+                if new_jd_area is None:
+                    self._warn("Invalid Input", "jd_area must be an integer.")
                     current_label, icon_data = new_label, new_icon_data
                     jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
                     continue
@@ -643,13 +523,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
             return
         s_area, s_id, s_ext = source_row
         if target_item.tag_id is None:
-            new_area, new_id, new_ext = s_area, s_id, s_ext
-            if self.current_level == 0:
-                new_area = target_item.jd_area
-            elif self.current_level == 1:
-                new_id = target_item.jd_id
-            else:
-                new_ext = target_item.jd_ext
+            new_area, new_id, new_ext = target_item.jd_area, s_id, s_ext
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
             parent_uuid = self._get_parent_uuid(cursor, new_area, new_id, new_ext)
@@ -666,14 +540,8 @@ class JdAreaPage(QtWidgets.QMainWindow):
                 (target_tag_id,),
             )
             t_area, t_id, t_ext = cursor.fetchone()
-            new_s_area, new_s_id, new_s_ext = s_area, s_id, s_ext
-            new_t_area, new_t_id, new_t_ext = t_area, t_id, t_ext
-            if self.current_level == 0:
-                new_s_area, new_t_area = t_area, s_area
-            elif self.current_level == 1:
-                new_s_id, new_t_id = t_id, s_id
-            else:
-                new_s_ext, new_t_ext = t_ext, s_ext
+            new_s_area, new_s_id, new_s_ext = t_area, s_id, s_ext
+            new_t_area, new_t_id, new_t_ext = s_area, t_id, t_ext
             cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
             event_id = cursor.lastrowid
             cursor.execute(
@@ -706,21 +574,15 @@ class JdAreaPage(QtWidgets.QMainWindow):
             header_item.label,
             True,
             self,
-            level=self.current_level,
+            level=0,
         )
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
                 delete_header(self.conn, header_item.header_id)
             else:
                 jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if self.current_level == 0 and jd_area is None:
+                if jd_area is None:
                     self._warn("Invalid Input", "jd_area must be an integer.")
-                    return
-                if self.current_level == 1 and jd_id is None:
-                    self._warn("Invalid Input", "jd_id must be an integer.")
-                    return
-                if self.current_level == 2 and jd_ext is None:
-                    self._warn("Invalid Input", "jd_ext must be an integer.")
                     return
                 if not update_header(
                     self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label
@@ -766,47 +628,18 @@ class JdAreaPage(QtWidgets.QMainWindow):
         self.sections = []
         self.section_paths = []
         self.section_filenames = []
-        current_section = None
         section_index = 0
-        current_base = 0 if self.current_level < 2 else None
         cursor = self.conn.cursor()
-        if self.current_level == 0:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area"
-            )
-            tags = cursor.fetchall()
-        elif self.current_level == 1:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-                (self.current_jd_area,),
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area = ? AND jd_id IS NOT NULL AND jd_ext IS NULL ORDER BY jd_id",
-                (self.current_jd_area,),
-            )
-            tags = cursor.fetchall()
-        else:
-            cursor.execute(
-                "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            headers = cursor.fetchall()
-            cursor.execute(
-                "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-                "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-                (self.current_jd_area, self.current_jd_id),
-            )
-            tags = cursor.fetchall()
+        cursor.execute(
+            "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
+            "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area",
+        )
+        headers = cursor.fetchall()
+        cursor.execute(
+            "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
+            "WHERE jd_area IS NOT NULL AND jd_id IS NULL AND jd_ext IS NULL ORDER BY jd_area",
+        )
+        tags = cursor.fetchall()
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
         icons = {row[0]: row[1] for row in cursor.fetchall()}
 
@@ -827,206 +660,84 @@ class JdAreaPage(QtWidgets.QMainWindow):
             prefix = construct_prefix(jd_area, jd_id, jd_ext)
             items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
 
-        # Sort numerically by jd components to ensure consistent ordering
         items.sort(
             key=lambda x: (
-                x[4] if self.current_level == 0 else (x[5] if self.current_level == 1 else x[6]),
+                x[4],
                 0 if x[0] == "header" else 1,
                 (x[2] or "").lower(),
             )
         )
 
-        # Build sections and placeholders
         def placeholder_item(val, sec_idx, item_idx):
-            if self.current_level == 0:
-                pa, pi, pe = val, None, None
-            elif self.current_level == 1:
-                pa, pi, pe = self.current_jd_area, val, None
-            else:
-                pa, pi, pe = self.current_jd_area, self.current_jd_id, val
+            pa, pi, pe = val, None, None
             item = FileItem(None, None, pa, pi, pe, None, self.directory, self, sec_idx, item_idx)
             item.updateLabel(self.show_prefix)
             return item
 
-        section_index = 0
+        headers_by_base = defaultdict(list)
+        tags_by_base = defaultdict(list)
+        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+            value = jd_area
+            base = (value // 10) * 10 if value is not None else 0
+            if kind == "header":
+                headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
+            else:
+                tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
 
-        if self.current_level < 2:
-            headers_by_base = defaultdict(list)
-            tags_by_base = defaultdict(list)
-            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-                value = jd_area if self.current_level == 0 else jd_id
-                base = (value // 10) * 10 if value is not None else 0
-                if kind == "header":
-                    headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
-                else:
-                    tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
-
-            for base in range(0, 100, 10):
-                for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
-                    display = f"{prefix} {label}" if prefix else (label or "")
-                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                    mainLayout.addWidget(header_item)
-                    mainLayout.addSpacing(10)
-                section = [
-                    placeholder_item(val, section_index, i)
-                    for i, val in enumerate(range(base, base + 10))
-                ]
-                for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
-                    value = jd_area if self.current_level == 0 else jd_id
-                    index = value - base
-                    icon_data = icons.get(obj_id)
-                    item = FileItem(
-                        obj_id,
-                        label,
-                        jd_area,
-                        jd_id,
-                        jd_ext,
-                        icon_data,
-                        self.directory,
-                        self,
-                        section_index,
-                        index,
-                    )
-                    item.updateLabel(self.show_prefix)
-                    section[index] = item
-                sectionWidget = QtWidgets.QWidget()
-                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                sectionLayout.setSpacing(5)
-                sectionLayout.setContentsMargins(0, 0, 0, 0)
-                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                rowLayout = None
-                for i, item in enumerate(section):
-                    if i % self.cols == 0:
-                        if rowLayout:
-                            sectionLayout.addLayout(rowLayout)
-                        rowLayout = QtWidgets.QHBoxLayout()
-                        rowLayout.setSpacing(2)
-                        rowLayout.setContentsMargins(0, 0, 0, 0)
-                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                    rowLayout.addWidget(item)
-                if rowLayout:
-                    sectionLayout.addLayout(rowLayout)
-                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                mainLayout.addWidget(sectionWidget)
-                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                self.sections.append(section)
-                if self.current_level == 0:
-                    base_path = (base, None, None)
-                else:
-                    base_path = (self.current_jd_area, base, None)
-                self.section_paths.append(base_path)
-                self.section_filenames.append(None)
-                section_index += 1
-        else:
-            current_section = None
-            section_base = None
-            sections_covered = set()
-
-            def add_section(section):
-                sectionWidget = QtWidgets.QWidget()
-                sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-                sectionLayout.setSpacing(5)
-                sectionLayout.setContentsMargins(0, 0, 0, 0)
-                sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                rowLayout = None
-                for i, item in enumerate(section):
-                    if i % self.cols == 0:
-                        if rowLayout:
-                            sectionLayout.addLayout(rowLayout)
-                        rowLayout = QtWidgets.QHBoxLayout()
-                        rowLayout.setSpacing(2)
-                        rowLayout.setContentsMargins(0, 0, 0, 0)
-                        rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
-                    rowLayout.addWidget(item)
-                if rowLayout:
-                    sectionLayout.addLayout(rowLayout)
-                sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                mainLayout.addWidget(sectionWidget)
-                mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
-                self.sections.append(section)
-
-            next_index = 0
-
-            def start_section(base, base_path, filename_id):
-                nonlocal current_section, section_base, next_index
-                current_section = []
-                self.section_paths.append(base_path)
-                self.section_filenames.append(filename_id)
-                section_base = base
-                sections_covered.add(base)
-                next_index = 0
-
-            def add_placeholders_until(end_index):
-                nonlocal next_index
-                for i in range(next_index, end_index):
-                    val = section_base + i
-                    current_section.append(placeholder_item(val, section_index, i))
-                next_index = end_index
-
-            def flush_section(fill_full=False):
-                nonlocal current_section, section_index, section_base, next_index
-                if current_section is None:
-                    return
-                if not current_section:
-                    end = 10 if fill_full else 1
-                    for i in range(end):
-                        val = section_base + i
-                        current_section.append(placeholder_item(val, section_index, i))
-                else:
-                    # Ensure a placeholder exists after the last actual item
-                    add_placeholders_until(next_index + 1)
-                add_section(current_section)
-                section_index += 1
-                current_section = None
-                section_base = None
-                next_index = 0
-
-            def add_empty_section(base):
-                base_path = (self.current_jd_area, self.current_jd_id, base)
-                start_section(base, base_path, None)
-                flush_section()
-
-            for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
+        for base in range(0, 100, 10):
+            for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
                 display = f"{prefix} {label}" if prefix else (label or "")
-                if kind == "header":
-                    flush_section()
-                    header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
-                    header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
-                    mainLayout.addWidget(header_item)
-                    mainLayout.addSpacing(10)
-                    base_path = (jd_area, jd_id, jd_ext)
-                    base_val = (jd_ext // 10) * 10 if jd_ext is not None else 0
-                    start_section(base_val, base_path, obj_id)
-                else:
-                    value = jd_ext
-                    base = (value // 10) * 10 if value is not None else 0
-                    if current_section is None or base != section_base:
-                        flush_section()
-                        base_path = (self.current_jd_area, self.current_jd_id, base)
-                        start_section(base, base_path, obj_id)
-                    index = value - section_base
-                    add_placeholders_until(index)
-                    icon_data = icons.get(obj_id)
-                    item = FileItem(
-                        obj_id,
-                        label,
-                        jd_area,
-                        jd_id,
-                        jd_ext,
-                        icon_data,
-                        self.directory,
-                        self,
-                        section_index,
-                        index,
-                    )
-                    item.updateLabel(self.show_prefix)
-                    current_section.append(item)
-                    next_index = index + 1
-
-            flush_section()
-            if not items:
-                add_empty_section(0)
+                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                mainLayout.addWidget(header_item)
+                mainLayout.addSpacing(10)
+            section = [
+                placeholder_item(val, section_index, i)
+                for i, val in enumerate(range(base, base + 10))
+            ]
+            for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
+                value = jd_area
+                index = value - base
+                icon_data = icons.get(obj_id)
+                item = FileItem(
+                    obj_id,
+                    label,
+                    jd_area,
+                    jd_id,
+                    jd_ext,
+                    icon_data,
+                    self.directory,
+                    self,
+                    section_index,
+                    index,
+                )
+                item.updateLabel(self.show_prefix)
+                section[index] = item
+            sectionWidget = QtWidgets.QWidget()
+            sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
+            sectionLayout.setSpacing(5)
+            sectionLayout.setContentsMargins(0, 0, 0, 0)
+            sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+            rowLayout = None
+            for i, item in enumerate(section):
+                if i % self.cols == 0:
+                    if rowLayout:
+                        sectionLayout.addLayout(rowLayout)
+                    rowLayout = QtWidgets.QHBoxLayout()
+                    rowLayout.setSpacing(2)
+                    rowLayout.setContentsMargins(0, 0, 0, 0)
+                    rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+                rowLayout.addWidget(item)
+            if rowLayout:
+                sectionLayout.addLayout(rowLayout)
+            sectionWidget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            mainLayout.addWidget(sectionWidget)
+            mainLayout.setAlignment(sectionWidget, QtCore.Qt.AlignmentFlag.AlignLeft)
+            self.sections.append(section)
+            base_path = (base, None, None)
+            self.section_paths.append(base_path)
+            self.section_filenames.append(None)
+            section_index += 1
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
@@ -1379,24 +1090,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def descend_level(self):
-        if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
-            return
-        current = self.sections[self.sec_idx][self.idx_in_sec]
-        if not current.tag_id:
-            return
-        self.nav_stack.append(current.tag_id)
-        if self.current_level == 0:
-            self.current_jd_area = current.jd_area
-            self.current_level = 1
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
-        elif self.current_level == 1 and current.jd_id is not None:
-            self.current_jd_id = current.jd_id
-            self.current_level = 2
-            self.sec_idx = 0
-            self.idx_in_sec = 0
-            self._rebuild_ui()
+        pass
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
