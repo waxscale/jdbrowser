@@ -333,12 +333,12 @@ def create_header(conn, jd_area, jd_id, jd_ext, label):
     if jd_id is not None:
         if jd_ext is None:
             cursor.execute(
-                "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
                 (jd_area,),
             )
         else:
             cursor.execute(
-                "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
                 (jd_area, jd_id),
             )
         row = cursor.fetchone()
@@ -373,12 +373,12 @@ def update_header(conn, header_id, jd_area, jd_id, jd_ext, label):
     if jd_id is not None:
         if jd_ext is None:
             cursor.execute(
-                "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
                 (jd_area,),
             )
         else:
             cursor.execute(
-                "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
+                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
                 (jd_area, jd_id),
             )
         row = cursor.fetchone()
