@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from PySide6 import QtWidgets, QtGui, QtCore
+import jdbrowser
 from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
 from .dialogs.header_dialog import HeaderDialog
 from .file_item import FileItem
@@ -361,7 +362,16 @@ class JdExtPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        pass
+        from .jd_id_page import JdIdPage
+
+        cursor = self.conn.cursor()
+        parent_uuid = self._get_parent_uuid(
+            cursor, self.current_jd_area, self.current_jd_id, None
+        )
+        new_page = JdIdPage(parent_uuid=parent_uuid, jd_area=self.current_jd_area)
+        jdbrowser.current_page = new_page
+        new_page.show()
+        self.close()
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
