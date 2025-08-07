@@ -22,6 +22,7 @@ class JdExtPage(QtWidgets.QMainWindow):
     def __init__(self, parent_uuid, jd_area, jd_id):
         super().__init__()
         self.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
+        self.parent_uuid = parent_uuid
         self.current_jd_area = jd_area
         self.current_jd_id = jd_id
         self.cols = 10
@@ -658,14 +659,14 @@ class JdExtPage(QtWidgets.QMainWindow):
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-            "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-            (self.current_jd_area, self.current_jd_id),
+            "WHERE parent_uuid IS ? ORDER BY jd_ext",
+            (self.parent_uuid,),
         )
         headers = cursor.fetchall()
         cursor.execute(
             "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-            "WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NOT NULL ORDER BY jd_ext",
-            (self.current_jd_area, self.current_jd_id),
+            "WHERE parent_uuid IS ? ORDER BY jd_ext",
+            (self.parent_uuid,),
         )
         tags = cursor.fetchall()
         cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
