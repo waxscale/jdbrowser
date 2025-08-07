@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from PySide6 import QtWidgets, QtGui, QtCore
+import jdbrowser
 from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
 from .dialogs.header_dialog import HeaderDialog
 from .file_item import FileItem
@@ -353,7 +354,11 @@ class JdIdPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        pass
+        from .jd_area_page import JdAreaPage
+        new_page = JdAreaPage()
+        jdbrowser.current_page = new_page
+        new_page.show()
+        self.close()
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -1105,7 +1110,25 @@ class JdIdPage(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def descend_level(self):
-        pass
+        if not self.sections:
+            return
+        if not (0 <= self.sec_idx < len(self.sections)):
+            return
+        sec = self.sections[self.sec_idx]
+        if not (0 <= self.idx_in_sec < len(sec)):
+            return
+        current_item = sec[self.idx_in_sec]
+        if not current_item.tag_id:
+            return
+        from .jd_ext_page import JdExtPage
+        new_page = JdExtPage(
+            parent_uuid=current_item.tag_id,
+            jd_area=current_item.jd_area,
+            jd_id=current_item.jd_id,
+        )
+        jdbrowser.current_page = new_page
+        new_page.show()
+        self.close()
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
