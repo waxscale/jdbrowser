@@ -7,13 +7,12 @@ from ..constants import *
 
 
 class EditTagDialog(QDialog):
-    def __init__(self, current_label, icon_data, level, jd_area=None, jd_id=None, jd_ext=None, parent=None):
+    def __init__(self, current_label, icon_data, level, order=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Tag Label and Icon")
         self.icon_data = icon_data
         self.level = level
-        self.jd_area = jd_area
-        self.jd_id = jd_id
+        self.order = order
         self.setStyleSheet(f'''
             QDialog {{
                 background-color: {BACKGROUND_COLOR};
@@ -67,7 +66,7 @@ class EditTagDialog(QDialog):
         layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         # Prefix input (below icon, full width)
-        default_prefix = [jd_area, jd_id, jd_ext][level]
+        default_prefix = order
         placeholder = ["jd_area", "jd_id", "jd_ext"][level]
         self.prefix_input = QLineEdit("" if default_prefix is None else str(default_prefix))
         self.prefix_input.setPlaceholderText(placeholder)
@@ -203,14 +202,8 @@ class EditTagDialog(QDialog):
     def get_icon_data(self):
         return self.icon_data
 
-    def get_path(self):
+    def get_order(self):
         try:
-            prefix = int(self.prefix_input.text()) if self.prefix_input.text() else None
+            return int(self.prefix_input.text()) if self.prefix_input.text() else None
         except ValueError:
-            prefix = None
-        if self.level == 0:
-            return prefix, None, None
-        elif self.level == 1:
-            return self.jd_area, prefix, None
-        else:
-            return self.jd_area, self.jd_id, prefix
+            return None
