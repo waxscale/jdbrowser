@@ -8,13 +8,14 @@ from .file_item import FileItem
 from .header_item import HeaderItem
 from .search_line_edit import SearchLineEdit
 from .database import (
-    create_tag,
-    rebuild_state_tags,
+    create_jd_id_tag,
+    rebuild_state_jd_id_tags,
     setup_database,
-    create_header,
-    update_header,
-    delete_header,
-    rebuild_state_headers,
+    create_jd_id_header,
+    update_jd_id_header,
+    delete_jd_id_header,
+    rebuild_state_jd_id_headers,
+    delete_jd_id_tag,
 )
 from .constants import *
 
@@ -238,18 +239,21 @@ class JdIdPage(QtWidgets.QMainWindow):
                 with open(file_path, 'rb') as f:
                     icon_data = f.read()
                 cursor = self.conn.cursor()
-                cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_icon')")
+                cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_icon')")
                 event_id = cursor.lastrowid
-                cursor.execute("INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)", (event_id, tag_id, icon_data))
+                cursor.execute(
+                    "INSERT INTO event_set_jd_id_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)",
+                    (event_id, tag_id, icon_data),
+                )
                 self.conn.commit()
-                rebuild_state_tags(self.conn)
+                rebuild_state_jd_id_tags(self.conn)
                 self._rebuild_ui()
 
     def _create_header(self):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT MAX(jd_id) FROM state_headers WHERE jd_area = ?",
-            (self.current_jd_area,),
+            "SELECT MAX([order]) FROM state_jd_id_headers WHERE parent_uuid IS ?",
+            (self.parent_uuid,),
         )
         max_order = cursor.fetchone()[0]
         default_order = max_order + 1 if max_order is not None else 0
@@ -260,15 +264,15 @@ class JdIdPage(QtWidgets.QMainWindow):
             if order is None:
                 self._warn("Invalid Input", "Order must be an integer.")
                 return
-            header_id = create_header(
-                self.conn, self.current_jd_area, order, None, label
+            header_id = create_jd_id_header(
+                self.conn, self.parent_uuid, order, label
             )
             if header_id:
-                rebuild_state_headers(self.conn)
+                rebuild_state_jd_id_headers(self.conn)
                 self._rebuild_ui()
             else:
                 self._warn(
-                    "Constraint Violation", "Header path conflicts or invalid."
+                    "Constraint Violation", "Header order conflicts or invalid."
                 )
 
     def _append_tag_to_section(self):
@@ -276,22 +280,17 @@ class JdIdPage(QtWidgets.QMainWindow):
         if not self.sections or self.sec_idx >= len(self.sections):
             return
         cursor = self.conn.cursor()
-        jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
+        _, base, _ = self.section_paths[self.sec_idx]
         label = "NewTag"
-        if jd_id is None:
-            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            new_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-        else:
-            cursor.execute(
-                "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                (jd_area, jd_id, jd_id + 10),
-            )
-            max_jd_id = cursor.fetchone()[0]
-            new_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-        new_tag_id = create_tag(self.conn, jd_area, new_jd_id, None, label)
+        cursor.execute(
+            "SELECT MAX([order]) FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] >= ? AND [order] < ?",
+            (self.parent_uuid, base, base + 10),
+        )
+        max_order = cursor.fetchone()[0]
+        new_order = max_order + 1 if max_order is not None else base
+        new_tag_id = create_jd_id_tag(self.conn, self.parent_uuid, new_order, label)
         if new_tag_id:
-            rebuild_state_tags(self.conn)
+            rebuild_state_jd_id_tags(self.conn)
             self._rebuild_ui(new_tag_id=new_tag_id)
 
     def _input_tag_dialog(self):
@@ -307,41 +306,30 @@ class JdIdPage(QtWidgets.QMainWindow):
                 self._edit_tag_label_with_icon()
                 return
         cursor = self.conn.cursor()
-        jd_area, jd_id, jd_ext = self.section_paths[self.sec_idx]
+        _, base, _ = self.section_paths[self.sec_idx]
         default_label = "NewTag"
-        if jd_id is None:
-            cursor.execute("SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ?", (jd_area,))
-            max_jd_id = cursor.fetchone()[0]
-            default_jd_id = max_jd_id + 1 if max_jd_id is not None else 0
-        else:
-            cursor.execute(
-                "SELECT MAX(jd_id) FROM state_tags WHERE jd_area = ? AND jd_id >= ? AND jd_id < ?",
-                (jd_area, jd_id, jd_id + 10),
-            )
-            max_jd_id = cursor.fetchone()[0]
-            default_jd_id = max_jd_id + 1 if max_jd_id is not None else jd_id
-        dialog = InputTagDialog(jd_area, default_jd_id, None, default_label, level=1, parent=self)
+        cursor.execute(
+            "SELECT MAX([order]) FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] >= ? AND [order] < ?",
+            (self.parent_uuid, base, base + 10),
+        )
+        max_order = cursor.fetchone()[0]
+        default_order = max_order + 1 if max_order is not None else base
+        dialog = InputTagDialog(self.current_jd_area, default_order, None, default_label, level=1, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
-                jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if jd_id is None:
+                _, order, _, label = dialog.get_values()
+                if order is None:
                     self._warn("Invalid Input", "jd_id must be an integer.")
                     continue
-                if jd_id is not None and jd_area is None:
-                    self._warn("Invalid Input", "jd_id requires jd_area.")
-                    continue
-                if jd_ext is not None and jd_id is None:
-                    self._warn("Invalid Input", "jd_ext requires jd_id.")
-                    continue
-                new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
+                new_tag_id = create_jd_id_tag(self.conn, self.parent_uuid, order, label)
                 if new_tag_id:
-                    rebuild_state_tags(self.conn)
+                    rebuild_state_jd_id_tags(self.conn)
                     self._rebuild_ui(new_tag_id=new_tag_id)
                     break
                 else:
                     self._warn(
                         "Constraint Violation",
-                        f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
+                        f"Order {order} is already in use.",
                     )
             else:
                 break
@@ -370,34 +358,28 @@ class JdIdPage(QtWidgets.QMainWindow):
             )
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
-                    jd_area, jd_id, jd_ext, label = dialog.get_values()
-                    if jd_id is None:
+                    _, order, _, label = dialog.get_values()
+                    if order is None:
                         self._warn("Invalid Input", "jd_id must be an integer.")
                         continue
-                    if jd_id is not None and jd_area is None:
-                        self._warn("Invalid Input", "jd_id requires jd_area.")
-                        continue
-                    if jd_ext is not None and jd_id is None:
-                        self._warn("Invalid Input", "jd_ext requires jd_id.")
-                        continue
-                    new_tag_id = create_tag(self.conn, jd_area, jd_id, jd_ext, label)
+                    new_tag_id = create_jd_id_tag(self.conn, self.parent_uuid, order, label)
                     if new_tag_id:
-                        rebuild_state_tags(self.conn)
+                        rebuild_state_jd_id_tags(self.conn)
                         self._rebuild_ui(new_tag_id=new_tag_id)
                         break
                     else:
                         self._warn(
                             "Constraint Violation",
-                            f"The combination (jd_area={jd_area}, jd_id={jd_id}, jd_ext={jd_ext}) is already in use.",
+                            f"Order {order} is already in use.",
                         )
                 else:
                     break
             return
         tag_id = current_item.tag_id
         cursor = self.conn.cursor()
-        cursor.execute("SELECT jd_area, jd_id, jd_ext, label FROM state_tags WHERE tag_id = ?", (tag_id,))
-        jd_area, jd_id, jd_ext, current_label = cursor.fetchone()
-        cursor.execute("SELECT icon FROM state_tag_icons WHERE tag_id = ?", (tag_id,))
+        cursor.execute("SELECT [order], label FROM state_jd_id_tags WHERE tag_id = ?", (tag_id,))
+        jd_id, current_label = cursor.fetchone()
+        cursor.execute("SELECT icon FROM state_jd_id_tag_icons WHERE tag_id = ?", (tag_id,))
         icon_data = cursor.fetchone()
         icon_data = icon_data[0] if icon_data else None
         while True:
@@ -407,40 +389,39 @@ class JdIdPage(QtWidgets.QMainWindow):
                 new_label = dialog.get_label()
                 new_icon_data = dialog.get_icon_data()
                 cursor.execute(
-                    "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL AND tag_id != ?",
-                    (jd_area, new_jd_id, tag_id),
+                    "SELECT tag_id FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] = ? AND tag_id != ?",
+                    (self.parent_uuid, new_jd_id, tag_id),
                 )
                 if cursor.fetchone():
                     self._warn(
                         "Constraint Violation",
-                        f"The combination (jd_area={jd_area}, jd_id={new_jd_id}, jd_ext=None) is already in use.",
+                        f"Order {new_jd_id} is already in use.",
                     )
                     current_label, icon_data, jd_id = new_label, new_icon_data, new_jd_id
                     continue
                 if new_jd_id != jd_id:
-                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
                     event_id = cursor.lastrowid
-                    parent_uuid = self.parent_uuid
                     cursor.execute(
-                        "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                        (event_id, tag_id, parent_uuid, jd_area, new_jd_id, None),
+                        "INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                        (event_id, tag_id, self.parent_uuid, new_jd_id),
                     )
                 if new_label != current_label:
-                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_label')")
                     event_id = cursor.lastrowid
                     cursor.execute(
-                        "INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+                        "INSERT INTO event_set_jd_id_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
                         (event_id, tag_id, new_label),
                     )
                 if new_icon_data:
-                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_icon')")
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_icon')")
                     event_id = cursor.lastrowid
                     cursor.execute(
-                        "INSERT INTO event_set_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)",
+                        "INSERT INTO event_set_jd_id_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)",
                         (event_id, tag_id, new_icon_data),
                     )
                 self.conn.commit()
-                rebuild_state_tags(self.conn)
+                rebuild_state_jd_id_tags(self.conn)
                 self._rebuild_ui()
                 break
             else:
@@ -455,16 +436,19 @@ class JdIdPage(QtWidgets.QMainWindow):
             return
         tag_id = current_item.tag_id
         cursor = self.conn.cursor()
-        cursor.execute("SELECT label FROM state_tags WHERE tag_id = ?", (tag_id,))
+        cursor.execute("SELECT label FROM state_jd_id_tags WHERE tag_id = ?", (tag_id,))
         current_label = cursor.fetchone()[0]
         dialog = SimpleEditTagDialog(current_label, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             new_label = dialog.get_label()
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_label')")
             event_id = cursor.lastrowid
-            cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, new_label))
+            cursor.execute(
+                "INSERT INTO event_set_jd_id_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+                (event_id, tag_id, new_label),
+            )
             self.conn.commit()
-            rebuild_state_tags(self.conn)
+            rebuild_state_jd_id_tags(self.conn)
             self._rebuild_ui()
 
     def _delete_tag(self):
@@ -476,26 +460,17 @@ class JdIdPage(QtWidgets.QMainWindow):
             return
         tag_id = current_item.tag_id
         cursor = self.conn.cursor()
-        cursor.execute("SELECT label, jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?", (tag_id,))
-        tag_name, jd_area, jd_id, jd_ext = cursor.fetchone()
-        # Construct display name for dialog
-        if jd_area is not None:
-            if jd_id is None:
-                prefix = f"[{jd_area:02d}]"
-            elif jd_ext is None:
-                prefix = f"[{jd_area:02d}.{jd_id:02d}]"
-            else:
-                prefix = f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
-            display_name = f"{prefix} {tag_name}" if tag_name else prefix
-        else:
-            display_name = tag_name
+        cursor.execute(
+            "SELECT [order], label FROM state_jd_id_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        order, tag_name = cursor.fetchone()
+        prefix = f"[{self.current_jd_area:02d}.{order:02d}]"
+        display_name = f"{prefix} {tag_name}" if tag_name else prefix
         dialog = DeleteTagDialog(display_name, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
-            cursor.execute("INSERT INTO events (event_type) VALUES ('delete_tag')")
-            event_id = cursor.lastrowid
-            cursor.execute("INSERT INTO event_delete_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
-            self.conn.commit()
-            rebuild_state_tags(self.conn)
+            delete_jd_id_tag(self.conn, tag_id)
+            rebuild_state_jd_id_tags(self.conn)
             # Preserve current indices; selection will land on placeholder
             current_item.tag_id = None
             self._rebuild_ui()
@@ -504,76 +479,69 @@ class JdIdPage(QtWidgets.QMainWindow):
         """Handle drag-and-drop operations between items."""
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?",
+            "SELECT [order] FROM state_jd_id_tags WHERE tag_id = ?",
             (source_tag_id,),
         )
-        source_row = cursor.fetchone()
-        if not source_row:
+        row = cursor.fetchone()
+        if not row:
             return
-        s_area, s_id, s_ext = source_row
+        s_id = row[0]
         if target_item.tag_id is None:
-            new_area, new_id, new_ext = s_area, s_id, s_ext
             new_id = target_item.jd_id
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
             event_id = cursor.lastrowid
-            parent_uuid = self.parent_uuid
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, parent_uuid, new_area, new_id, new_ext),
+                "INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                (event_id, source_tag_id, self.parent_uuid, new_id),
             )
         else:
             target_tag_id = target_item.tag_id
             if target_tag_id == source_tag_id:
                 return
             cursor.execute(
-                "SELECT jd_area, jd_id, jd_ext FROM state_tags WHERE tag_id = ?",
+                "SELECT [order] FROM state_jd_id_tags WHERE tag_id = ?",
                 (target_tag_id,),
             )
-            t_area, t_id, t_ext = cursor.fetchone()
-            new_s_area, new_s_id, new_s_ext = s_area, s_id, s_ext
-            new_t_area, new_t_id, new_t_ext = t_area, t_id, t_ext
-            new_s_id, new_t_id = t_id, s_id
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            t_id = cursor.fetchone()[0]
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
             event_id = cursor.lastrowid
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, None, None, None, None),
+                "INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                (event_id, target_tag_id, self.parent_uuid, -1),
             )
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
             event_id = cursor.lastrowid
-            parent_uuid = self.parent_uuid
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                (event_id, target_tag_id, parent_uuid, new_t_area, new_t_id, new_t_ext),
+                "INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                (event_id, source_tag_id, self.parent_uuid, t_id),
             )
-            cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
             event_id = cursor.lastrowid
-            parent_uuid = self.parent_uuid
             cursor.execute(
-                "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                (event_id, source_tag_id, parent_uuid, new_s_area, new_s_id, new_s_ext),
+                "INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                (event_id, target_tag_id, self.parent_uuid, s_id),
             )
         self.conn.commit()
-        rebuild_state_tags(self.conn)
+        rebuild_state_jd_id_tags(self.conn)
         self._rebuild_ui(new_tag_id=source_tag_id)
 
     def _edit_header(self, header_item):
         dialog = HeaderDialog(header_item.jd_id, header_item.label, True, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
-                delete_header(self.conn, header_item.header_id)
+                delete_jd_id_header(self.conn, header_item.header_id)
             else:
                 order = dialog.get_order()
                 label = dialog.get_label()
                 if order is None:
                     self._warn("Invalid Input", "Order must be an integer.")
                     return
-                if not update_header(
-                    self.conn, header_item.header_id, self.current_jd_area, order, None, label
+                if not update_jd_id_header(
+                    self.conn, header_item.header_id, self.parent_uuid, order, label
                 ):
-                    self._warn("Invalid Input", "Header path conflicts or invalid.")
+                    self._warn("Invalid Input", "Header order conflicts or invalid.")
                     return
-            rebuild_state_headers(self.conn)
+            rebuild_state_jd_id_headers(self.conn)
             self._rebuild_ui()
 
     def _setup_search_shortcuts(self):
@@ -616,41 +584,33 @@ class JdIdPage(QtWidgets.QMainWindow):
         section_index = 0
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT header_id, jd_area, jd_id, jd_ext, label FROM state_headers "
-            "WHERE parent_uuid IS ? ORDER BY jd_id",
+            "SELECT header_id, [order], label FROM state_jd_id_headers WHERE parent_uuid IS ? ORDER BY [order]",
             (self.parent_uuid,),
         )
         headers = cursor.fetchall()
         cursor.execute(
-            "SELECT tag_id, jd_area, jd_id, jd_ext, label FROM state_tags "
-            "WHERE parent_uuid IS ? ORDER BY jd_id",
+            "SELECT tag_id, [order], label FROM state_jd_id_tags WHERE parent_uuid IS ? ORDER BY [order]",
             (self.parent_uuid,),
         )
         tags = cursor.fetchall()
-        cursor.execute("SELECT tag_id, icon FROM state_tag_icons")
+        cursor.execute("SELECT tag_id, icon FROM state_jd_id_tag_icons")
         icons = {row[0]: row[1] for row in cursor.fetchall()}
 
-        def construct_prefix(jd_area, jd_id, jd_ext):
-            if jd_area is None:
-                return ""
-            if jd_id is None:
-                return f"[{jd_area:02d}]"
-            if jd_ext is None:
-                return f"[{jd_area:02d}.{jd_id:02d}]"
-            return f"[{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+        def construct_prefix(order):
+            return f"[{self.current_jd_area:02d}.{order:02d}]"
 
         items = []
-        for header_id, jd_area, jd_id, jd_ext, label in headers:
-            prefix = construct_prefix(jd_area, jd_id, jd_ext)
-            items.append(("header", prefix, label, header_id, jd_area, jd_id, jd_ext))
-        for tag_id, jd_area, jd_id, jd_ext, label in tags:
-            prefix = construct_prefix(jd_area, jd_id, jd_ext)
-            items.append(("tag", prefix, label, tag_id, jd_area, jd_id, jd_ext))
+        for header_id, order, label in headers:
+            prefix = construct_prefix(order)
+            items.append(("header", prefix, label, header_id, order))
+        for tag_id, order, label in tags:
+            prefix = construct_prefix(order)
+            items.append(("tag", prefix, label, tag_id, order))
 
-        # Sort numerically by jd components to ensure consistent ordering
+        # Sort numerically by order to ensure consistent ordering
         items.sort(
             key=lambda x: (
-                x[5],
+                x[4],
                 0 if x[0] == "header" else 1,
                 (x[2] or "").lower(),
             )
@@ -667,18 +627,18 @@ class JdIdPage(QtWidgets.QMainWindow):
 
         headers_by_base = defaultdict(list)
         tags_by_base = defaultdict(list)
-        for kind, prefix, label, obj_id, jd_area, jd_id, jd_ext in items:
-            value = jd_id
+        for kind, prefix, label, obj_id, order in items:
+            value = order
             base = (value // 10) * 10 if value is not None else 0
             if kind == "header":
-                headers_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label, prefix))
+                headers_by_base[base].append((obj_id, order, label, prefix))
             else:
-                tags_by_base[base].append((obj_id, jd_area, jd_id, jd_ext, label))
+                tags_by_base[base].append((obj_id, order, label))
 
         for base in range(0, 100, 10):
-            for obj_id, jd_area, jd_id, jd_ext, label, prefix in headers_by_base.get(base, []):
+            for obj_id, order, label, prefix in headers_by_base.get(base, []):
                 display = f"{prefix} {label}" if prefix else (label or "")
-                header_item = HeaderItem(obj_id, jd_area, jd_id, jd_ext, label, self, section_index, display)
+                header_item = HeaderItem(obj_id, self.current_jd_area, order, None, label, self, section_index, display)
                 header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
@@ -686,16 +646,15 @@ class JdIdPage(QtWidgets.QMainWindow):
                 placeholder_item(val, section_index, i)
                 for i, val in enumerate(range(base, base + 10))
             ]
-            for obj_id, jd_area, jd_id, jd_ext, label in tags_by_base.get(base, []):
-                value = jd_id
-                index = value - base
+            for obj_id, order, label in tags_by_base.get(base, []):
+                index = order - base
                 icon_data = icons.get(obj_id)
                 item = FileItem(
                     obj_id,
                     label,
-                    jd_area,
-                    jd_id,
-                    jd_ext,
+                    self.current_jd_area,
+                    order,
+                    None,
                     icon_data,
                     self,
                     section_index,
