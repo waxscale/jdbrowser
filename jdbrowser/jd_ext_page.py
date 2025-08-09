@@ -617,22 +617,12 @@ class JdExtPage(QtWidgets.QMainWindow):
         def construct_prefix(order):
             return f"[{self.current_jd_area:02d}.{self.current_jd_id:02d}+{order:04d}]"
 
-        items = []
+        # Organize headers and tags by their exact order values
+        headers_by_order = defaultdict(list)
         for header_id, order, label in headers:
             prefix = construct_prefix(order)
-            items.append(("header", prefix, label, header_id, order))
-        for tag_id, order, label in tags:
-            prefix = construct_prefix(order)
-            items.append(("tag", prefix, label, tag_id, order))
-
-        # Sort numerically by order to ensure consistent ordering
-        items.sort(
-            key=lambda x: (
-                x[4],
-                0 if x[0] == "header" else 1,
-                (x[2] or "").lower(),
-            )
-        )
+            headers_by_order[order].append((header_id, order, label, prefix))
+        tags = sorted(tags, key=lambda x: x[1])
 
         # Build sections and placeholders
         def placeholder_item(val, sec_idx, item_idx):
@@ -684,15 +674,13 @@ class JdExtPage(QtWidgets.QMainWindow):
                 current_section.append(placeholder_item(val, section_index, i))
             next_index = end_index
 
-        def flush_section(fill_full=False):
+        def flush_section():
             nonlocal current_section, section_index, section_base, next_index
             if current_section is None:
                 return
             if not current_section:
-                end = 10 if fill_full else 1
-                for i in range(end):
-                    val = section_base + i
-                    current_section.append(placeholder_item(val, section_index, i))
+                val = section_base
+                current_section.append(placeholder_item(val, section_index, 0))
             else:
                 add_placeholders_until(next_index + 1)
             add_section(current_section)
@@ -700,28 +688,12 @@ class JdExtPage(QtWidgets.QMainWindow):
             current_section = None
             section_base = None
             next_index = 0
-
-        def add_empty_section(base, filename_id=None):
-            base_path = (self.current_jd_area, self.current_jd_id, base)
-            start_section(base, base_path, filename_id)
-            flush_section(fill_full=True)
-
-        headers_by_base = defaultdict(list)
-        tags_by_base = defaultdict(list)
-        for kind, prefix, label, obj_id, order in items:
-            base = (order // 10) * 10 if order is not None else 0
-            if kind == "header":
-                headers_by_base[base].append((obj_id, order, label, prefix))
-            else:
-                tags_by_base[base].append((obj_id, order, label))
-
-        max_base = 0
-        if headers_by_base or tags_by_base:
-            max_base = max((*headers_by_base.keys(), *tags_by_base.keys()))
-
-        for base in range(0, max_base + 10, 10):
+        section_starts = sorted({0, *headers_by_order.keys()})
+        tag_idx = 0
+        for i, base in enumerate(section_starts):
+            next_start = section_starts[i + 1] if i + 1 < len(section_starts) else None
             last_header_id = None
-            for obj_id, order, label, prefix in headers_by_base.get(base, []):
+            for obj_id, order, label, prefix in headers_by_order.get(base, []):
                 display = f"{prefix} {label}" if prefix else (label or "")
                 header_item = HeaderItem(
                     obj_id,
@@ -737,30 +709,28 @@ class JdExtPage(QtWidgets.QMainWindow):
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
                 last_header_id = obj_id
-            tags = sorted(tags_by_base.get(base, []), key=lambda x: x[1])
-            if tags:
-                start_section(base, (self.current_jd_area, self.current_jd_id, base), last_header_id)
-                for obj_id, order, label in tags:
-                    index = order - base
-                    add_placeholders_until(index)
-                    icon_data = icons.get(obj_id)
-                    item = FileItem(
-                        obj_id,
-                        label,
-                        self.current_jd_area,
-                        self.current_jd_id,
-                        order,
-                        icon_data,
-                        self,
-                        section_index,
-                        index,
-                    )
-                    item.updateLabel(self.show_prefix)
-                    current_section.append(item)
-                    next_index = index + 1
-                flush_section()
-            else:
-                add_empty_section(base, last_header_id)
+            start_section(base, (self.current_jd_area, self.current_jd_id, base), last_header_id)
+            while tag_idx < len(tags) and (next_start is None or tags[tag_idx][1] < next_start):
+                obj_id, order, label = tags[tag_idx]
+                index = order - base
+                add_placeholders_until(index)
+                icon_data = icons.get(obj_id)
+                item = FileItem(
+                    obj_id,
+                    label,
+                    self.current_jd_area,
+                    self.current_jd_id,
+                    order,
+                    icon_data,
+                    self,
+                    section_index,
+                    index,
+                )
+                item.updateLabel(self.show_prefix)
+                current_section.append(item)
+                next_index = index + 1
+                tag_idx += 1
+            flush_section()
 
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
