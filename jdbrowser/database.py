@@ -314,6 +314,10 @@ def setup_database(db_path):
         "state_jd_id_tags",
         "event_set_jd_id_header_order",
         "state_jd_id_headers",
+        "event_set_jd_ext_tag_order",
+        "state_jd_ext_tags",
+        "event_set_jd_ext_header_order",
+        "state_jd_ext_headers",
     ):
         ensure_parent_uuid(table)
 
