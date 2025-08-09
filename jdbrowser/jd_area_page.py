@@ -11,10 +11,10 @@ from .database import (
     create_tag,
     rebuild_state_tags,
     setup_database,
-    create_jd_area_header,
-    update_jd_area_header,
-    delete_jd_area_header,
-    rebuild_state_jd_area_headers,
+    create_header,
+    update_header,
+    delete_header,
+    rebuild_state_headers,
 )
 from .jd_id_page import JdIdPage
 from .constants import *
@@ -248,7 +248,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
 
     def _create_header(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT MAX([order]) FROM state_jd_area_headers")
+        cursor.execute("SELECT MAX(jd_area) FROM state_headers")
         max_order = cursor.fetchone()[0]
         default_order = max_order + 1 if max_order is not None else 0
         dialog = HeaderDialog(default_order, parent=self)
@@ -258,12 +258,12 @@ class JdAreaPage(QtWidgets.QMainWindow):
             if order is None:
                 self._warn("Invalid Input", "Order must be an integer.")
                 return
-            header_id = create_jd_area_header(self.conn, order, label)
+            header_id = create_header(self.conn, order, None, None, label)
             if header_id:
-                rebuild_state_jd_area_headers(self.conn)
+                rebuild_state_headers(self.conn)
                 self._rebuild_ui()
             else:
-                self._warn("Constraint Violation", f"Order {order} is already in use.")
+                self._warn("Constraint Violation", "Header path conflicts or invalid.")
 
     def _append_tag_to_section(self):
         """Append a tag to the current section with jd parts incremented appropriately."""
@@ -542,19 +542,19 @@ class JdAreaPage(QtWidgets.QMainWindow):
         dialog = HeaderDialog(header_item.jd_area, header_item.label, True, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
-                delete_jd_area_header(self.conn, header_item.header_id)
+                delete_header(self.conn, header_item.header_id)
             else:
                 order = dialog.get_order()
                 label = dialog.get_label()
                 if order is None:
                     self._warn("Invalid Input", "Order must be an integer.")
                     return
-                if not update_jd_area_header(
-                    self.conn, header_item.header_id, order, label
+                if not update_header(
+                    self.conn, header_item.header_id, order, None, None, label
                 ):
-                    self._warn("Invalid Input", "Header order conflicts or invalid.")
+                    self._warn("Invalid Input", "Header path conflicts or invalid.")
                     return
-            rebuild_state_jd_area_headers(self.conn)
+            rebuild_state_headers(self.conn)
             self._rebuild_ui()
 
     def _setup_search_shortcuts(self):

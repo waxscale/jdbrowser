@@ -11,10 +11,10 @@ from .database import (
     create_tag,
     rebuild_state_tags,
     setup_database,
-    create_jd_ext_header,
-    update_jd_ext_header,
-    delete_jd_ext_header,
-    rebuild_state_jd_ext_headers,
+    create_header,
+    update_header,
+    delete_header,
+    rebuild_state_headers,
 )
 from .constants import *
 
@@ -249,8 +249,8 @@ class JdExtPage(QtWidgets.QMainWindow):
     def _create_header(self):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT MAX([order]) FROM state_jd_ext_headers WHERE parent_uuid = ?",
-            (self.parent_uuid,),
+            "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
+            (self.current_jd_area, self.current_jd_id),
         )
         max_order = cursor.fetchone()[0]
         default_order = max_order + 1 if max_order is not None else 0
@@ -261,12 +261,16 @@ class JdExtPage(QtWidgets.QMainWindow):
             if order is None:
                 self._warn("Invalid Input", "Order must be an integer.")
                 return
-            header_id = create_jd_ext_header(self.conn, self.parent_uuid, order, label)
+            header_id = create_header(
+                self.conn, self.current_jd_area, self.current_jd_id, order, label
+            )
             if header_id:
-                rebuild_state_jd_ext_headers(self.conn)
+                rebuild_state_headers(self.conn)
                 self._rebuild_ui()
             else:
-                self._warn("Constraint Violation", f"Order {order} is already in use.")
+                self._warn(
+                    "Constraint Violation", "Header path conflicts or invalid."
+                )
 
     def _append_tag_to_section(self):
         """Append a tag to the current section with jd parts incremented appropriately."""
@@ -563,19 +567,24 @@ class JdExtPage(QtWidgets.QMainWindow):
         dialog = HeaderDialog(header_item.jd_ext, header_item.label, True, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
-                delete_jd_ext_header(self.conn, header_item.header_id)
+                delete_header(self.conn, header_item.header_id)
             else:
                 order = dialog.get_order()
                 label = dialog.get_label()
                 if order is None:
                     self._warn("Invalid Input", "Order must be an integer.")
                     return
-                if not update_jd_ext_header(
-                    self.conn, header_item.header_id, self.parent_uuid, order, label
+                if not update_header(
+                    self.conn,
+                    header_item.header_id,
+                    self.current_jd_area,
+                    self.current_jd_id,
+                    order,
+                    label,
                 ):
-                    self._warn("Invalid Input", "Header order conflicts or invalid.")
+                    self._warn("Invalid Input", "Header path conflicts or invalid.")
                     return
-            rebuild_state_jd_ext_headers(self.conn)
+            rebuild_state_headers(self.conn)
             self._rebuild_ui()
 
     def _setup_search_shortcuts(self):
