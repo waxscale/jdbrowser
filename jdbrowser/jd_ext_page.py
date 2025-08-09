@@ -1034,44 +1034,21 @@ class JdExtPage(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def moveToSectionEnd(self):
-        if not self.in_search_mode and self.sections:
-            base = self.section_paths[self.sec_idx][2]
-            current_order = base + self.idx_in_sec
-            next_index = None
-            for i, h in enumerate(self.header_orders):
-                if h > current_order:
-                    next_index = i
-                    break
-            if next_index is None:
-                self.sec_idx = len(self.sections) - 1
+        """Jump to the last item of the current section or the next section."""
+        if self.in_search_mode or not self.sections:
+            return
+
+        last_index = len(self.sections[self.sec_idx]) - 1
+
+        if self.idx_in_sec >= last_index:
+            if self.sec_idx + 1 < len(self.sections):
+                self.sec_idx += 1
                 self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
-            else:
-                target_order = self.header_orders[next_index] - 1
-                end_base = (target_order // 10) * 10
-                end_idx = target_order - end_base
-                if self.idx_in_sec == end_idx:
-                    if next_index + 1 < len(self.header_orders):
-                        target_order = self.header_orders[next_index + 1] - 1
-                        end_base = (target_order // 10) * 10
-                        end_idx = target_order - end_base
-                    else:
-                        self.sec_idx = len(self.sections) - 1
-                        self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
-                        self.desired_col = self.idx_in_sec % self.cols
-                        self.updateSelection()
-                        return
-                sec_idx = next(
-                    (
-                        i
-                        for i, p in enumerate(self.section_paths)
-                        if p[2] == end_base
-                    ),
-                    len(self.sections) - 1,
-                )
-                self.sec_idx = sec_idx
-                self.idx_in_sec = min(end_idx, len(self.sections[sec_idx]) - 1)
-            self.desired_col = self.idx_in_sec % self.cols
-            self.updateSelection()
+        else:
+            self.idx_in_sec = last_index
+
+        self.desired_col = self.idx_in_sec % self.cols
+        self.updateSelection()
 
     def moveToAbsoluteFirst(self):
         if not self.in_search_mode and self.sections:
