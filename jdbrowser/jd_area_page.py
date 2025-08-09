@@ -11,10 +11,10 @@ from .database import (
     create_tag,
     rebuild_state_tags,
     setup_database,
-    create_header,
-    update_header,
-    delete_header,
-    rebuild_state_headers,
+    create_jd_area_header,
+    update_jd_area_header,
+    delete_jd_area_header,
+    rebuild_state_jd_area_headers,
 )
 from .jd_id_page import JdIdPage
 from .constants import *
@@ -248,19 +248,22 @@ class JdAreaPage(QtWidgets.QMainWindow):
 
     def _create_header(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT MAX(jd_area) FROM state_headers")
-        max_jd_area = cursor.fetchone()[0]
-        default_jd_area = max_jd_area + 1 if max_jd_area is not None else 0
-        dialog = HeaderDialog(default_jd_area, None, None, parent=self, level=0)
+        cursor.execute("SELECT MAX([order]) FROM state_jd_area_headers")
+        max_order = cursor.fetchone()[0]
+        default_order = max_order + 1 if max_order is not None else 0
+        dialog = HeaderDialog(default_order, parent=self)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
-            jd_area, jd_id, jd_ext, label = dialog.get_values()
-            if jd_area is None:
-                self._warn("Invalid Input", "jd_area must be an integer.")
+            order = dialog.get_order()
+            label = dialog.get_label()
+            if order is None:
+                self._warn("Invalid Input", "Order must be an integer.")
                 return
-            header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
+            header_id = create_jd_area_header(self.conn, order, label)
             if header_id:
-                rebuild_state_headers(self.conn)
+                rebuild_state_jd_area_headers(self.conn)
                 self._rebuild_ui()
+            else:
+                self._warn("Constraint Violation", f"Order {order} is already in use.")
 
     def _append_tag_to_section(self):
         """Append a tag to the current section with jd parts incremented appropriately."""
@@ -536,29 +539,22 @@ class JdAreaPage(QtWidgets.QMainWindow):
         self._rebuild_ui(new_tag_id=source_tag_id)
 
     def _edit_header(self, header_item):
-        dialog = HeaderDialog(
-            header_item.jd_area,
-            header_item.jd_id,
-            header_item.jd_ext,
-            header_item.label,
-            True,
-            self,
-            level=0,
-        )
+        dialog = HeaderDialog(header_item.jd_area, header_item.label, True, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
-                delete_header(self.conn, header_item.header_id)
+                delete_jd_area_header(self.conn, header_item.header_id)
             else:
-                jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if jd_area is None:
-                    self._warn("Invalid Input", "jd_area must be an integer.")
+                order = dialog.get_order()
+                label = dialog.get_label()
+                if order is None:
+                    self._warn("Invalid Input", "Order must be an integer.")
                     return
-                if not update_header(
-                    self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label
+                if not update_jd_area_header(
+                    self.conn, header_item.header_id, order, label
                 ):
-                    self._warn("Invalid Input", "Header path conflicts or invalid.")
+                    self._warn("Invalid Input", "Header order conflicts or invalid.")
                     return
-            rebuild_state_headers(self.conn)
+            rebuild_state_jd_area_headers(self.conn)
             self._rebuild_ui()
 
     def _setup_search_shortcuts(self):
