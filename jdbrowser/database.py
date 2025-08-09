@@ -14,12 +14,10 @@ def setup_database(db_path):
             event_id INTEGER PRIMARY KEY AUTOINCREMENT,
             event_type TEXT NOT NULL CHECK (
                 event_type IN (
-                    'create_tag',
                     'set_tag_path',
                     'set_tag_label',
                     'set_tag_icon',
                     'delete_tag',
-                    'create_header',
                     'set_header_path',
                     'set_header_label',
                     'delete_header',
@@ -55,12 +53,6 @@ def setup_database(db_path):
             timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );
 
-        CREATE TABLE IF NOT EXISTS event_create_tag (
-            event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-        );
-
         CREATE TABLE IF NOT EXISTS event_set_tag_path (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
@@ -88,12 +80,6 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_delete_tag (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
-            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS event_create_header (
-            event_id INTEGER PRIMARY KEY,
-            header_id TEXT NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
@@ -1180,96 +1166,6 @@ def delete_jd_id_tag(conn, tag_id):
         (event_id, tag_id),
     )
     conn.commit()
-
-def create_tag(conn, jd_area, jd_id, jd_ext, label):
-    """Create a new tag and return its tag_id, or None if constraints are violated."""
-    cursor = conn.cursor()
-    # Check for unique (jd_area, jd_id, jd_ext) constraint
-    cursor.execute("SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ?", (jd_area, jd_id, jd_ext))
-    if cursor.fetchone():
-        return None  # Conflict exists
-    # Validate constraints: no jd_id without jd_area, no jd_ext without jd_id
-    if jd_id is not None and jd_area is None:
-        return None
-    if jd_ext is not None and jd_id is None:
-        return None
-    tag_id = str(uuid.uuid4())
-    cursor.execute("INSERT INTO events (event_type) VALUES ('create_tag')")
-    event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_create_tag (event_id, tag_id) VALUES (?, ?)", (event_id, tag_id))
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
-    event_id = cursor.lastrowid
-    parent_uuid = None
-    if jd_id is not None:
-        if jd_ext is None:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS NULL AND jd_ext IS NULL",
-                (jd_area,),
-            )
-        else:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL",
-                (jd_area, jd_id),
-            )
-        row = cursor.fetchone()
-        parent_uuid = row[0] if row else None
-    cursor.execute(
-        "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-        (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext),
-    )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
-    event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_set_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)", (event_id, tag_id, label))
-    conn.commit()
-    return tag_id
-
-def create_header(conn, jd_area, jd_id, jd_ext, label):
-    """Create a new header and return its header_id, or None if constraints are violated."""
-    cursor = conn.cursor()
-    # Enforce jd_area not null
-    if jd_area is None:
-        return None
-    # Check unique (jd_area, jd_id, jd_ext)
-    cursor.execute(
-        "SELECT header_id FROM state_headers WHERE jd_area = ? AND jd_id IS ? AND jd_ext IS ?",
-        (jd_area, jd_id, jd_ext),
-    )
-    if cursor.fetchone():
-        return None
-    if jd_ext is not None and jd_id is None:
-        return None
-    header_id = str(uuid.uuid4())
-    cursor.execute("INSERT INTO events (event_type) VALUES ('create_header')")
-    event_id = cursor.lastrowid
-    cursor.execute("INSERT INTO event_create_header (event_id, header_id) VALUES (?, ?)", (event_id, header_id))
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_path')")
-    event_id = cursor.lastrowid
-    parent_uuid = None
-    if jd_id is not None:
-        if jd_ext is None:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id IS NULL AND jd_ext IS NULL",
-                (jd_area,),
-            )
-        else:
-            cursor.execute(
-                "SELECT tag_id FROM state_tags WHERE jd_area = ? AND jd_id = ? AND jd_ext IS NULL",
-                (jd_area, jd_id),
-            )
-        row = cursor.fetchone()
-        parent_uuid = row[0] if row else None
-    cursor.execute(
-        "INSERT INTO event_set_header_path (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-        (event_id, header_id, parent_uuid, jd_area, jd_id, jd_ext),
-    )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_header_label')")
-    event_id = cursor.lastrowid
-    cursor.execute(
-        "INSERT INTO event_set_header_label (event_id, header_id, new_label) VALUES (?, ?, ?)",
-        (event_id, header_id, label),
-    )
-    conn.commit()
-    return header_id
 
 def update_header(conn, header_id, jd_area, jd_id, jd_ext, label):
     """Update an existing header. Returns True on success."""
