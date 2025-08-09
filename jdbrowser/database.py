@@ -22,7 +22,16 @@ def setup_database(db_path):
                     'create_header',
                     'set_header_path',
                     'set_header_label',
-                    'delete_header'
+                    'delete_header',
+                    'create_jd_area_tag',
+                    'set_jd_area_tag_order',
+                    'set_jd_area_tag_label',
+                    'set_jd_area_tag_icon',
+                    'delete_jd_area_tag',
+                    'create_jd_area_header',
+                    'set_jd_area_header_order',
+                    'set_jd_area_header_label',
+                    'delete_jd_area_header'
                 )
             ),
             timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -93,6 +102,65 @@ def setup_database(db_path):
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS event_create_jd_area_tag (
+            event_id INTEGER PRIMARY KEY,
+            tag_id TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_set_jd_area_tag_order (
+            event_id INTEGER PRIMARY KEY,
+            tag_id TEXT NOT NULL,
+            [order] INTEGER NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_set_jd_area_tag_label (
+            event_id INTEGER PRIMARY KEY,
+            tag_id TEXT NOT NULL,
+            new_label TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_set_jd_area_tag_icon (
+            event_id INTEGER PRIMARY KEY,
+            tag_id TEXT NOT NULL,
+            icon BLOB,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_delete_jd_area_tag (
+            event_id INTEGER PRIMARY KEY,
+            tag_id TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_create_jd_area_header (
+            event_id INTEGER PRIMARY KEY,
+            header_id TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_set_jd_area_header_order (
+            event_id INTEGER PRIMARY KEY,
+            header_id TEXT NOT NULL,
+            [order] INTEGER NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_set_jd_area_header_label (
+            event_id INTEGER PRIMARY KEY,
+            header_id TEXT NOT NULL,
+            new_label TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_delete_jd_area_header (
+            event_id INTEGER PRIMARY KEY,
+            header_id TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS state_headers (
             header_id TEXT PRIMARY KEY,
             parent_uuid TEXT,
@@ -101,6 +169,12 @@ def setup_database(db_path):
             jd_ext INTEGER,
             label TEXT NOT NULL,
             UNIQUE(jd_area, jd_id, jd_ext)
+        );
+
+        CREATE TABLE IF NOT EXISTS state_jd_area_headers (
+            header_id TEXT PRIMARY KEY,
+            [order] INTEGER NOT NULL UNIQUE,
+            label TEXT NOT NULL
         );
 
         -- Trigger to prevent jd_ext without jd_id for headers
@@ -116,6 +190,11 @@ def setup_database(db_path):
             icon BLOB
         );
 
+        CREATE TABLE IF NOT EXISTS state_jd_area_tag_icons (
+            tag_id TEXT PRIMARY KEY,
+            icon BLOB
+        );
+
         CREATE TABLE IF NOT EXISTS state_tags (
             tag_id TEXT PRIMARY KEY,
             parent_uuid TEXT,
@@ -124,6 +203,12 @@ def setup_database(db_path):
             jd_ext INTEGER,
             label TEXT NOT NULL,
             UNIQUE(jd_area, jd_id, jd_ext)
+        );
+
+        CREATE TABLE IF NOT EXISTS state_jd_area_tags (
+            tag_id TEXT PRIMARY KEY,
+            [order] INTEGER NOT NULL UNIQUE,
+            label TEXT NOT NULL
         );
 
         -- Trigger to prevent jd_id without jd_area
@@ -172,6 +257,8 @@ def setup_database(db_path):
 
     rebuild_state_tags(conn)
     rebuild_state_headers(conn)
+    rebuild_state_jd_area_tags(conn)
+    rebuild_state_jd_area_headers(conn)
     conn.commit()
     return conn
 
@@ -278,6 +365,202 @@ def rebuild_state_headers(conn):
         ) l ON p.header_id = l.header_id
         WHERE p.header_id NOT IN (SELECT header_id FROM event_delete_header);
     """)
+    conn.commit()
+
+def rebuild_state_jd_area_tags(conn):
+    """Rebuild the state_jd_area_tags table from the event log."""
+    cursor = conn.cursor()
+    cursor.executescript("""
+        DELETE FROM state_jd_area_tags;
+
+        INSERT INTO state_jd_area_tags (tag_id, [order], label)
+        SELECT
+            o.tag_id,
+            o.[order],
+            l.new_label
+        FROM (
+            SELECT
+                o.tag_id,
+                o.[order],
+                o.event_id
+            FROM event_set_jd_area_tag_order o
+            JOIN (
+                SELECT tag_id, MAX(event_id) AS max_event
+                FROM event_set_jd_area_tag_order
+                GROUP BY tag_id
+            ) latest_order ON o.tag_id = latest_order.tag_id AND o.event_id = latest_order.max_event
+        ) o
+        JOIN (
+            SELECT
+                l.tag_id,
+                l.new_label,
+                l.event_id
+            FROM event_set_jd_area_tag_label l
+            JOIN (
+                SELECT tag_id, MAX(event_id) AS max_event
+                FROM event_set_jd_area_tag_label
+                GROUP BY tag_id
+            ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
+        ) l ON o.tag_id = l.tag_id
+        WHERE o.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_area_tag);
+    """)
+
+    cursor.executescript("""
+        DELETE FROM state_jd_area_tag_icons;
+
+        INSERT INTO state_jd_area_tag_icons (tag_id, icon)
+        SELECT
+            i.tag_id,
+            i.icon
+        FROM event_set_jd_area_tag_icon i
+        JOIN (
+            SELECT tag_id, MAX(event_id) AS max_event
+            FROM event_set_jd_area_tag_icon
+            GROUP BY tag_id
+        ) latest ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
+        WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_area_tag);
+    """)
+    conn.commit()
+
+def rebuild_state_jd_area_headers(conn):
+    """Rebuild the state_jd_area_headers table from the event log."""
+    cursor = conn.cursor()
+    cursor.executescript("""
+        DELETE FROM state_jd_area_headers;
+
+        INSERT INTO state_jd_area_headers (header_id, [order], label)
+        SELECT
+            o.header_id,
+            o.[order],
+            l.new_label
+        FROM (
+            SELECT
+                o.header_id,
+                o.[order],
+                o.event_id
+            FROM event_set_jd_area_header_order o
+            JOIN (
+                SELECT header_id, MAX(event_id) AS max_event
+                FROM event_set_jd_area_header_order
+                GROUP BY header_id
+            ) latest_order ON o.header_id = latest_order.header_id AND o.event_id = latest_order.max_event
+        ) o
+        JOIN (
+            SELECT
+                l.header_id,
+                l.new_label,
+                l.event_id
+            FROM event_set_jd_area_header_label l
+            JOIN (
+                SELECT header_id, MAX(event_id) AS max_event
+                FROM event_set_jd_area_header_label
+                GROUP BY header_id
+            ) latest_label ON l.header_id = latest_label.header_id AND l.event_id = latest_label.max_event
+        ) l ON o.header_id = l.header_id
+        WHERE o.header_id NOT IN (SELECT header_id FROM event_delete_jd_area_header);
+    """)
+    conn.commit()
+
+def create_jd_area_tag(conn, order, label):
+    """Create a new jd_area tag and return its tag_id, or None if order conflict."""
+    cursor = conn.cursor()
+    cursor.execute('SELECT tag_id FROM state_jd_area_tags WHERE [order] = ?', (order,))
+    if cursor.fetchone():
+        return None
+    tag_id = str(uuid.uuid4())
+    cursor.execute("INSERT INTO events (event_type) VALUES ('create_jd_area_tag')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_create_jd_area_tag (event_id, tag_id) VALUES (?, ?)",
+        (event_id, tag_id),
+    )
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_tag_order')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        'INSERT INTO event_set_jd_area_tag_order (event_id, tag_id, [order]) VALUES (?, ?, ?)',
+        (event_id, tag_id, order),
+    )
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_tag_label')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_set_jd_area_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+        (event_id, tag_id, label),
+    )
+    conn.commit()
+    return tag_id
+
+def create_jd_area_header(conn, order, label):
+    """Create a new jd_area header and return its header_id, or None on conflict."""
+    cursor = conn.cursor()
+    cursor.execute('SELECT header_id FROM state_jd_area_headers WHERE [order] = ?', (order,))
+    if cursor.fetchone():
+        return None
+    header_id = str(uuid.uuid4())
+    cursor.execute("INSERT INTO events (event_type) VALUES ('create_jd_area_header')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_create_jd_area_header (event_id, header_id) VALUES (?, ?)",
+        (event_id, header_id),
+    )
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_header_order')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        'INSERT INTO event_set_jd_area_header_order (event_id, header_id, [order]) VALUES (?, ?, ?)',
+        (event_id, header_id, order),
+    )
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_header_label')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_set_jd_area_header_label (event_id, header_id, new_label) VALUES (?, ?, ?)",
+        (event_id, header_id, label),
+    )
+    conn.commit()
+    return header_id
+
+def update_jd_area_header(conn, header_id, order, label):
+    """Update an existing jd_area header. Returns True on success."""
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT header_id FROM state_jd_area_headers WHERE [order] = ? AND header_id != ?',
+        (order, header_id),
+    )
+    if cursor.fetchone():
+        return False
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_header_order')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        'INSERT INTO event_set_jd_area_header_order (event_id, header_id, [order]) VALUES (?, ?, ?)',
+        (event_id, header_id, order),
+    )
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_area_header_label')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_set_jd_area_header_label (event_id, header_id, new_label) VALUES (?, ?, ?)",
+        (event_id, header_id, label),
+    )
+    conn.commit()
+    return True
+
+def delete_jd_area_header(conn, header_id):
+    """Delete an existing jd_area header."""
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO events (event_type) VALUES ('delete_jd_area_header')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_delete_jd_area_header (event_id, header_id) VALUES (?, ?)",
+        (event_id, header_id),
+    )
+    conn.commit()
+
+def delete_jd_area_tag(conn, tag_id):
+    """Delete an existing jd_area tag."""
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO events (event_type) VALUES ('delete_jd_area_tag')")
+    event_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO event_delete_jd_area_tag (event_id, tag_id) VALUES (?, ?)",
+        (event_id, tag_id),
+    )
     conn.commit()
 
 def create_tag(conn, jd_area, jd_id, jd_ext, label):
