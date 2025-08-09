@@ -391,45 +391,29 @@ class JdIdPage(QtWidgets.QMainWindow):
         icon_data = cursor.fetchone()
         icon_data = icon_data[0] if icon_data else None
         while True:
-            dialog = EditTagDialog(current_label, icon_data, 1, jd_area, jd_id, jd_ext, self)
+            dialog = EditTagDialog(current_label, icon_data, 1, jd_id, self)
             if dialog.exec() == QtWidgets.QDialog.Accepted:
-                new_jd_area, new_jd_id, new_jd_ext = dialog.get_path()
+                new_jd_id = dialog.get_order()
                 new_label = dialog.get_label()
                 new_icon_data = dialog.get_icon_data()
-                if new_jd_id is None:
-                    self._warn("Invalid Input", "jd_id must be an integer.")
-                    current_label, icon_data = new_label, new_icon_data
-                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
-                    continue
-                if new_jd_id is not None and new_jd_area is None:
-                    self._warn("Invalid Input", "jd_id requires jd_area.")
-                    current_label, icon_data = new_label, new_icon_data
-                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
-                    continue
-                if new_jd_ext is not None and new_jd_id is None:
-                    self._warn("Invalid Input", "jd_ext requires jd_id.")
-                    current_label, icon_data = new_label, new_icon_data
-                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
-                    continue
                 cursor.execute(
-                    "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS ? AND tag_id != ?",
-                    (new_jd_area, new_jd_id, new_jd_ext, tag_id),
+                    "SELECT tag_id FROM state_tags WHERE jd_area IS ? AND jd_id IS ? AND jd_ext IS NULL AND tag_id != ?",
+                    (jd_area, new_jd_id, tag_id),
                 )
                 if cursor.fetchone():
                     self._warn(
                         "Constraint Violation",
-                        f"The combination (jd_area={new_jd_area}, jd_id={new_jd_id}, jd_ext={new_jd_ext}) is already in use.",
+                        f"The combination (jd_area={jd_area}, jd_id={new_jd_id}, jd_ext=None) is already in use.",
                     )
-                    current_label, icon_data = new_label, new_icon_data
-                    jd_area, jd_id, jd_ext = new_jd_area, new_jd_id, new_jd_ext
+                    current_label, icon_data, jd_id = new_label, new_icon_data, new_jd_id
                     continue
-                if (new_jd_area, new_jd_id, new_jd_ext) != (jd_area, jd_id, jd_ext):
+                if new_jd_id != jd_id:
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_path')")
                     event_id = cursor.lastrowid
                     parent_uuid = self.parent_uuid
                     cursor.execute(
                         "INSERT INTO event_set_tag_path (event_id, tag_id, parent_uuid, jd_area, jd_id, jd_ext) VALUES (?, ?, ?, ?, ?, ?)",
-                        (event_id, tag_id, parent_uuid, new_jd_area, new_jd_id, new_jd_ext),
+                        (event_id, tag_id, parent_uuid, jd_area, new_jd_id, None),
                     )
                 if new_label != current_label:
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_tag_label')")
