@@ -1034,20 +1034,28 @@ class JdExtPage(QtWidgets.QMainWindow):
             base = self.section_paths[self.sec_idx][2]
             current_order = base + self.idx_in_sec
             target_order = 0
-            for h in self.header_orders:
+            header_index = 0
+            for i, h in enumerate(self.header_orders):
                 if h <= current_order:
                     target_order = h
+                    header_index = i
                 else:
                     break
-            target_base = (target_order // 10) * 10
+            start_base = (target_order // 10) * 10
+            start_idx = target_order - start_base
+            if (
+                self.idx_in_sec == start_idx
+                and header_index > 0
+            ):
+                target_order = self.header_orders[header_index - 1]
+                start_base = (target_order // 10) * 10
+                start_idx = target_order - start_base
             sec_idx = next(
-                (i for i, p in enumerate(self.section_paths) if p[2] == target_base),
-                0,
+                (i for i, p in enumerate(self.section_paths) if p[2] == start_base),
+                self.sec_idx,
             )
             self.sec_idx = sec_idx
-            self.idx_in_sec = min(
-                target_order - target_base, len(self.sections[sec_idx]) - 1
-            )
+            self.idx_in_sec = min(start_idx, len(self.sections[sec_idx]) - 1)
             self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
@@ -1055,29 +1063,35 @@ class JdExtPage(QtWidgets.QMainWindow):
         if not self.in_search_mode and self.sections:
             base = self.section_paths[self.sec_idx][2]
             current_order = base + self.idx_in_sec
-            next_header = None
-            for h in self.header_orders:
+            next_index = None
+            for i, h in enumerate(self.header_orders):
                 if h > current_order:
-                    next_header = h
+                    next_index = i
                     break
-            if next_header is None:
+            if next_index is None:
                 self.sec_idx = len(self.sections) - 1
                 self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
             else:
-                target_order = next_header - 1
-                target_base = (target_order // 10) * 10
+                target_order = self.header_orders[next_index] - 1
+                end_base = (target_order // 10) * 10
+                end_idx = target_order - end_base
+                if (
+                    self.idx_in_sec == end_idx
+                    and next_index + 1 < len(self.header_orders)
+                ):
+                    target_order = self.header_orders[next_index + 1] - 1
+                    end_base = (target_order // 10) * 10
+                    end_idx = target_order - end_base
                 sec_idx = next(
                     (
                         i
                         for i, p in enumerate(self.section_paths)
-                        if p[2] == target_base
+                        if p[2] == end_base
                     ),
                     len(self.sections) - 1,
                 )
                 self.sec_idx = sec_idx
-                self.idx_in_sec = min(
-                    target_order - target_base, len(self.sections[sec_idx]) - 1
-                )
+                self.idx_in_sec = min(end_idx, len(self.sections[sec_idx]) - 1)
             self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
