@@ -605,7 +605,7 @@ class JdExtPage(QtWidgets.QMainWindow):
             (self.parent_uuid,),
         )
         headers = cursor.fetchall()
-        self.header_orders = sorted([order for _, order, _ in headers])
+        self.header_orders = sorted({0, *(order for _, order, _ in headers)})
         cursor.execute(
             "SELECT tag_id, [order], label FROM state_jd_ext_tags WHERE parent_uuid IS ? ORDER BY [order]",
             (self.parent_uuid,),
@@ -1075,13 +1075,17 @@ class JdExtPage(QtWidgets.QMainWindow):
                 target_order = self.header_orders[next_index] - 1
                 end_base = (target_order // 10) * 10
                 end_idx = target_order - end_base
-                if (
-                    self.idx_in_sec == end_idx
-                    and next_index + 1 < len(self.header_orders)
-                ):
-                    target_order = self.header_orders[next_index + 1] - 1
-                    end_base = (target_order // 10) * 10
-                    end_idx = target_order - end_base
+                if self.idx_in_sec == end_idx:
+                    if next_index + 1 < len(self.header_orders):
+                        target_order = self.header_orders[next_index + 1] - 1
+                        end_base = (target_order // 10) * 10
+                        end_idx = target_order - end_base
+                    else:
+                        self.sec_idx = len(self.sections) - 1
+                        self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
+                        self.desired_col = self.idx_in_sec % self.cols
+                        self.updateSelection()
+                        return
                 sec_idx = next(
                     (
                         i
