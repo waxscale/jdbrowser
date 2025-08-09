@@ -30,6 +30,7 @@ class JdIdPage(QtWidgets.QMainWindow):
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
         self.section_filenames = []  # Store .2do filenames for sorting
+        self.header_orders = []
         self.sec_idx = 0
         self.idx_in_sec = 0
         self.desired_col = 0
@@ -585,6 +586,7 @@ class JdIdPage(QtWidgets.QMainWindow):
             (self.parent_uuid,),
         )
         headers = cursor.fetchall()
+        self.header_orders = sorted([order for _, order, _ in headers])
         cursor.execute(
             "SELECT tag_id, [order], label FROM state_jd_id_tags WHERE parent_uuid IS ? ORDER BY [order]",
             (self.parent_uuid,),
@@ -958,24 +960,53 @@ class JdIdPage(QtWidgets.QMainWindow):
 
     def moveToSectionStart(self):
         if not self.in_search_mode and self.sections:
-            if self.idx_in_sec == 0 and self.sec_idx > 0:
-                self.sec_idx -= 1
-                self.idx_in_sec = 0
-            else:
-                self.idx_in_sec = 0
-            self.desired_col = 0
+            base = self.section_paths[self.sec_idx][1]
+            current_order = base + self.idx_in_sec
+            target_order = 0
+            for h in self.header_orders:
+                if h <= current_order:
+                    target_order = h
+                else:
+                    break
+            target_base = (target_order // 10) * 10
+            sec_idx = next(
+                (i for i, p in enumerate(self.section_paths) if p[1] == target_base),
+                0,
+            )
+            self.sec_idx = sec_idx
+            self.idx_in_sec = min(
+                target_order - target_base, len(self.sections[sec_idx]) - 1
+            )
+            self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
     def moveToSectionEnd(self):
         if not self.in_search_mode and self.sections:
-            sec = self.sections[self.sec_idx]
-            last_idx = len(sec) - 1
-            if self.idx_in_sec == last_idx and self.sec_idx < len(self.sections) - 1:
-                self.sec_idx += 1
-                sec = self.sections[self.sec_idx]
-                self.idx_in_sec = len(sec) - 1
+            base = self.section_paths[self.sec_idx][1]
+            current_order = base + self.idx_in_sec
+            next_header = None
+            for h in self.header_orders:
+                if h > current_order:
+                    next_header = h
+                    break
+            if next_header is None:
+                self.sec_idx = len(self.sections) - 1
+                self.idx_in_sec = len(self.sections[self.sec_idx]) - 1
             else:
-                self.idx_in_sec = last_idx
+                target_order = next_header - 1
+                target_base = (target_order // 10) * 10
+                sec_idx = next(
+                    (
+                        i
+                        for i, p in enumerate(self.section_paths)
+                        if p[1] == target_base
+                    ),
+                    len(self.sections) - 1,
+                )
+                self.sec_idx = sec_idx
+                self.idx_in_sec = min(
+                    target_order - target_base, len(self.sections[sec_idx]) - 1
+                )
             self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
