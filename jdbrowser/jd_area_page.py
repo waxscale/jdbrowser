@@ -308,13 +308,12 @@ class JdAreaPage(QtWidgets.QMainWindow):
         )
         max_order = cursor.fetchone()[0]
         default_order = max_order + 1 if max_order is not None else base
-        dialog = InputTagDialog(default_order, None, None, default_label, level=0, parent=self)
+        dialog = InputTagDialog(default_order, default_label, parent=self)
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
-                jd_area, jd_id, jd_ext, label = dialog.get_values()
-                order = jd_area
+                order, label = dialog.get_values()
                 if order is None:
-                    self._warn("Invalid Input", "jd_area must be an integer.")
+                    self._warn("Invalid Input", "Order must be an integer.")
                     continue
                 new_tag_id = create_jd_area_tag(self.conn, order, label)
                 if new_tag_id:
@@ -324,7 +323,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
                 else:
                     self._warn(
                         "Constraint Violation",
-                        f"jd_area={order} is already in use.",
+                        f"Order {order} is already in use.",
                     )
             else:
                 break
@@ -339,13 +338,12 @@ class JdAreaPage(QtWidgets.QMainWindow):
         current_item = self.sections[self.sec_idx][self.idx_in_sec]
         if not current_item.tag_id:
             default_label = "NewTag"
-            dialog = InputTagDialog(current_item.jd_area, None, None, default_label, level=0, parent=self)
+            dialog = InputTagDialog(current_item.jd_area, default_label, parent=self)
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
-                    jd_area, jd_id, jd_ext, label = dialog.get_values()
-                    order = jd_area
+                    order, label = dialog.get_values()
                     if order is None:
-                        self._warn("Invalid Input", "jd_area must be an integer.")
+                        self._warn("Invalid Input", "Order must be an integer.")
                         continue
                     new_tag_id = create_jd_area_tag(self.conn, order, label)
                     if new_tag_id:
@@ -355,7 +353,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
                     else:
                         self._warn(
                             "Constraint Violation",
-                            f"jd_area={order} is already in use.",
+                            f"Order {order} is already in use.",
                         )
                 else:
                     break

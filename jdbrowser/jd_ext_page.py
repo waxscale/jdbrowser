@@ -316,18 +316,15 @@ class JdExtPage(QtWidgets.QMainWindow):
         max_order = cursor.fetchone()[0]
         default_order = max_order + 1 if max_order is not None else base
         dialog = InputTagDialog(
-            self.current_jd_area,
-            self.current_jd_id,
             default_order,
             default_label,
-            level=2,
             parent=self,
         )
         while True:
             if dialog.exec() == QtWidgets.QDialog.Accepted:
-                _, _, order, label = dialog.get_values()
+                order, label = dialog.get_values()
                 if order is None:
-                    self._warn("Invalid Input", "jd_ext must be an integer.")
+                    self._warn("Invalid Input", "Order must be an integer.")
                     continue
                 new_tag_id = create_jd_ext_tag(self.conn, self.parent_uuid, order, label)
                 if new_tag_id:
@@ -358,18 +355,15 @@ class JdExtPage(QtWidgets.QMainWindow):
         if not current_item.tag_id:
             default_label = "NewTag"
             dialog = InputTagDialog(
-                current_item.jd_area,
-                current_item.jd_id,
                 current_item.jd_ext,
                 default_label,
-                level=2,
                 parent=self,
             )
             while True:
                 if dialog.exec() == QtWidgets.QDialog.Accepted:
-                    _, _, order, label = dialog.get_values()
+                    order, label = dialog.get_values()
                     if order is None:
-                        self._warn("Invalid Input", "jd_ext must be an integer.")
+                        self._warn("Invalid Input", "Order must be an integer.")
                         continue
                     new_tag_id = create_jd_ext_tag(self.conn, self.parent_uuid, order, label)
                     if new_tag_id:
