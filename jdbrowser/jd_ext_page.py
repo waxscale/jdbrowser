@@ -252,18 +252,25 @@ class JdExtPage(QtWidgets.QMainWindow):
             "SELECT MAX(jd_ext) FROM state_headers WHERE jd_area = ? AND jd_id = ?",
             (self.current_jd_area, self.current_jd_id),
         )
-        max_jd_ext = cursor.fetchone()[0]
-        default_jd_ext = max_jd_ext + 1 if max_jd_ext is not None else 0
-        dialog = HeaderDialog(self.current_jd_area, self.current_jd_id, default_jd_ext, parent=self, level=2)
+        max_order = cursor.fetchone()[0]
+        default_order = max_order + 1 if max_order is not None else 0
+        dialog = HeaderDialog(default_order, parent=self)
         if dialog.exec() == QtWidgets.QDialog.Accepted and not dialog.delete_pressed:
-            jd_area, jd_id, jd_ext, label = dialog.get_values()
-            if jd_ext is None:
-                self._warn("Invalid Input", "jd_ext must be an integer.")
+            order = dialog.get_order()
+            label = dialog.get_label()
+            if order is None:
+                self._warn("Invalid Input", "Order must be an integer.")
                 return
-            header_id = create_header(self.conn, jd_area, jd_id, jd_ext, label)
+            header_id = create_header(
+                self.conn, self.current_jd_area, self.current_jd_id, order, label
+            )
             if header_id:
                 rebuild_state_headers(self.conn)
                 self._rebuild_ui()
+            else:
+                self._warn(
+                    "Constraint Violation", "Header path conflicts or invalid."
+                )
 
     def _append_tag_to_section(self):
         """Append a tag to the current section with jd parts incremented appropriately."""
@@ -557,25 +564,23 @@ class JdExtPage(QtWidgets.QMainWindow):
         self._rebuild_ui(new_tag_id=source_tag_id)
 
     def _edit_header(self, header_item):
-        dialog = HeaderDialog(
-            header_item.jd_area,
-            header_item.jd_id,
-            header_item.jd_ext,
-            header_item.label,
-            True,
-            self,
-            level=2,
-        )
+        dialog = HeaderDialog(header_item.jd_ext, header_item.label, True, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             if dialog.delete_pressed:
                 delete_header(self.conn, header_item.header_id)
             else:
-                jd_area, jd_id, jd_ext, label = dialog.get_values()
-                if jd_ext is None:
-                    self._warn("Invalid Input", "jd_ext must be an integer.")
+                order = dialog.get_order()
+                label = dialog.get_label()
+                if order is None:
+                    self._warn("Invalid Input", "Order must be an integer.")
                     return
                 if not update_header(
-                    self.conn, header_item.header_id, jd_area, jd_id, jd_ext, label
+                    self.conn,
+                    header_item.header_id,
+                    self.current_jd_area,
+                    self.current_jd_id,
+                    order,
+                    label,
                 ):
                     self._warn("Invalid Input", "Header path conflicts or invalid.")
                     return
