@@ -188,6 +188,7 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_jd_id_tag_order (
             event_id INTEGER PRIMARY KEY,
             tag_id TEXT NOT NULL,
+            parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
@@ -221,6 +222,7 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_jd_id_header_order (
             event_id INTEGER PRIMARY KEY,
             header_id TEXT NOT NULL,
+            parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
@@ -317,8 +319,10 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_jd_id_headers (
             header_id TEXT PRIMARY KEY,
-            [order] INTEGER NOT NULL UNIQUE,
-            label TEXT NOT NULL
+            parent_uuid TEXT,
+            [order] INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            UNIQUE(parent_uuid, [order])
         );
 
         CREATE TABLE IF NOT EXISTS state_jd_ext_headers (
@@ -375,8 +379,10 @@ def setup_database(db_path):
 
         CREATE TABLE IF NOT EXISTS state_jd_id_tags (
             tag_id TEXT PRIMARY KEY,
-            [order] INTEGER NOT NULL UNIQUE,
-            label TEXT NOT NULL
+            parent_uuid TEXT,
+            [order] INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            UNIQUE(parent_uuid, [order])
         );
 
         CREATE TABLE IF NOT EXISTS state_jd_ext_tags (
@@ -420,10 +426,18 @@ def setup_database(db_path):
             ON event_set_jd_ext_tag_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_event_set_jd_ext_header_order_parent_uuid
             ON event_set_jd_ext_header_order(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_event_set_jd_id_tag_order_parent_uuid
+            ON event_set_jd_id_tag_order(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_event_set_jd_id_header_order_parent_uuid
+            ON event_set_jd_id_header_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_tags_parent_uuid
             ON state_jd_ext_tags(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_headers_parent_uuid
             ON state_jd_ext_headers(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_state_jd_id_tags_parent_uuid
+            ON state_jd_id_tags(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_state_jd_id_headers_parent_uuid
+            ON state_jd_id_headers(parent_uuid);
     """)
     # Ensure existing databases have the parent_uuid column
     def ensure_parent_uuid(table_name):
@@ -436,6 +450,10 @@ def setup_database(db_path):
         "state_tags",
         "event_set_header_path",
         "state_headers",
+        "event_set_jd_id_tag_order",
+        "state_jd_id_tags",
+        "event_set_jd_id_header_order",
+        "state_jd_id_headers",
     ):
         ensure_parent_uuid(table)
 
@@ -655,14 +673,16 @@ def rebuild_state_jd_id_tags(conn):
     cursor.executescript("""
         DELETE FROM state_jd_id_tags;
 
-        INSERT INTO state_jd_id_tags (tag_id, [order], label)
+        INSERT INTO state_jd_id_tags (tag_id, parent_uuid, [order], label)
         SELECT
             o.tag_id,
+            o.parent_uuid,
             o.[order],
             l.new_label
         FROM (
             SELECT
                 o.tag_id,
+                o.parent_uuid,
                 o.[order],
                 o.event_id
             FROM event_set_jd_id_tag_order o
@@ -710,14 +730,16 @@ def rebuild_state_jd_id_headers(conn):
     cursor.executescript("""
         DELETE FROM state_jd_id_headers;
 
-        INSERT INTO state_jd_id_headers (header_id, [order], label)
+        INSERT INTO state_jd_id_headers (header_id, parent_uuid, [order], label)
         SELECT
             o.header_id,
+            o.parent_uuid,
             o.[order],
             l.new_label
         FROM (
             SELECT
                 o.header_id,
+                o.parent_uuid,
                 o.[order],
                 o.event_id
             FROM event_set_jd_id_header_order o
@@ -1051,10 +1073,13 @@ def delete_jd_area_tag(conn, tag_id):
     )
     conn.commit()
 
-def create_jd_id_tag(conn, order, label):
+def create_jd_id_tag(conn, parent_uuid, order, label):
     """Create a new jd_id tag and return its tag_id, or None if order conflict."""
     cursor = conn.cursor()
-    cursor.execute('SELECT tag_id FROM state_jd_id_tags WHERE [order] = ?', (order,))
+    cursor.execute(
+        'SELECT tag_id FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] = ?',
+        (parent_uuid, order),
+    )
     if cursor.fetchone():
         return None
     tag_id = str(uuid.uuid4())
@@ -1067,8 +1092,8 @@ def create_jd_id_tag(conn, order, label):
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, [order]) VALUES (?, ?, ?)',
-        (event_id, tag_id, order),
+        'INSERT INTO event_set_jd_id_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)',
+        (event_id, tag_id, parent_uuid, order),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_tag_label')")
     event_id = cursor.lastrowid
@@ -1079,10 +1104,13 @@ def create_jd_id_tag(conn, order, label):
     conn.commit()
     return tag_id
 
-def create_jd_id_header(conn, order, label):
+def create_jd_id_header(conn, parent_uuid, order, label):
     """Create a new jd_id header and return its header_id, or None on conflict."""
     cursor = conn.cursor()
-    cursor.execute('SELECT header_id FROM state_jd_id_headers WHERE [order] = ?', (order,))
+    cursor.execute(
+        'SELECT header_id FROM state_jd_id_headers WHERE parent_uuid IS ? AND [order] = ?',
+        (parent_uuid, order),
+    )
     if cursor.fetchone():
         return None
     header_id = str(uuid.uuid4())
@@ -1095,8 +1123,8 @@ def create_jd_id_header(conn, order, label):
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_header_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_id_header_order (event_id, header_id, [order]) VALUES (?, ?, ?)',
-        (event_id, header_id, order),
+        'INSERT INTO event_set_jd_id_header_order (event_id, header_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)',
+        (event_id, header_id, parent_uuid, order),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_header_label')")
     event_id = cursor.lastrowid
@@ -1107,20 +1135,20 @@ def create_jd_id_header(conn, order, label):
     conn.commit()
     return header_id
 
-def update_jd_id_header(conn, header_id, order, label):
+def update_jd_id_header(conn, header_id, parent_uuid, order, label):
     """Update an existing jd_id header. Returns True on success."""
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT header_id FROM state_jd_id_headers WHERE [order] = ? AND header_id != ?',
-        (order, header_id),
+        'SELECT header_id FROM state_jd_id_headers WHERE parent_uuid IS ? AND [order] = ? AND header_id != ?',
+        (parent_uuid, order, header_id),
     )
     if cursor.fetchone():
         return False
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_header_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_id_header_order (event_id, header_id, [order]) VALUES (?, ?, ?)',
-        (event_id, header_id, order),
+        'INSERT INTO event_set_jd_id_header_order (event_id, header_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)',
+        (event_id, header_id, parent_uuid, order),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_id_header_label')")
     event_id = cursor.lastrowid
