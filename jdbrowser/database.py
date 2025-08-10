@@ -360,9 +360,12 @@ def setup_database(db_path):
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             label TEXT NOT NULL,
-            linked_tag_uuid TEXT,
-            UNIQUE([order])
+            linked_tag_uuid TEXT
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_state_jd_directories_order
+            ON state_jd_directories([order])
+            WHERE linked_tag_uuid IS NULL;
 
         -- Indexes to accelerate lookups by parent_uuid
         CREATE INDEX IF NOT EXISTS idx_event_set_jd_ext_tag_order_parent_uuid
@@ -837,14 +840,15 @@ def delete_jd_ext_tag(conn, tag_id):
     conn.commit()
 
 def create_jd_directory(conn, parent_uuid, order, label, linked_tag_uuid=None):
-    """Create a new directory and return its directory_id, or None on conflict."""
+    """Create a new directory or tag and return its directory_id, or None on conflict."""
     cursor = conn.cursor()
-    cursor.execute(
-        'SELECT directory_id FROM state_jd_directories WHERE [order] = ?',
-        (order,),
-    )
-    if cursor.fetchone():
-        return None
+    if linked_tag_uuid is None:
+        cursor.execute(
+            'SELECT directory_id FROM state_jd_directories WHERE [order] = ? AND linked_tag_uuid IS NULL',
+            (order,),
+        )
+        if cursor.fetchone():
+            return None
     directory_id = str(uuid.uuid4())
     cursor.execute("INSERT INTO events (event_type) VALUES ('create_jd_directory')")
     event_id = cursor.lastrowid

@@ -431,11 +431,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
     def _add_directory(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
+        cursor.execute(
+            "SELECT MAX([order]) FROM state_jd_directories WHERE linked_tag_uuid IS NULL"
+        )
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         directory_order = max_order + 1
-        tag_order = max_order + 2
         directory_id = create_jd_directory(
             self.conn, self.parent_uuid, directory_order, "", None
         )
@@ -454,7 +455,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 row = cursor.fetchone()
             tag_label = row[0] if row else ""
             create_jd_directory(
-                self.conn, directory_id, tag_order, tag_label, self.parent_uuid
+                self.conn, directory_id, directory_order, tag_label, self.parent_uuid
             )
 
         rebuild_state_jd_directories(self.conn)
@@ -702,11 +703,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
         if cursor.fetchone():
             return
-        cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
-        row = cursor.fetchone()
-        max_order = row[0] if row and row[0] is not None else 0
         create_jd_directory(
-            self.conn, current_item.directory_id, max_order + 1, label, tag_uuid
+            self.conn, current_item.directory_id, current_item.order, label, tag_uuid
         )
         rebuild_state_jd_directories(self.conn)
         idx = self.selected_index
