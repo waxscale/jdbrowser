@@ -454,6 +454,7 @@ def rebuild_state_jd_area_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_area_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_area_headers(conn):
     """Rebuild the state_jd_area_headers table from the event log."""
@@ -550,6 +551,7 @@ def rebuild_state_jd_id_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_id_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_id_headers(conn):
     """Rebuild the state_jd_id_headers table from the event log."""
@@ -648,6 +650,7 @@ def rebuild_state_jd_ext_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_ext_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_ext_headers(conn):
     """Rebuild the state_jd_ext_headers table from the event log."""
@@ -696,37 +699,40 @@ def rebuild_state_jd_directory_tags(conn):
     cursor.executescript("""
         DELETE FROM state_jd_directory_tags;
 
-        INSERT INTO state_jd_directory_tags (tag_id, parent_uuid, [order], label)
-        SELECT
-            o.tag_id,
-            o.parent_uuid,
-            o.[order],
-            l.new_label
-        FROM (
+        WITH latest_order AS (
             SELECT
                 o.tag_id,
                 o.parent_uuid,
-                o.[order],
-                o.event_id
+                o.[order]
             FROM event_set_jd_directory_tag_order o
             JOIN (
                 SELECT tag_id, MAX(event_id) AS max_event
                 FROM event_set_jd_directory_tag_order
                 GROUP BY tag_id
-            ) latest_order ON o.tag_id = latest_order.tag_id AND o.event_id = latest_order.max_event
-        ) o
-        JOIN (
+            ) lo ON o.tag_id = lo.tag_id AND o.event_id = lo.max_event
+        ),
+        latest_label AS (
             SELECT
                 l.tag_id,
-                l.new_label,
-                l.event_id
+                l.new_label
             FROM event_set_jd_directory_tag_label l
             JOIN (
                 SELECT tag_id, MAX(event_id) AS max_event
                 FROM event_set_jd_directory_tag_label
                 GROUP BY tag_id
-            ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
-        ) l ON o.tag_id = l.tag_id
+            ) ll ON l.tag_id = ll.tag_id AND l.event_id = ll.max_event
+        )
+        INSERT INTO state_jd_directory_tags (tag_id, parent_uuid, [order], label)
+        SELECT
+            o.tag_id,
+            o.parent_uuid,
+            o.[order],
+            COALESCE(ext.label, id.label, area.label, l.new_label) AS label
+        FROM latest_order o
+        LEFT JOIN latest_label l ON o.tag_id = l.tag_id
+        LEFT JOIN state_jd_ext_tags ext ON o.tag_id = ext.tag_id
+        LEFT JOIN state_jd_id_tags id ON o.tag_id = id.tag_id
+        LEFT JOIN state_jd_area_tags area ON o.tag_id = area.tag_id
         WHERE o.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_directory_tag);
     """)
 
