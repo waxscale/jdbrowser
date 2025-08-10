@@ -7,7 +7,7 @@ from .database import (
     rebuild_state_jd_directory_tags,
     create_jd_directory_tag,
 )
-from .dialogs import EditTagDialog
+from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .constants import *
 from .config import read_config
 
@@ -282,6 +282,38 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if self.items:
             self.set_selection(len(self.items) - 1)
 
+    def _rename_tag_label(self):
+        """Edit the current directory tag's label with a simple dialog."""
+        if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
+            return
+        current_item = self.items[self.selected_index]
+        tag_id = current_item.tag_id
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT label FROM state_jd_directory_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        current_label = row[0]
+        dialog = SimpleEditTagDialog(current_label, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            new_label = dialog.get_label()
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_label')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_jd_directory_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+                (event_id, tag_id, new_label),
+            )
+            self.conn.commit()
+            rebuild_state_jd_directory_tags(self.conn)
+            self._load_directories()
+            for i, item in enumerate(self.items):
+                if item.tag_id == tag_id:
+                    self.set_selection(i)
+                    break
+
     def _edit_tag_label_with_icon(self):
         if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
             return
@@ -394,6 +426,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_A, self._add_directory, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
+            (QtCore.Qt.Key_R, self._rename_tag_label, None),
+            (QtCore.Qt.Key_F2, self._rename_tag_label, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
         ]
         self.shortcuts = []
