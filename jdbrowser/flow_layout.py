@@ -64,16 +64,18 @@ class FlowLayout(QtWidgets.QLayout):
         return size
 
     def doLayout(self, rect, testOnly):
-        x = rect.x()
-        y = rect.y()
+        margins = self.contentsMargins()
+        x = rect.x() + margins.left()
+        y = rect.y() + margins.top()
         lineHeight = 0
+        right_limit = rect.right() - margins.right()
         for item in self.itemList:
             widget = item.widget()
             spaceX = self.spacing()
             spaceY = self.spacing()
             nextX = x + item.sizeHint().width() + spaceX
-            if nextX - spaceX > rect.right() and lineHeight > 0:
-                x = rect.x()
+            if nextX - spaceX > right_limit and lineHeight > 0:
+                x = rect.x() + margins.left()
                 y = y + lineHeight + spaceY
                 nextX = x + item.sizeHint().width() + spaceX
                 lineHeight = 0
@@ -81,4 +83,4 @@ class FlowLayout(QtWidgets.QLayout):
                 item.setGeometry(QtCore.QRect(QtCore.QPoint(x, y), item.sizeHint()))
             x = nextX
             lineHeight = max(lineHeight, item.sizeHint().height())
-        return y + lineHeight - rect.y()
+        return y + lineHeight + margins.bottom() - rect.y()
