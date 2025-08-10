@@ -67,7 +67,8 @@ class DirectoryItem(QtWidgets.QWidget):
         font.setPointSize(int(font.pointSize() * 1.2))
         font.setBold(True)
         self.label.setFont(font)
-        self.label.setStyleSheet(f"color: {TEXT_COLOR};")
+        # Add a small padding so the text isn't flush against the edges
+        self.label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 2px;")
         right_layout.addWidget(self.label)
         right_layout.addStretch(1)
         layout.addWidget(self.right)
