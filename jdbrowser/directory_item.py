@@ -24,6 +24,7 @@ class DirectoryItem(QtWidgets.QWidget):
         self.index = index
         self.isSelected = False
         self.isHover = False
+        self.isDimmed = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
 
         layout = QtWidgets.QHBoxLayout(self)
@@ -150,6 +151,13 @@ class DirectoryItem(QtWidgets.QWidget):
         bg = HIGHLIGHT_COLOR if self.isSelected else (
             HOVER_COLOR if self.isHover else "transparent"
         )
+        opacity = 0.4 if self.isDimmed else 1.0
+        icon_effect = QtWidgets.QGraphicsOpacityEffect(self.icon)
+        icon_effect.setOpacity(opacity)
+        self.icon.setGraphicsEffect(icon_effect)
+        right_effect = QtWidgets.QGraphicsOpacityEffect(self.right)
+        right_effect.setOpacity(opacity)
+        self.right.setGraphicsEffect(right_effect)
         self.setStyleSheet(f"background-color: {bg}; border-radius: 5px;")
 
     def enterEvent(self, event):

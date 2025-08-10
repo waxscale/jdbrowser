@@ -10,6 +10,7 @@ from .database import (
 from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .constants import *
 from .config import read_config
+from .search_line_edit import SearchLineEdit
 
 class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
@@ -46,6 +47,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         settings = QtCore.QSettings("xAI", "jdbrowser")
         self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.repository_path = read_config()
+
+        self.in_search_mode = False
+        self.prev_selected_index = None
+        self.search_matches = []
+        self.current_match_idx = -1
+        self.shortcuts = []
+        self.search_shortcut_instances = []
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -112,6 +120,61 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
         box.exec()
 
+    def _setup_search_shortcuts(self):
+        """Set up search mode shortcuts for the current search_input widget."""
+        for shortcut in self.search_shortcut_instances:
+            shortcut.deleteLater()
+        self.search_shortcut_instances = []
+        search_shortcuts = [
+            (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
+            (
+                QtCore.Qt.Key_BracketLeft,
+                self.exit_search_mode_revert,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (QtCore.Qt.Key_Return, self.exit_search_mode_select, None),
+            (
+                QtCore.Qt.Key_G,
+                self.next_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (
+                QtCore.Qt.Key_G,
+                self.prev_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier
+                | QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_N,
+                self.next_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (
+                QtCore.Qt.Key_P,
+                self.prev_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+        ]
+        for mapping in search_shortcuts:
+            key, func, arg = mapping[0], mapping[1], mapping[2]
+            modifiers = (
+                mapping[3]
+                if len(mapping) > 3
+                else QtCore.Qt.KeyboardModifier.NoModifier
+            )
+            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
+            s.setEnabled(False)
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
+            self.search_shortcut_instances.append(s)
+
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
@@ -132,6 +195,14 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._load_directories()
         if self.items:
             self.set_selection(0)
+
+        # Search input box
+        self.search_input = SearchLineEdit(self)
+        self.search_input.setFixedWidth(300)
+        self.search_input.setFixedHeight(30)
+        self.search_input.hide()
+        self.search_input.textChanged.connect(self.perform_search)
+        self._setup_search_shortcuts()
 
         style = f'''
         * {{ font-family: 'FiraCode Nerd Font'; }}
@@ -162,6 +233,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
         '''
         self.setStyleSheet(style)
+        self.search_input.move(self.width() - 310, self.height() - 40)
 
     def _clear_items(self):
         while self.vlayout.count():
@@ -247,7 +319,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             self.scroll_area.ensureWidgetVisible(self.items[self.selected_index])
 
     def move_selection(self, direction):
-        if not self.items:
+        if self.in_search_mode or not self.items:
             return
         if self.selected_index is None:
             index = 0 if direction > 0 else len(self.items) - 1
@@ -257,18 +329,20 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.set_selection(index)
 
     def move_selection_multiple(self, count):
-        if not self.items:
+        if self.in_search_mode or not self.items:
             return
         for _ in range(abs(count)):
             self.move_selection(1 if count > 0 else -1)
 
     def move_to_start(self):
-        if self.items:
-            self.set_selection(0)
+        if self.in_search_mode or not self.items:
+            return
+        self.set_selection(0)
 
     def move_to_end(self):
-        if self.items:
-            self.set_selection(len(self.items) - 1)
+        if self.in_search_mode or not self.items:
+            return
+        self.set_selection(len(self.items) - 1)
 
     def _add_directory(self):
         cursor = self.conn.cursor()
@@ -383,6 +457,91 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 break
 
+    def enter_search_mode(self):
+        if not self.in_search_mode:
+            if not self.items:
+                return
+            self.in_search_mode = True
+            self.prev_selected_index = self.selected_index
+            self.search_matches = []
+            self.current_match_idx = -1
+            self.search_input.clear()
+            self.search_input.show()
+            self.search_input.setFocus()
+            for s in self.shortcuts:
+                key_str = s.key().toString()
+                if key_str and not any(
+                    key_str.lower() == seq.lower() for seq in self.quit_sequences
+                ):
+                    s.setEnabled(False)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(True)
+            self.perform_search("")
+
+    def exit_search_mode_revert(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            self.search_matches = []
+            self.current_match_idx = -1
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            for item in self.items:
+                item.isDimmed = False
+                item.updateStyle()
+            if self.prev_selected_index is not None:
+                self.set_selection(self.prev_selected_index)
+
+    def exit_search_mode_select(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            if self.search_matches and self.current_match_idx >= 0:
+                self.set_selection(self.search_matches[self.current_match_idx])
+            elif self.prev_selected_index is not None:
+                self.set_selection(self.prev_selected_index)
+            self.search_matches = []
+            self.current_match_idx = -1
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            for item in self.items:
+                item.isDimmed = False
+                item.updateStyle()
+
+    def perform_search(self, query):
+        if not self.items:
+            return
+        query = query.lower()
+        self.search_matches = []
+        for i, item in enumerate(self.items):
+            tags_text = " ".join(t_label for _, t_label, _, _ in item.tags)
+            combined = f"{item.label_text} {tags_text}".lower()
+            if query and query in combined:
+                self.search_matches.append(i)
+                item.isDimmed = False
+            else:
+                item.isDimmed = bool(query)
+            item.updateStyle()
+        if self.search_matches:
+            self.current_match_idx = 0
+            self.set_selection(self.search_matches[0])
+        else:
+            self.current_match_idx = -1
+
+    def next_match(self):
+        if self.in_search_mode and self.current_match_idx < len(self.search_matches) - 1:
+            self.current_match_idx += 1
+            self.set_selection(self.search_matches[self.current_match_idx])
+
+    def prev_match(self):
+        if self.in_search_mode and self.current_match_idx > 0:
+            self.current_match_idx -= 1
+            self.set_selection(self.search_matches[self.current_match_idx])
+
     def toggle_label_prefix(self):
         self.show_prefix = not self.show_prefix
         for item in self.items:
@@ -392,9 +551,18 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         settings = QtCore.QSettings("xAI", "jdbrowser")
         settings.setValue("show_prefix", self.show_prefix)
 
+    def mousePressEvent(self, event):
+        if self.in_search_mode:
+            self.exit_search_mode_select()
+        super().mousePressEvent(event)
+
     def closeEvent(self, event):
         self.conn.close()
         super().closeEvent(event)
+
+    def resizeEvent(self, event):
+        self.search_input.move(self.width() - 310, self.height() - 40)
+        super().resizeEvent(event)
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -429,6 +597,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
+            (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
+            (
+                QtCore.Qt.Key_F,
+                self.enter_search_mode,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
         ]
         self.shortcuts = []
         for mapping in mappings:
@@ -444,8 +619,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 shortcut.activated.connect(lambda f=func, a=arg: f(a))
             self.shortcuts.append(shortcut)
-        quit_keys = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
-        for seq in quit_keys:
+        self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
+        for seq in self.quit_sequences:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
