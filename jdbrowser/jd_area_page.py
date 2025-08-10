@@ -20,10 +20,11 @@ from .database import (
 from .jd_id_page import JdIdPage
 from .constants import *
 
-class JdAreaPage(QtWidgets.QMainWindow):
+class JdAreaPage(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("File Browser")
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setWindowTitle("File Browser")
         self.current_jd_area = None
         self.current_jd_id = None
         self.parent_uuid = None
@@ -54,9 +55,6 @@ class JdAreaPage(QtWidgets.QMainWindow):
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, 'tag.db')
         self.conn = setup_database(self.db_path)
-
-        # Disable window decorations
-        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         app = QtWidgets.QApplication.instance()
         if app:
@@ -90,11 +88,6 @@ class JdAreaPage(QtWidgets.QMainWindow):
         self._setup_ui()
         self._setup_shortcuts()
         self.updateSelection()
-
-        # Restore saved position and size
-        if settings.contains("pos") and settings.contains("size"):
-            self.move(settings.value("pos", type=QtCore.QPoint))
-            self.resize(settings.value("size", type=QtCore.QSize))
 
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
@@ -661,7 +654,9 @@ class JdAreaPage(QtWidgets.QMainWindow):
         container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll.setWidget(container)
-        self.setCentralWidget(self.scroll)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.scroll)
 
         # Search input box
         self.search_input = SearchLineEdit(self)
@@ -796,7 +791,7 @@ class JdAreaPage(QtWidgets.QMainWindow):
             self.shortcuts.append(s)
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
-            s.activated.connect(self.close)
+            s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
 
     def enter_search_mode(self):
@@ -1072,11 +1067,11 @@ class JdAreaPage(QtWidgets.QMainWindow):
         if not current_item.tag_id:
             return
 
-        # Instantiate the next level page and replace the current one
+        # Instantiate the next level page and replace the current widget
         new_page = JdIdPage(parent_uuid=current_item.tag_id, jd_area=current_item.jd_area)
+        self.conn.close()
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
@@ -1093,9 +1088,6 @@ class JdAreaPage(QtWidgets.QMainWindow):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        settings = QtCore.QSettings("xAI", "jdbrowser")
-        settings.setValue("pos", self.pos())
-        settings.setValue("size", self.size())
         self.conn.close()
         super().closeEvent(event)
 

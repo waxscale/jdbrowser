@@ -19,10 +19,11 @@ from .database import (
 )
 from .constants import *
 
-class JdExtPage(QtWidgets.QMainWindow):
+class JdExtPage(QtWidgets.QWidget):
     def __init__(self, parent_uuid, jd_area, jd_id, grandparent_uuid):
         super().__init__()
-        self.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
         self.parent_uuid = parent_uuid
         self.grandparent_uuid = grandparent_uuid
         self.current_jd_area = jd_area
@@ -54,9 +55,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, 'tag.db')
         self.conn = setup_database(self.db_path)
-
-        # Disable window decorations
-        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         app = QtWidgets.QApplication.instance()
         if app:
@@ -90,11 +88,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         self._setup_ui()
         self._setup_shortcuts()
         self.updateSelection()
-
-        # Restore saved position and size
-        if settings.contains("pos") and settings.contains("size"):
-            self.move(settings.value("pos", type=QtCore.QPoint))
-            self.resize(settings.value("size", type=QtCore.QSize))
 
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
@@ -344,9 +337,9 @@ class JdExtPage(QtWidgets.QMainWindow):
         from .jd_id_page import JdIdPage
 
         new_page = JdIdPage(parent_uuid=self.grandparent_uuid, jd_area=self.current_jd_area)
+        self.conn.close()
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -736,7 +729,9 @@ class JdExtPage(QtWidgets.QMainWindow):
         container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll.setWidget(container)
-        self.setCentralWidget(self.scroll)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.scroll)
 
         # Search input box
         self.search_input = SearchLineEdit(self)
@@ -871,7 +866,7 @@ class JdExtPage(QtWidgets.QMainWindow):
             self.shortcuts.append(s)
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
-            s.activated.connect(self.close)
+            s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
 
     def enter_search_mode(self):
@@ -1126,10 +1121,9 @@ class JdExtPage(QtWidgets.QMainWindow):
             grandparent_uuid=self.parent_uuid,
             great_grandparent_uuid=self.grandparent_uuid,
         )
-        new_page.setGeometry(self.geometry())
+        self.conn.close()
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
@@ -1146,9 +1140,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        settings = QtCore.QSettings("xAI", "jdbrowser")
-        settings.setValue("pos", self.pos())
-        settings.setValue("size", self.size())
         self.conn.close()
         super().closeEvent(event)
 
