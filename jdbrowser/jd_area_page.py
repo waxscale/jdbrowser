@@ -45,8 +45,9 @@ class JdAreaPage(QtWidgets.QWidget):
         self.shortcuts = []
         self.search_shortcut_instances = []
         self.show_prefix = False
-        # Load show_hidden state from QSettings
+        # Load show_prefix and show_hidden state from QSettings
         settings = QtCore.QSettings("xAI", "jdbrowser")
+        self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.show_hidden = settings.value("show_hidden", False, type=bool)
 
         # Initialize SQLite database
@@ -766,6 +767,8 @@ class JdAreaPage(QtWidgets.QWidget):
             for item in sec:
                 item.updateLabel(self.show_prefix)
         self.updateSelection()
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("show_prefix", self.show_prefix)
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)

@@ -43,6 +43,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.items = []
         self.selected_index = None
         self.show_path = False
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        self.show_path = settings.value("show_path", False, type=bool)
         self.repository_path = read_config()
 
         self._setup_ui()
@@ -313,6 +315,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             item.updateLabel(self.show_path)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("show_path", self.show_path)
 
     def closeEvent(self, event):
         self.conn.close()
