@@ -458,7 +458,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             f" background-color: #000;"
         )
         v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
-        v_layout.setContentsMargins(0, 0, 0, 0)
+        v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
             item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
