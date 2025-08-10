@@ -76,19 +76,25 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._setup_shortcuts()
 
     def _navigate_to(self, new_page):
-        if self._navigating:
-            return
-        self._navigating = True
+        """Swap in *new_page* on the next event loop iteration.
+
+        The current page is deleted after the swap to avoid use-after-free
+        issues if navigation is triggered while event handlers are still
+        running.
+        """
+        old_page = self
 
         def swap():
             jdbrowser.main_window.setCentralWidget(new_page)
             jdbrowser.current_page = new_page
+            old_page.deleteLater()
 
         QtCore.QTimer.singleShot(0, swap)
 
     def ascend_level(self):
         if self._navigating:
             return
+        self._navigating = True
         from .jd_ext_page import JdExtPage
 
         new_page = JdExtPage(
@@ -115,6 +121,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def ascend_to_id(self):
         if self._navigating:
             return
+        self._navigating = True
         from .jd_id_page import JdIdPage
 
         new_page = JdIdPage(
@@ -137,6 +144,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def ascend_to_area(self):
         if self._navigating:
             return
+        self._navigating = True
         from .jd_area_page import JdAreaPage
 
         new_page = JdAreaPage()
@@ -413,6 +421,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def open_tag(self, tag_id, order, parent_uuid):
         if self._navigating:
             return
+        self._navigating = True
         from .jd_directory_list_page import JdDirectoryListPage
 
         s = f"{order:016d}"
