@@ -7,6 +7,8 @@ from .database import (
     setup_database,
     rebuild_state_jd_directories,
     create_jd_directory,
+    add_directory_tag,
+    rebuild_state_directory_tags,
 )
 from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .constants import *
@@ -368,21 +370,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.selected_index = None
         cursor = self.conn.cursor()
 
-        # Fetch info for the current tag so each directory shows at least this tag.
-        # Depending on depth, the parent may live in the directory or ext tag table.
-        cursor.execute(
-            "SELECT directory_id, label, [order], parent_uuid FROM state_jd_directories WHERE directory_id = ?",
-            (self.parent_uuid,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            cursor.execute(
-                "SELECT tag_id, label, [order], parent_uuid FROM state_jd_ext_tags WHERE tag_id = ?",
-                (self.parent_uuid,),
-            )
-            row = cursor.fetchone()
-        current_tag = tuple(row) if row else None
-
         cursor.execute(
             """
             SELECT t.directory_id, t.label, t.[order], i.icon
@@ -397,13 +384,22 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         for idx, row in enumerate(rows):
             directory_id, label, order, icon_data = row
             cursor.execute(
-                "SELECT directory_id, label, [order], parent_uuid FROM state_jd_directories WHERE parent_uuid = ? ORDER BY [order]",
+                """
+                SELECT dt.tag_id,
+                       COALESCE(ext.label, id.label, area.label) AS label,
+                       COALESCE(ext.[order], id.[order], area.[order]) AS [order],
+                       COALESCE(ext.parent_uuid, id.parent_uuid) AS parent_uuid
+                FROM state_jd_directory_tags dt
+                LEFT JOIN state_jd_ext_tags ext ON dt.tag_id = ext.tag_id
+                LEFT JOIN state_jd_id_tags id ON dt.tag_id = id.tag_id
+                LEFT JOIN state_jd_area_tags area ON dt.tag_id = area.tag_id
+                WHERE dt.directory_id = ?
+                ORDER BY [order]
+                """,
                 (directory_id,),
             )
             tag_rows = cursor.fetchall()
             tags = [tuple(t) for t in tag_rows]
-            if current_tag:
-                tags.append(current_tag)
             item = DirectoryItem(directory_id, label, order, icon_data, self, idx, tags)
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
@@ -452,8 +448,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
-        create_jd_directory(self.conn, self.parent_uuid, new_order, "", None)
+        directory_id = create_jd_directory(self.conn, self.parent_uuid, new_order, "")
+        if directory_id:
+            add_directory_tag(self.conn, directory_id, self.parent_uuid)
         rebuild_state_jd_directories(self.conn)
+        rebuild_state_directory_tags(self.conn)
         self._load_directories()
         if self.items:
             self.set_selection(len(self.items) - 1)
@@ -685,26 +684,19 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         current_item = self.items[self.selected_index]
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT label FROM state_jd_ext_tags WHERE tag_id = ?",
+            "SELECT 1 FROM state_jd_ext_tags WHERE tag_id = ?",
             (tag_uuid,),
         )
-        row = cursor.fetchone()
-        if not row:
+        if not cursor.fetchone():
             return
-        label = row[0]
         cursor.execute(
-            "SELECT 1 FROM state_jd_directories WHERE parent_uuid = ? AND linked_tag_uuid = ?",
+            "SELECT 1 FROM state_jd_directory_tags WHERE directory_id = ? AND tag_id = ?",
             (current_item.directory_id, tag_uuid),
         )
         if cursor.fetchone():
             return
-        cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
-        row = cursor.fetchone()
-        max_order = row[0] if row and row[0] is not None else 0
-        create_jd_directory(
-            self.conn, current_item.directory_id, max_order + 1, label, tag_uuid
-        )
-        rebuild_state_jd_directories(self.conn)
+        add_directory_tag(self.conn, current_item.directory_id, tag_uuid)
+        rebuild_state_directory_tags(self.conn)
         idx = self.selected_index
         self._load_directories()
         if idx is not None and idx < len(self.items):
