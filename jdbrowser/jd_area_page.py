@@ -539,12 +539,50 @@ class JdAreaPage(QtWidgets.QWidget):
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.search_shortcut_instances.append(s)
 
+    def _build_breadcrumb(self, crumbs):
+        bar = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(bar)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(0)
+        bar.setStyleSheet(
+            f"background-color: {BREADCRUMB_BG_COLOR}; color: black;"
+        )
+        for i, (text, handler) in enumerate(crumbs):
+            if i:
+                sep = QtWidgets.QLabel(" / ")
+                sep.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(sep)
+            if handler:
+                btn = QtWidgets.QPushButton(text)
+                btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+                btn.setFlat(True)
+                btn.setStyleSheet(
+                    "QPushButton { background-color: transparent; border: none; color: black; }"
+                    "QPushButton:hover { text-decoration: underline; }"
+                )
+                btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(btn)
+            else:
+                label = QtWidgets.QLabel(text)
+                label.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(label)
+        layout.addStretch(1)
+        return bar
+
     def _setup_ui(self):
         if not hasattr(self, "scroll_area"):
             self.scroll_area = QtWidgets.QScrollArea()
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -558,6 +596,9 @@ class JdAreaPage(QtWidgets.QWidget):
             )
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            self.breadcrumb_bar = self._build_breadcrumb([("Home", None)])
+            layout.addWidget(self.breadcrumb_bar)
             layout.addWidget(self.scroll_area)
 
             # Search input box
@@ -573,9 +614,10 @@ class JdAreaPage(QtWidgets.QWidget):
                 old.deleteLater()
 
         container = QtWidgets.QWidget()
+        container.setStyleSheet("background-color: #000000;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
-        mainLayout.setContentsMargins(5, 5, 5, 5)
+        mainLayout.setContentsMargins(5, 15, 5, 5)
 
         self.sections = []
         self.section_paths = []

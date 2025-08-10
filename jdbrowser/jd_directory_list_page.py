@@ -41,6 +41,28 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.db_path = os.path.join(db_dir, "tag.db")
         self.conn = setup_database(self.db_path)
 
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT label FROM state_jd_ext_tags WHERE tag_id = ?",
+            (self.parent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.ext_label = row[0] if row else ""
+
+        cursor.execute(
+            "SELECT label FROM state_jd_id_tags WHERE tag_id = ?",
+            (self.grandparent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.id_label = row[0] if row else ""
+
+        cursor.execute(
+            "SELECT label FROM state_jd_area_tags WHERE tag_id = ?",
+            (self.great_grandparent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.area_label = row[0] if row else ""
+
         self.items = []
         self.selected_index = None
         self.show_prefix = False
@@ -69,6 +91,46 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
         # Ensure the item we descended from becomes selected when returning
         target_tag_id = self.parent_uuid
+        found = False
+        for s, sec in enumerate(new_page.sections):
+            for i, item in enumerate(sec):
+                if item.tag_id == target_tag_id:
+                    new_page.sec_idx = s
+                    new_page.idx_in_sec = i
+                    found = True
+                    break
+            if found:
+                break
+        new_page.updateSelection()
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
+    def ascend_to_id(self):
+        from .jd_id_page import JdIdPage
+
+        new_page = JdIdPage(
+            parent_uuid=self.great_grandparent_uuid, jd_area=self.current_jd_area
+        )
+        target_tag_id = self.grandparent_uuid
+        found = False
+        for s, sec in enumerate(new_page.sections):
+            for i, item in enumerate(sec):
+                if item.tag_id == target_tag_id:
+                    new_page.sec_idx = s
+                    new_page.idx_in_sec = i
+                    found = True
+                    break
+            if found:
+                break
+        new_page.updateSelection()
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
+    def ascend_to_area(self):
+        from .jd_area_page import JdAreaPage
+
+        new_page = JdAreaPage()
+        target_tag_id = self.great_grandparent_uuid
         found = False
         for s, sec in enumerate(new_page.sections):
             for i, item in enumerate(sec):
@@ -175,10 +237,59 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.search_shortcut_instances.append(s)
 
+    def _build_breadcrumb(self, crumbs):
+        bar = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(bar)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(0)
+        bar.setStyleSheet(
+            f"background-color: {BREADCRUMB_BG_COLOR}; color: black;"
+        )
+        for i, (text, handler) in enumerate(crumbs):
+            if i:
+                sep = QtWidgets.QLabel(" / ")
+                sep.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(sep)
+            if handler:
+                btn = QtWidgets.QPushButton(text)
+                btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+                btn.setFlat(True)
+                btn.setStyleSheet(
+                    "QPushButton { background-color: transparent; border: none; color: black; }"
+                    "QPushButton:hover { text-decoration: underline; }"
+                )
+                btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(btn)
+            else:
+                label = QtWidgets.QLabel(text)
+                label.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(label)
+        layout.addStretch(1)
+        return bar
+
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
+
+        crumb_area = f"{self.current_jd_area:02d} {self.area_label}".strip()
+        crumb_id = f"{self.current_jd_id:02d} {self.id_label}".strip()
+        crumb_ext = f"{self.current_jd_ext:04d} {self.ext_label}".strip()
+        self.breadcrumb_bar = self._build_breadcrumb(
+            [
+                (crumb_area, self.ascend_to_area),
+                (crumb_id, self.ascend_to_id),
+                (crumb_ext, self.ascend_level),
+            ]
+        )
+        layout.addWidget(self.breadcrumb_bar)
 
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)

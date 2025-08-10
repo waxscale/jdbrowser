@@ -58,6 +58,20 @@ class JdExtPage(QtWidgets.QWidget):
         self.db_path = os.path.join(db_dir, 'tag.db')
         self.conn = setup_database(self.db_path)
 
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT label FROM state_jd_area_tags WHERE tag_id = ?",
+            (self.grandparent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.area_label = row[0] if row else ""
+        cursor.execute(
+            "SELECT label FROM state_jd_id_tags WHERE tag_id = ?",
+            (self.parent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.id_label = row[0] if row else ""
+
         app = QtWidgets.QApplication.instance()
         if app:
             app.setStyleSheet(
@@ -356,6 +370,26 @@ class JdExtPage(QtWidgets.QWidget):
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
+    def ascend_to_area(self):
+        from .jd_area_page import JdAreaPage
+
+        new_page = JdAreaPage()
+        target_tag_id = self.grandparent_uuid
+        found = False
+        for s, sec in enumerate(new_page.sections):
+            for i, item in enumerate(sec):
+                if item.tag_id == target_tag_id:
+                    new_page.sec_idx = s
+                    new_page.idx_in_sec = i
+                    found = True
+                    break
+            if found:
+                break
+        new_page.updateSelection()
+        self.conn.close()
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
         if not self.sections or self.sec_idx >= len(self.sections) or self.idx_in_sec >= len(self.sections[self.sec_idx]):
@@ -594,12 +628,50 @@ class JdExtPage(QtWidgets.QWidget):
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.search_shortcut_instances.append(s)
 
+    def _build_breadcrumb(self, crumbs):
+        bar = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(bar)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(0)
+        bar.setStyleSheet(
+            f"background-color: {BREADCRUMB_BG_COLOR}; color: black;"
+        )
+        for i, (text, handler) in enumerate(crumbs):
+            if i:
+                sep = QtWidgets.QLabel(" / ")
+                sep.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(sep)
+            if handler:
+                btn = QtWidgets.QPushButton(text)
+                btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+                btn.setFlat(True)
+                btn.setStyleSheet(
+                    "QPushButton { background-color: transparent; border: none; color: black; }"
+                    "QPushButton:hover { text-decoration: underline; }"
+                )
+                btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(btn)
+            else:
+                label = QtWidgets.QLabel(text)
+                label.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(label)
+        layout.addStretch(1)
+        return bar
+
     def _setup_ui(self):
         if not hasattr(self, "scroll_area"):
             self.scroll_area = QtWidgets.QScrollArea()
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -613,6 +685,13 @@ class JdExtPage(QtWidgets.QWidget):
             )
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            crumb_area = f"{self.current_jd_area:02d} {self.area_label}".strip()
+            crumb_id = f"{self.current_jd_id:02d} {self.id_label}".strip()
+            self.breadcrumb_bar = self._build_breadcrumb(
+                [(crumb_area, self.ascend_to_area), (crumb_id, self.ascend_level)]
+            )
+            layout.addWidget(self.breadcrumb_bar)
             layout.addWidget(self.scroll_area)
 
             # Search input box
@@ -628,9 +707,10 @@ class JdExtPage(QtWidgets.QWidget):
                 old.deleteLater()
 
         container = QtWidgets.QWidget()
+        container.setStyleSheet("background-color: #000000;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
-        mainLayout.setContentsMargins(5, 5, 5, 5)
+        mainLayout.setContentsMargins(5, 15, 5, 5)
 
         self.sections = []
         self.section_paths = []
