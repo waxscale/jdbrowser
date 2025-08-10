@@ -228,10 +228,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
     def _add_directory(self):
         cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT MAX([order]) FROM state_jd_directory_tags WHERE parent_uuid IS ?",
-            (self.parent_uuid,),
-        )
+        cursor.execute("SELECT MAX([order]) FROM state_jd_directory_tags")
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
@@ -268,8 +265,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 new_label = dialog.get_label()
                 new_icon_data = dialog.get_icon_data()
                 cursor.execute(
-                    "SELECT tag_id FROM state_jd_directory_tags WHERE parent_uuid IS ? AND [order] = ? AND tag_id != ?",
-                    (self.parent_uuid, new_order, tag_id),
+                    "SELECT tag_id FROM state_jd_directory_tags WHERE [order] = ? AND tag_id != ?",
+                    (new_order, tag_id),
                 )
                 if cursor.fetchone():
                     self._warn(
