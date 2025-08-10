@@ -372,11 +372,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
         cursor.execute(
             """
-            SELECT t.directory_id, t.label, t.[order], i.icon
-            FROM state_jd_directories t
-            LEFT JOIN state_jd_directory_icons i ON t.directory_id = i.directory_id
-            WHERE t.parent_uuid = ?
-            ORDER BY t.[order]
+            SELECT d.directory_id, d.label, d.[order], i.icon
+            FROM state_jd_directories d
+            JOIN state_jd_directory_tags dt ON d.directory_id = dt.directory_id
+            LEFT JOIN state_jd_directory_icons i ON d.directory_id = i.directory_id
+            WHERE dt.tag_id = ?
+            ORDER BY d.[order]
             """,
             (self.parent_uuid,),
         )
@@ -448,7 +449,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
-        directory_id = create_jd_directory(self.conn, self.parent_uuid, new_order, "")
+        directory_id = create_jd_directory(self.conn, new_order, "")
         if directory_id:
             add_directory_tag(self.conn, directory_id, self.parent_uuid)
         rebuild_state_jd_directories(self.conn)
@@ -530,8 +531,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_order')")
                     event_id = cursor.lastrowid
                     cursor.execute(
-                        "INSERT INTO event_set_jd_directory_order (event_id, directory_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
-                        (event_id, directory_id, self.parent_uuid, new_order),
+                        "INSERT INTO event_set_jd_directory_order (event_id, directory_id, [order]) VALUES (?, ?, ?)",
+                        (event_id, directory_id, new_order),
                     )
                 if new_label != current_label:
                     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_label')")
