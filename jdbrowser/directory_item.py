@@ -1,6 +1,13 @@
 import os
 from PySide6 import QtWidgets, QtGui, QtCore
-from .constants import HIGHLIGHT_COLOR, HOVER_COLOR, SLATE_COLOR, TEXT_COLOR, BORDER_COLOR
+from .constants import (
+    HIGHLIGHT_COLOR,
+    HOVER_COLOR,
+    SLATE_COLOR,
+    TEXT_COLOR,
+    BORDER_COLOR,
+    TAG_COLOR,
+)
 from .flow_layout import FlowLayout
 
 
@@ -83,6 +90,7 @@ class DirectoryItem(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
         )
         self.tags_layout = FlowLayout(self.tags_widget, margin=0, spacing=5)
+        self.tags_layout.setContentsMargins(10, 2, 0, 0)
         right_layout.addWidget(self.tags_widget)
         right_layout.addStretch(1)
         self._build_tag_pills()
@@ -115,7 +123,7 @@ class DirectoryItem(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(text)
             btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
             btn.setStyleSheet(
-                f"background-color: {BORDER_COLOR}; color: {TEXT_COLOR}; border: none;"
+                f"background-color: {TAG_COLOR}; color: {TEXT_COLOR}; border: none;"
                 " border-radius: 10px; padding: 2px 6px;"
             )
             btn.setMinimumWidth(60)
