@@ -81,10 +81,22 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._setup_ui()
         self._setup_shortcuts()
 
-    def ascend_level(self):
+    def _navigate_to(self, new_page):
         if self._navigating:
             return
         self._navigating = True
+
+        def swap():
+            jdbrowser.main_window.setCentralWidget(new_page)
+            jdbrowser.current_page = new_page
+            self.conn.close()
+            self.deleteLater()
+
+        QtCore.QTimer.singleShot(0, swap)
+
+    def ascend_level(self):
+        if self._navigating:
+            return
         from .jd_ext_page import JdExtPage
 
         new_page = JdExtPage(
@@ -106,16 +118,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
-        jdbrowser.current_page = new_page
-        QtCore.QTimer.singleShot(
-            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
-        )
+        self._navigate_to(new_page)
 
     def ascend_to_id(self):
         if self._navigating:
             return
-        self._navigating = True
         from .jd_id_page import JdIdPage
 
         new_page = JdIdPage(
@@ -133,16 +140,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
-        jdbrowser.current_page = new_page
-        QtCore.QTimer.singleShot(
-            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
-        )
+        self._navigate_to(new_page)
 
     def ascend_to_area(self):
         if self._navigating:
             return
-        self._navigating = True
         from .jd_area_page import JdAreaPage
 
         new_page = JdAreaPage()
@@ -158,11 +160,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
-        jdbrowser.current_page = new_page
-        QtCore.QTimer.singleShot(
-            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
-        )
+        self._navigate_to(new_page)
 
     def _warn(self, title: str, message: str) -> None:
         box = QtWidgets.QMessageBox(self)
@@ -423,7 +421,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def open_tag(self, tag_id, order, parent_uuid):
         if self._navigating:
             return
-        self._navigating = True
         from .jd_directory_list_page import JdDirectoryListPage
 
         s = f"{order:016d}"
@@ -438,11 +435,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             grandparent_uuid=parent_uuid,
             great_grandparent_uuid=self.parent_uuid,
         )
-        self.conn.close()
-        jdbrowser.current_page = new_page
-        QtCore.QTimer.singleShot(
-            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
-        )
+        self._navigate_to(new_page)
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
