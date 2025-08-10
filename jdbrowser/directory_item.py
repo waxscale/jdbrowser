@@ -128,9 +128,6 @@ class DirectoryItem(QtWidgets.QWidget):
                 " border-radius: 10px; padding: 3px 7px;"
             )
             btn.setMinimumWidth(60)
-            btn.clicked.connect(
-                lambda checked=False, tid=t_id, o=t_order, p=parent_uuid: self.page.open_tag(tid, o, p)
-            )
             self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
         self.tags_widget.adjustSize()

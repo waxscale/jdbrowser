@@ -401,24 +401,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             self.items.append(item)
         self.vlayout.addStretch(1)
 
-    def open_tag(self, tag_id, order, parent_uuid):
-        from .jd_directory_list_page import JdDirectoryListPage
-
-        s = f"{order:016d}"
-        area = int(s[0:4])
-        jd_id = int(s[4:8])
-        jd_ext = int(s[8:12])
-        new_page = JdDirectoryListPage(
-            parent_uuid=tag_id,
-            jd_area=area,
-            jd_id=jd_id,
-            jd_ext=jd_ext,
-            grandparent_uuid=parent_uuid,
-            great_grandparent_uuid=self.parent_uuid,
-        )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
-
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
             return
