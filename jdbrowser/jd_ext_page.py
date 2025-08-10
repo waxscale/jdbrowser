@@ -599,15 +599,16 @@ class JdExtPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            scroll_area_ref = QtCore.QPointer(self.scroll_area)
             QtCore.QTimer.singleShot(
                 100,
-                lambda: self.scroll_area.setVerticalScrollBarPolicy(
+                lambda sa=scroll_area_ref: sa and sa.setVerticalScrollBarPolicy(
                     QtCore.Qt.ScrollBarAsNeeded
                 ),
             )
             QtCore.QTimer.singleShot(
                 100,
-                lambda: self.scroll_area.setHorizontalScrollBarPolicy(
+                lambda sa=scroll_area_ref: sa and sa.setHorizontalScrollBarPolicy(
                     QtCore.Qt.ScrollBarAsNeeded
                 ),
             )
