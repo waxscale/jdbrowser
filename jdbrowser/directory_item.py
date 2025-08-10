@@ -106,5 +106,5 @@ class DirectoryItem(QtWidgets.QWidget):
             elif event.button() == QtCore.Qt.RightButton:
                 self.page.set_selection(self.index)
                 self.page._edit_tag_label_with_icon()
-        super().mousePressEvent(event)
+        event.accept()
 
