@@ -599,7 +599,6 @@ class JdAreaPage(QtWidgets.QWidget):
             layout.setSpacing(0)
             self.breadcrumb_bar = self._build_breadcrumb([("Home", None)])
             layout.addWidget(self.breadcrumb_bar)
-            layout.addSpacing(10)
             layout.addWidget(self.scroll_area)
 
             # Search input box
@@ -618,7 +617,7 @@ class JdAreaPage(QtWidgets.QWidget):
         container.setStyleSheet("background-color: #000000;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
-        mainLayout.setContentsMargins(5, 5, 5, 5)
+        mainLayout.setContentsMargins(5, 15, 5, 5)
 
         self.sections = []
         self.section_paths = []

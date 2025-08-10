@@ -644,7 +644,6 @@ class JdIdPage(QtWidgets.QWidget):
             crumb_text = f"{self.current_jd_area:02d} {self.area_label}".strip()
             self.breadcrumb_bar = self._build_breadcrumb([(crumb_text, self.ascend_level)])
             layout.addWidget(self.breadcrumb_bar)
-            layout.addSpacing(10)
             layout.addWidget(self.scroll_area)
 
             # Search input box
@@ -663,7 +662,7 @@ class JdIdPage(QtWidgets.QWidget):
         container.setStyleSheet("background-color: #000000;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
-        mainLayout.setContentsMargins(5, 5, 5, 5)
+        mainLayout.setContentsMargins(5, 15, 5, 5)
 
         self.sections = []
         self.section_paths = []
