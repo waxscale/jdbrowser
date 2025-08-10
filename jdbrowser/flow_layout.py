@@ -45,11 +45,22 @@ class FlowLayout(QtWidgets.QLayout):
         return self.minimumSize()
 
     def minimumSize(self):
+        """Return the minimum bounding box for all items.
+
+        Using ``item.minimumSize()`` results in zero height for widgets like
+        ``QPushButton`` which do not have an explicit minimum set, causing the
+        entire layout to collapse.  ``sizeHint`` reflects the implicit size Qt
+        would like to give the widget, so we expand the accumulated rectangle
+        using that instead to ensure our tag pills are visible.
+        """
         size = QtCore.QSize()
         for item in self.itemList:
-            size = size.expandedTo(item.minimumSize())
+            size = size.expandedTo(item.sizeHint())
         margins = self.contentsMargins()
-        size += QtCore.QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+        size += QtCore.QSize(
+            margins.left() + margins.right(),
+            margins.top() + margins.bottom(),
+        )
         return size
 
     def doLayout(self, rect, testOnly):
