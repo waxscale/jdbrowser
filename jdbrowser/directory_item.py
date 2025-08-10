@@ -10,7 +10,8 @@ class DirectoryItem(QtWidgets.QWidget):
         self.tag_id = tag_id
         self.label_text = label if label is not None else ""
         self.order = order
-        self.tags = tags or []  # List of (tag_id, label, order)
+        # Each tag tuple: (tag_id, label, order, parent_uuid)
+        self.tags = tags or []
         self.tag_buttons = []
         self.page = page
         self.index = index
@@ -106,7 +107,7 @@ class DirectoryItem(QtWidgets.QWidget):
             if w := item.widget():
                 w.deleteLater()
         self.tag_buttons = []
-        for t_id, t_label, t_order in self.tags:
+        for t_id, t_label, t_order, parent_uuid in self.tags:
             text = t_label if not self.page.show_prefix else self._format_prefix(t_order)
             btn = QtWidgets.QPushButton(text)
             btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
@@ -116,9 +117,9 @@ class DirectoryItem(QtWidgets.QWidget):
             )
             btn.setMinimumWidth(60)
             btn.clicked.connect(
-                lambda checked=False, tid=t_id, o=t_order: self.page.open_tag(tid, o, self.tag_id)
+                lambda checked=False, tid=t_id, o=t_order, p=parent_uuid: self.page.open_tag(tid, o, p)
             )
-            self.tag_buttons.append((btn, t_id, t_label, t_order))
+            self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
 
     def updateLabel(self, show_prefix):
@@ -130,7 +131,7 @@ class DirectoryItem(QtWidgets.QWidget):
             text = self.label_text
         self.label.setText(text)
         # Update tag pills
-        for btn, t_id, t_label, t_order in self.tag_buttons:
+        for btn, t_id, t_label, t_order, _ in self.tag_buttons:
             btn.setText(t_label if not show_prefix else self._format_prefix(t_order))
 
     def updateStyle(self):

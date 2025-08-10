@@ -177,23 +177,23 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         cursor = self.conn.cursor()
         cursor.execute(
             """
-            SELECT t.tag_id, t.label, t.[order], i.icon
+            SELECT t.tag_id, t.label, t.[order], i.icon,
+                   p.tag_id, p.label, p.[order], p.parent_uuid
             FROM state_jd_directory_tags t
             LEFT JOIN state_jd_directory_tag_icons i ON t.tag_id = i.tag_id
+            LEFT JOIN state_jd_directory_tags p ON t.parent_uuid = p.tag_id
             WHERE t.parent_uuid IS ?
             ORDER BY t.[order]
             """,
-            (self.parent_uuid,)
+            (self.parent_uuid,),
         )
         rows = cursor.fetchall()
         for idx, row in enumerate(rows):
-            tag_id, label, order, icon_data = row
-            cursor.execute(
-                "SELECT tag_id, label, [order] FROM state_jd_directory_tags WHERE parent_uuid IS ? ORDER BY [order]",
-                (tag_id,),
-            )
-            child_tags = cursor.fetchall()
-            item = DirectoryItem(tag_id, label, order, icon_data, self, idx, child_tags)
+            tag_id, label, order, icon_data, p_id, p_label, p_order, p_parent_uuid = row
+            parent_tags = []
+            if p_id is not None:
+                parent_tags.append((p_id, p_label, p_order, p_parent_uuid))
+            item = DirectoryItem(tag_id, label, order, icon_data, self, idx, parent_tags)
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
