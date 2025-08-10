@@ -175,24 +175,66 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.items = []
         self.selected_index = None
         cursor = self.conn.cursor()
+
+        # Fetch info for the current tag so each directory shows at least this tag.
+        # Depending on depth, the parent may live in the directory or ext tag table.
+        cursor.execute(
+            "SELECT tag_id, label, [order], parent_uuid FROM state_jd_directory_tags WHERE tag_id = ?",
+            (self.parent_uuid,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute(
+                "SELECT tag_id, label, [order], parent_uuid FROM state_jd_ext_tags WHERE tag_id = ?",
+                (self.parent_uuid,),
+            )
+            row = cursor.fetchone()
+        current_tag = tuple(row) if row else None
+
         cursor.execute(
             """
             SELECT t.tag_id, t.label, t.[order], i.icon
             FROM state_jd_directory_tags t
             LEFT JOIN state_jd_directory_tag_icons i ON t.tag_id = i.tag_id
-            WHERE t.parent_uuid IS ?
+            WHERE t.parent_uuid = ?
             ORDER BY t.[order]
             """,
-            (self.parent_uuid,)
+            (self.parent_uuid,),
         )
         rows = cursor.fetchall()
         for idx, row in enumerate(rows):
             tag_id, label, order, icon_data = row
-            item = DirectoryItem(tag_id, label, order, icon_data, self, idx)
+            cursor.execute(
+                "SELECT tag_id, label, [order], parent_uuid FROM state_jd_directory_tags WHERE parent_uuid = ? ORDER BY [order]",
+                (tag_id,),
+            )
+            tag_rows = cursor.fetchall()
+            tags = [tuple(t) for t in tag_rows]
+            if current_tag:
+                tags.append(current_tag)
+            item = DirectoryItem(tag_id, label, order, icon_data, self, idx, tags)
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
         self.vlayout.addStretch(1)
+
+    def open_tag(self, tag_id, order, parent_uuid):
+        from .jd_directory_list_page import JdDirectoryListPage
+
+        s = f"{order:016d}"
+        area = int(s[0:4])
+        jd_id = int(s[4:8])
+        jd_ext = int(s[8:12])
+        new_page = JdDirectoryListPage(
+            parent_uuid=tag_id,
+            jd_area=area,
+            jd_id=jd_id,
+            jd_ext=jd_ext,
+            grandparent_uuid=parent_uuid,
+            great_grandparent_uuid=self.parent_uuid,
+        )
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):

@@ -1,14 +1,25 @@
 import os
 from PySide6 import QtWidgets, QtGui, QtCore
-from .constants import HIGHLIGHT_COLOR, HOVER_COLOR, SLATE_COLOR, TEXT_COLOR
+from .constants import (
+    HIGHLIGHT_COLOR,
+    HOVER_COLOR,
+    SLATE_COLOR,
+    TEXT_COLOR,
+    BORDER_COLOR,
+    TAG_COLOR,
+)
+from .flow_layout import FlowLayout
 
 
 class DirectoryItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, label, order, icon_data, page, index):
+    def __init__(self, tag_id, label, order, icon_data, page, index, tags=None):
         super().__init__()
         self.tag_id = tag_id
         self.label_text = label if label is not None else ""
         self.order = order
+        # Each tag tuple: (tag_id, label, order, parent_uuid)
+        self.tags = tags or []
+        self.tag_buttons = []
         self.page = page
         self.index = index
         self.isSelected = False
@@ -59,7 +70,7 @@ class DirectoryItem(QtWidgets.QWidget):
         self.right = QtWidgets.QWidget()
         right_layout = QtWidgets.QVBoxLayout(self.right)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(2)
+        right_layout.setSpacing(5)
 
         self.label = QtWidgets.QLabel(self.label_text)
         self.label.setAlignment(
@@ -70,18 +81,58 @@ class DirectoryItem(QtWidgets.QWidget):
         font.setBold(True)
         self.label.setFont(font)
         # Add a small padding so the text isn't flush against the edges
-        self.label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 2px;")
+        self.label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 2px 2px 4px 2px;")
         right_layout.addWidget(self.label)
+
+        # Tag pills container
+        self.tags_widget = QtWidgets.QWidget()
+        self.tags_widget.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
+        self.tags_layout = FlowLayout(self.tags_widget, margin=0, spacing=5)
+        self.tags_layout.setContentsMargins(10, 2, 0, 0)
+        right_layout.addWidget(self.tags_widget)
         right_layout.addStretch(1)
+        self._build_tag_pills()
         layout.addWidget(self.right)
 
         # Ensure clicks and hover on child widgets behave like the parent item
-        for widget in (self.icon, self.right, self.label):
+        for widget in (self.icon, self.right, self.label, self.tags_widget):
             widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
             widget.enterEvent = self.enterEvent  # type: ignore[attr-defined]
             widget.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
 
         self.updateStyle()
+
+    def _format_prefix(self, order):
+        s = f"{order:016d}"
+        area = int(s[0:4])
+        jd_id = int(s[4:8])
+        jd_ext = int(s[8:12])
+        return f"[{area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+
+    def _build_tag_pills(self):
+        # Clear existing pills
+        while self.tags_layout.count():
+            item = self.tags_layout.takeAt(0)
+            if w := item.widget():
+                w.deleteLater()
+        self.tag_buttons = []
+        for t_id, t_label, t_order, parent_uuid in self.tags:
+            text = t_label if not self.page.show_prefix else self._format_prefix(t_order)
+            btn = QtWidgets.QPushButton(text)
+            btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+            btn.setStyleSheet(
+                f"background-color: {TAG_COLOR}; color: {TEXT_COLOR}; border: none;"
+                " border-radius: 10px; padding: 2px 6px;"
+            )
+            btn.setMinimumWidth(60)
+            btn.clicked.connect(
+                lambda checked=False, tid=t_id, o=t_order, p=parent_uuid: self.page.open_tag(tid, o, p)
+            )
+            self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
+            self.tags_layout.addWidget(btn)
+        self.tags_widget.adjustSize()
 
     def updateLabel(self, show_prefix):
         if show_prefix:
@@ -91,6 +142,9 @@ class DirectoryItem(QtWidgets.QWidget):
         else:
             text = self.label_text
         self.label.setText(text)
+        # Update tag pills
+        for btn, t_id, t_label, t_order, _ in self.tag_buttons:
+            btn.setText(t_label if not show_prefix else self._format_prefix(t_order))
 
     def updateStyle(self):
         bg = HIGHLIGHT_COLOR if self.isSelected else (
