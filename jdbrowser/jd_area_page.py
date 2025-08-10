@@ -94,7 +94,11 @@ class JdAreaPage(QtWidgets.QWidget):
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         super().paintEvent(event)
         painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setRenderHints(
+            QtGui.QPainter.RenderHint.Antialiasing
+            | QtGui.QPainter.RenderHint.HighQualityAntialiasing
+            | QtGui.QPainter.RenderHint.SmoothPixmapTransform
+        )
         rect = self.rect()
         painter.fillRect(rect, QtGui.QColor(ROOT_BG_COLOR))
 
@@ -102,27 +106,33 @@ class JdAreaPage(QtWidgets.QWidget):
         height = rect.height()
 
         # Middle layer: blue radial glow
-        blue_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 600)
-        blue_grad.setColorAt(0, QtGui.QColor(0x7A, 0xA2, 0xF7, round(0.14 * 255)))
-        blue_grad.setColorAt(1, QtCore.Qt.transparent)
+        blue_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 1200)
+        blue_color = QtGui.QColor(0x7A, 0xA2, 0xF7, round(0.14 * 255))
+        blue_transparent = QtGui.QColor(0x7A, 0xA2, 0xF7, 0)
+        blue_grad.setColorAt(0.0, blue_color)
+        blue_grad.setColorAt(0.7, blue_transparent)
+        blue_grad.setColorAt(1.0, QtCore.Qt.transparent)
         painter.save()
         painter.translate(1.10 * width, 0.10 * height)
         painter.scale(1, 800 / 1200)
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(blue_grad)
-        painter.drawEllipse(QtCore.QRectF(-600, -600, 1200, 1200))
+        painter.drawEllipse(QtCore.QRectF(-1200, -1200, 2400, 2400))
         painter.restore()
 
         # Top layer: purple radial glow
-        purple_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 600)
-        purple_grad.setColorAt(0, QtGui.QColor(0xBB, 0x9A, 0xF7, round(0.16 * 255)))
-        purple_grad.setColorAt(1, QtCore.Qt.transparent)
+        purple_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 1200)
+        purple_color = QtGui.QColor(0xBB, 0x9A, 0xF7, round(0.16 * 255))
+        purple_transparent = QtGui.QColor(0xBB, 0x9A, 0xF7, 0)
+        purple_grad.setColorAt(0.0, purple_color)
+        purple_grad.setColorAt(0.7, purple_transparent)
+        purple_grad.setColorAt(1.0, QtCore.Qt.transparent)
         painter.save()
         painter.translate(0.20 * width, -0.10 * height)
         painter.scale(1, 800 / 1200)
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(purple_grad)
-        painter.drawEllipse(QtCore.QRectF(-600, -600, 1200, 1200))
+        painter.drawEllipse(QtCore.QRectF(-1200, -1200, 2400, 2400))
         painter.restore()
 
     def set_selection(self, section_idx, item_idx):
