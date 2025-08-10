@@ -583,6 +583,8 @@ class JdExtPage(QtWidgets.QWidget):
         if not hasattr(self, "scroll_area"):
             self.scroll_area = QtWidgets.QScrollArea()
             self.scroll_area.setWidgetResizable(True)
+            self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.addWidget(self.scroll_area)
