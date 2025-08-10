@@ -638,7 +638,11 @@ class JdExtPage(QtWidgets.QWidget):
         )
         for i, (text, handler) in enumerate(crumbs):
             if i:
-                layout.addWidget(QtWidgets.QLabel(" / "))
+                sep = QtWidgets.QLabel(" / ")
+                sep.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(sep)
             if handler:
                 btn = QtWidgets.QPushButton(text)
                 btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
@@ -648,10 +652,17 @@ class JdExtPage(QtWidgets.QWidget):
                     "QPushButton:hover { text-decoration: underline; }"
                 )
                 btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
                 layout.addWidget(btn)
             else:
                 label = QtWidgets.QLabel(text)
+                label.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
                 layout.addWidget(label)
+        layout.addStretch(1)
         return bar
 
     def _setup_ui(self):
@@ -660,6 +671,9 @@ class JdExtPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.scroll_area.setStyleSheet(
+                f"border: none; background-color: {BACKGROUND_COLOR};"
+            )
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -673,6 +687,7 @@ class JdExtPage(QtWidgets.QWidget):
             )
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
             crumb_area = f"{self.current_jd_area:02d} {self.area_label}".strip()
             crumb_id = f"{self.current_jd_id:02d} {self.id_label}".strip()
             self.breadcrumb_bar = self._build_breadcrumb(

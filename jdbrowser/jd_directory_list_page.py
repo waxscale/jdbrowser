@@ -49,6 +49,20 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         row = cursor.fetchone()
         self.ext_label = row[0] if row else ""
 
+        cursor.execute(
+            "SELECT label FROM state_jd_id_tags WHERE tag_id = ?",
+            (self.grandparent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.id_label = row[0] if row else ""
+
+        cursor.execute(
+            "SELECT label FROM state_jd_area_tags WHERE tag_id = ?",
+            (self.great_grandparent_uuid,),
+        )
+        row = cursor.fetchone()
+        self.area_label = row[0] if row else ""
+
         self.items = []
         self.selected_index = None
         self.show_prefix = False
@@ -233,7 +247,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
         for i, (text, handler) in enumerate(crumbs):
             if i:
-                layout.addWidget(QtWidgets.QLabel(" / "))
+                sep = QtWidgets.QLabel(" / ")
+                sep.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(sep)
             if handler:
                 btn = QtWidgets.QPushButton(text)
                 btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
@@ -243,10 +261,17 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                     "QPushButton:hover { text-decoration: underline; }"
                 )
                 btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
                 layout.addWidget(btn)
             else:
                 label = QtWidgets.QLabel(text)
+                label.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
                 layout.addWidget(label)
+        layout.addStretch(1)
         return bar
 
     def _setup_ui(self):
@@ -254,8 +279,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
-        crumb_area = f"{self.current_jd_area:02d}"
-        crumb_id = f"{self.current_jd_id:02d}"
+        crumb_area = f"{self.current_jd_area:02d} {self.area_label}".strip()
+        crumb_id = f"{self.current_jd_id:02d} {self.id_label}".strip()
         crumb_ext = f"{self.current_jd_ext:04d} {self.ext_label}".strip()
         self.breadcrumb_bar = self._build_breadcrumb(
             [
