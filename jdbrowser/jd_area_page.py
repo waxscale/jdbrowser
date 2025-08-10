@@ -1072,11 +1072,14 @@ class JdAreaPage(QtWidgets.QMainWindow):
         if not current_item.tag_id:
             return
 
-        # Instantiate the next level page and replace the current one
+        # Instantiate the next level page and replace the current one.  Instead
+        # of destroying this page, keep it on a stack so that navigating back is
+        # instantaneous.
+        jdbrowser.page_stack.append(self)
         new_page = JdIdPage(parent_uuid=current_item.tag_id, jd_area=current_item.jd_area)
         jdbrowser.current_page = new_page
         new_page.show()
-        self.close()
+        self.hide()
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):

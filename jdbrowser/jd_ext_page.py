@@ -341,11 +341,11 @@ class JdExtPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        from .jd_id_page import JdIdPage
-
-        new_page = JdIdPage(parent_uuid=self.grandparent_uuid, jd_area=self.current_jd_area)
-        jdbrowser.current_page = new_page
-        new_page.show()
+        """Return to the previous page in the navigation stack."""
+        if jdbrowser.page_stack:
+            previous_page = jdbrowser.page_stack.pop()
+            jdbrowser.current_page = previous_page
+            previous_page.show()
         self.close()
 
     def _edit_tag_label_with_icon(self):

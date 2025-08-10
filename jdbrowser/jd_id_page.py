@@ -336,10 +336,11 @@ class JdIdPage(QtWidgets.QMainWindow):
                 break
 
     def ascend_level(self):
-        from .jd_area_page import JdAreaPage
-        new_page = JdAreaPage()
-        jdbrowser.current_page = new_page
-        new_page.show()
+        """Return to the previous page if one exists on the stack."""
+        if jdbrowser.page_stack:
+            previous_page = jdbrowser.page_stack.pop()
+            jdbrowser.current_page = previous_page
+            previous_page.show()
         self.close()
 
     def _edit_tag_label_with_icon(self):
@@ -1096,6 +1097,10 @@ class JdIdPage(QtWidgets.QMainWindow):
         if not current_item.tag_id:
             return
         from .jd_ext_page import JdExtPage
+
+        # Keep this page on the stack so returning from the extension level is
+        # fast and preserves state.
+        jdbrowser.page_stack.append(self)
         new_page = JdExtPage(
             parent_uuid=current_item.tag_id,
             jd_area=current_item.jd_area,
@@ -1104,7 +1109,7 @@ class JdIdPage(QtWidgets.QMainWindow):
         )
         jdbrowser.current_page = new_page
         new_page.show()
-        self.close()
+        self.hide()
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
