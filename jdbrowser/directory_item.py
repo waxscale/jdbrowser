@@ -128,6 +128,11 @@ class DirectoryItem(QtWidgets.QWidget):
                 " border-radius: 10px; padding: 3px 7px;"
             )
             btn.setMinimumWidth(60)
+            # Pass mouse events through to the DirectoryItem so clicking a tag
+            # pill still selects the underlying directory entry
+            btn.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            btn.enterEvent = self.enterEvent  # type: ignore[attr-defined]
+            btn.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
             self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
         self.tags_widget.adjustSize()
