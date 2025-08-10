@@ -93,7 +93,12 @@ class DirectoryItem(QtWidgets.QWidget):
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton and self.page:
-            self.page.set_selection(self.index)
+        """Select on left-click; right-click edits the tag."""
+        if self.page:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.page.set_selection(self.index)
+            elif event.button() == QtCore.Qt.RightButton:
+                self.page.set_selection(self.index)
+                self.page._edit_tag_label_with_icon()
         super().mousePressEvent(event)
 
