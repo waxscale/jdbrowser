@@ -580,12 +580,12 @@ class JdExtPage(QtWidgets.QWidget):
             self.search_shortcut_instances.append(s)
 
     def _setup_ui(self):
-        if not hasattr(self, "scroll"):
-            self.scroll = QtWidgets.QScrollArea()
-            self.scroll.setWidgetResizable(True)
+        if not hasattr(self, "scroll_area"):
+            self.scroll_area = QtWidgets.QScrollArea()
+            self.scroll_area.setWidgetResizable(True)
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
-            layout.addWidget(self.scroll)
+            layout.addWidget(self.scroll_area)
 
             # Search input box
             self.search_input = SearchLineEdit(self)
@@ -595,7 +595,7 @@ class JdExtPage(QtWidgets.QWidget):
             self.search_input.textChanged.connect(self.perform_search)
             self._setup_search_shortcuts()
         else:
-            old = self.scroll.takeWidget()
+            old = self.scroll_area.takeWidget()
             if old:
                 old.deleteLater()
 
@@ -715,7 +715,7 @@ class JdExtPage(QtWidgets.QWidget):
                     section_index,
                     display,
                 )
-                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                header_item.setMinimumWidth(self.scroll_area.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
                 last_header_id = obj_id
@@ -745,7 +745,7 @@ class JdExtPage(QtWidgets.QWidget):
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.scroll.setWidget(container)
+        self.scroll_area.setWidget(container)
 
         self.search_input.move(self.width() - 310, self.height() - 40)
 
@@ -773,7 +773,7 @@ class JdExtPage(QtWidgets.QWidget):
         current_tag_id = None
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current_tag_id = self.sections[self.sec_idx][self.idx_in_sec].tag_id
-        old_widget = self.scroll.takeWidget()
+        old_widget = self.scroll_area.takeWidget()
         if old_widget:
             old_widget.deleteLater()
         self.sections = []
@@ -1074,12 +1074,12 @@ class JdExtPage(QtWidgets.QWidget):
     def centerSelectedItem(self):
         if not self.in_search_mode and self.sections:
             current = self.sections[self.sec_idx][self.idx_in_sec]
-            self.scroll.ensureWidgetVisible(current)
-            viewport = self.scroll.viewport()
+            self.scroll_area.ensureWidgetVisible(current)
+            viewport = self.scroll_area.viewport()
             viewport_height = viewport.height()
             widget_rect = current.rect()
-            widget_pos = current.mapTo(self.scroll.widget(), widget_rect.topLeft())
-            scroll_bar = self.scroll.verticalScrollBar()
+            widget_pos = current.mapTo(self.scroll_area.widget(), widget_rect.topLeft())
+            scroll_bar = self.scroll_area.verticalScrollBar()
             target_pos = widget_pos.y() - (viewport_height - widget_rect.height()) // 2
             scroll_bar.setValue(max(0, target_pos))
             self.updateSelection()
@@ -1134,7 +1134,7 @@ class JdExtPage(QtWidgets.QWidget):
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current = self.sections[self.sec_idx][self.idx_in_sec]
-            self.scroll.ensureWidgetVisible(current)
+            self.scroll_area.ensureWidgetVisible(current)
             for s, sec in enumerate(self.sections):
                 for i, item in enumerate(sec):
                     item.isSelected = (s == self.sec_idx and i == self.idx_in_sec)
@@ -1155,7 +1155,7 @@ class JdExtPage(QtWidgets.QWidget):
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)
         # Update header widths on resize
-        for widget in self.scroll.widget().findChildren(QtWidgets.QLabel):
+        for widget in self.scroll_area.widget().findChildren(QtWidgets.QLabel):
             if widget.styleSheet().startswith(f'background-color: {BUTTON_COLOR}'):
-                widget.setMinimumWidth(self.scroll.viewport().width() - 10)
+                widget.setMinimumWidth(self.scroll_area.viewport().width() - 10)
         super().resizeEvent(event)
