@@ -1,5 +1,13 @@
 from PySide6 import QtWidgets, QtGui, QtCore
-from .constants import *
+from .constants import (
+    SURFACE_COLOR,
+    SURFACE2_COLOR,
+    TEXT_COLOR,
+    MUTED_COLOR,
+    PLACEHOLDER_COLOR,
+    PLACEHOLDER_TEXT_COLOR,
+    SLATE_COLOR,
+)
 
 class FileItem(QtWidgets.QWidget):
     def __init__(self, tag_id, name, jd_area, jd_id, jd_ext, icon_data, page, section_idx, item_idx):
@@ -35,8 +43,18 @@ class FileItem(QtWidgets.QWidget):
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(2)
+        layout.setSpacing(8)
         layout.setContentsMargins(2, 2, 2, 2)
+
+        # Container box for image with drop shadow and border
+        self.box = QtWidgets.QFrame()
+        self.box.setFixedSize(120, 75)
+        self.box.setStyleSheet(
+            f"background-color: {SURFACE_COLOR}; border: 1px solid {SURFACE2_COLOR}; border-radius: 16px;"
+        )
+        box_layout = QtWidgets.QVBoxLayout(self.box)
+        box_layout.setContentsMargins(0, 0, 0, 0)
+        box_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
         # Icon: Load from database BLOB or use slate/placeholder color
         if icon_data:
@@ -51,24 +69,37 @@ class FileItem(QtWidgets.QWidget):
                 path = QtGui.QPainterPath()
                 path.addRoundedRect(0, 0, 120, 75, 5, 5)
                 painter.setClipPath(path)
-                scaled_pixmap = pixmap.scaled(120, 75, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(
+                    120,
+                    75,
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
                 painter.drawPixmap(0, 0, scaled_pixmap)
                 painter.end()
                 self.icon.setPixmap(rounded_pixmap)
                 self.icon.setFixedSize(120, 75)
-                self.icon.setStyleSheet('background-color: transparent;')
+                self.icon.setStyleSheet("background-color: transparent;")
             else:
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(120, 75)
                 color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
-                self.icon.setStyleSheet(f'background-color: {color}; border-radius: 5px;')
+                self.icon.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
         else:
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(120, 75)
             color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
-            self.icon.setStyleSheet(f'background-color: {color}; border-radius: 5px;')
+            self.icon.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
         self.icon.setAutoFillBackground(True)
-        layout.addWidget(self.icon, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+        box_layout.addWidget(self.icon)
+
+        shadow = QtWidgets.QGraphicsDropShadowEffect(self.box)
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QtGui.QColor(0, 0, 0, 153))
+        self.box.setGraphicsEffect(shadow)
+
+        layout.addWidget(self.box, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         # Label (single line, empty for placeholders)
         self.label = QtWidgets.QLabel(self.display_name)
@@ -78,7 +109,7 @@ class FileItem(QtWidgets.QWidget):
         font = self.label.font()
         font.setPointSize(int(font.pointSize() * 0.9))
         self.label.setFont(font)
-        self.label.setStyleSheet(f'color: {TEXT_COLOR};')
+        self.label.setStyleSheet(f"color: {MUTED_COLOR};")
         self.label.setAutoFillBackground(True)
         layout.addWidget(self.label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.updateLabel(False)
@@ -91,6 +122,8 @@ class FileItem(QtWidgets.QWidget):
         total_height = 75 + label_height + spacing + margins.top() + margins.bottom()
         self.setFixedHeight(total_height)
 
+        self.opacity_effect = QtWidgets.QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
         self.updateStyle()
 
     def updateLabel(self, show_prefix):
@@ -107,28 +140,26 @@ class FileItem(QtWidgets.QWidget):
     def updateStyle(self):
         # Prioritize isSelected over isHover for background
         if self.isSelected:
-            bg = HIGHLIGHT_COLOR
+            box_style = (
+                "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(125,207,255,0.12), stop:1 "
+                f"{SURFACE2_COLOR}); border:1px solid rgba(125,207,255,0.6);"
+            )
+            label_color = TEXT_COLOR
         elif self.isHover:
-            bg = HOVER_COLOR
+            box_style = (
+                f"background-color: {SURFACE_COLOR}; border:1px solid rgba(125,207,255,0.55);"
+            )
+            label_color = TEXT_COLOR
         else:
-            bg = 'transparent'
-        # Apply dimming for non-matching items using QGraphicsOpacityEffect
+            box_style = (
+                f"background-color: {SURFACE_COLOR}; border:1px solid {SURFACE2_COLOR};"
+            )
+            label_color = PLACEHOLDER_TEXT_COLOR if self.tag_id is None else MUTED_COLOR
+
         opacity = 0.4 if self.isDimmed else 1.0
-        icon_effect = QtWidgets.QGraphicsOpacityEffect(self.icon)
-        icon_effect.setOpacity(opacity)
-        self.icon.setGraphicsEffect(icon_effect)
-        label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
-        label_effect.setOpacity(opacity)
-        self.label.setGraphicsEffect(label_effect)
-        if isinstance(self.icon, QtWidgets.QFrame):
-            icon_color = PLACEHOLDER_COLOR if self.tag_id is None else SLATE_COLOR
-            icon_style = f'background-color: {icon_color}; border-radius: 5px;'
-        else:
-            icon_style = 'background-color: transparent;'
-        label_color = PLACEHOLDER_TEXT_COLOR if self.tag_id is None else TEXT_COLOR
-        self.setStyleSheet(f'background-color: {bg}; border-radius: 5px;')
-        self.icon.setStyleSheet(icon_style)
-        self.label.setStyleSheet(f'color: {label_color};')
+        self.opacity_effect.setOpacity(opacity)
+        self.box.setStyleSheet(box_style + " border-radius: 16px;")
+        self.label.setStyleSheet(f"color: {label_color};")
 
     def enterEvent(self, event):
         self.isHover = True

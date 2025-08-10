@@ -1,4 +1,5 @@
 import os
+import random
 from collections import defaultdict
 from PySide6 import QtWidgets, QtGui, QtCore
 import shiboken6
@@ -582,7 +583,7 @@ class JdAreaPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-            self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
+            self.scroll_area.setStyleSheet(f"border: none; background-color: {BG_COLOR};")
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -614,7 +615,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 old.deleteLater()
 
         container = QtWidgets.QWidget()
-        container.setStyleSheet("background-color: #000000;")
+        container.setObjectName("area_container")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
         mainLayout.setContentsMargins(5, 15, 5, 5)
@@ -673,7 +674,10 @@ class JdAreaPage(QtWidgets.QWidget):
         for base in range(0, 100, 10):
             for obj_id, order, label, prefix in headers_by_base.get(base, []):
                 display = f"{prefix} {label}" if prefix else (label or "")
-                header_item = HeaderItem(obj_id, order, None, None, label, self, section_index, display)
+                dot_color = QtGui.QColor.fromHsv(random.randint(0, 359), 200, 255).name()
+                header_item = HeaderItem(
+                    obj_id, order, None, None, label, self, section_index, display, dot_color
+                )
                 header_item.setMinimumWidth(self.scroll_area.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
@@ -700,7 +704,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 section[index] = item
             sectionWidget = QtWidgets.QWidget()
             sectionLayout = QtWidgets.QVBoxLayout(sectionWidget)
-            sectionLayout.setSpacing(5)
+            sectionLayout.setSpacing(14)
             sectionLayout.setContentsMargins(0, 0, 0, 0)
             sectionLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
             rowLayout = None
@@ -709,7 +713,7 @@ class JdAreaPage(QtWidgets.QWidget):
                     if rowLayout:
                         sectionLayout.addLayout(rowLayout)
                     rowLayout = QtWidgets.QHBoxLayout()
-                    rowLayout.setSpacing(2)
+                    rowLayout.setSpacing(14)
                     rowLayout.setContentsMargins(0, 0, 0, 0)
                     rowLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
                 rowLayout.addWidget(item)
@@ -725,7 +729,6 @@ class JdAreaPage(QtWidgets.QWidget):
             section_index += 1
 
         mainLayout.addStretch()
-        container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll_area.setWidget(container)
 
@@ -733,12 +736,12 @@ class JdAreaPage(QtWidgets.QWidget):
 
         style = f'''
         * {{ font-family: 'FiraCode Nerd Font'; }}
-        QWidget {{ background-color: #000000; }}
-        QMainWindow {{ background-color: #000000; }}
-        QScrollArea {{ border: none; background-color: #000000; }}
+        QWidget#area_container {{ background: qradialgradient(spread:pad, cx:0.2, cy:-0.1, radius:1, fx:0.2, fy:-0.1, stop:0 rgba(187,154,247,40), stop:1 {BG_COLOR}); }}
+        QMainWindow {{ background-color: {BG_COLOR}; }}
+        QScrollArea {{ border: none; background-color: {BG_COLOR}; }}
         QScrollBar:vertical {{
             width: 8px;
-            background: #000000;
+            background: {BG_COLOR};
         }}
         QScrollBar::handle:vertical {{
             background: {BORDER_COLOR};
@@ -749,7 +752,7 @@ class JdAreaPage(QtWidgets.QWidget):
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         QScrollBar:horizontal {{
             height: 8px;
-            background: #000000;
+            background: {BG_COLOR};
         }}
         QScrollBar::handle:horizontal {{
             background: {BORDER_COLOR};
