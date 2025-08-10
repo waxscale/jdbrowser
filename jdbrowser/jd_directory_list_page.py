@@ -447,15 +447,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         title.setStyleSheet(f"color: {BREADCRUMB_INACTIVE_COLOR};")
         outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
-        center = QtWidgets.QWidget()
-        h_layout = QtWidgets.QHBoxLayout(center)
-        h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setSpacing(0)
-        h_layout.addStretch(1)
         self.recent_frame = QtWidgets.QFrame()
         self.recent_frame.setStyleSheet(
             f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
             f" background-color: #000;"
+        )
+        self.recent_frame.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
         v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
         v_layout.setContentsMargins(10, 10, 10, 10)
@@ -465,16 +463,16 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.recent_items.append(item)
-        h_layout.addWidget(self.recent_frame)
-        h_layout.addStretch(1)
-        outer_layout.addWidget(center)
-        self.vlayout.addWidget(self.recent_wrapper)
+        outer_layout.addWidget(self.recent_frame)
+        self.vlayout.addWidget(
+            self.recent_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self._update_recent_width()
 
     def _update_recent_width(self):
-        if self.recent_frame:
+        if self.recent_wrapper:
             width = int(self.scroll_area.viewport().width() * 0.6)
-            self.recent_frame.setFixedWidth(width)
+            self.recent_wrapper.setFixedWidth(width)
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
