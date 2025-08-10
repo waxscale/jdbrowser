@@ -76,11 +76,15 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.current_match_idx = -1
         self.shortcuts = []
         self.search_shortcut_instances = []
+        self._navigating = False
 
         self._setup_ui()
         self._setup_shortcuts()
 
     def ascend_level(self):
+        if self._navigating:
+            return
+        self._navigating = True
         from .jd_ext_page import JdExtPage
 
         new_page = JdExtPage(
@@ -109,6 +113,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
 
     def ascend_to_id(self):
+        if self._navigating:
+            return
+        self._navigating = True
         from .jd_id_page import JdIdPage
 
         new_page = JdIdPage(
@@ -133,6 +140,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         )
 
     def ascend_to_area(self):
+        if self._navigating:
+            return
+        self._navigating = True
         from .jd_area_page import JdAreaPage
 
         new_page = JdAreaPage()
@@ -411,6 +421,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.vlayout.addStretch(1)
 
     def open_tag(self, tag_id, order, parent_uuid):
+        if self._navigating:
+            return
+        self._navigating = True
         from .jd_directory_list_page import JdDirectoryListPage
 
         s = f"{order:016d}"
