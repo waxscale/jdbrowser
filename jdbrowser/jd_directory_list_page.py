@@ -12,6 +12,7 @@ from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .constants import *
 from .config import read_config
 from .search_line_edit import SearchLineEdit
+from .tag_search_overlay import TagSearchOverlay
 
 class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
@@ -77,6 +78,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.current_match_idx = -1
         self.shortcuts = []
         self.search_shortcut_instances = []
+        self.tag_search_overlay = None
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -658,7 +660,39 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)
+        if self.tag_search_overlay and self.tag_search_overlay.isVisible():
+            self.tag_search_overlay.reposition()
         super().resizeEvent(event)
+
+    def open_tag_search(self):
+        if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
+            return
+        if not self.tag_search_overlay:
+            self.tag_search_overlay = TagSearchOverlay(self, self.conn)
+            self.tag_search_overlay.tagSelected.connect(self.apply_tag_to_selected_directory)
+            self.tag_search_overlay.closed.connect(self._tag_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.tag_search_overlay.open()
+
+    def _tag_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def apply_tag_to_selected_directory(self, label):
+        if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
+            return
+        current_item = self.items[self.selected_index]
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT MAX([order]) FROM state_jd_directory_tags")
+        row = cursor.fetchone()
+        max_order = row[0] if row and row[0] is not None else 0
+        create_jd_directory_tag(self.conn, current_item.tag_id, max_order + 1, label)
+        rebuild_state_jd_directory_tags(self.conn)
+        idx = self.selected_index
+        self._load_directories()
+        if idx is not None and idx < len(self.items):
+            self.set_selection(idx)
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -692,6 +726,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+            (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (
