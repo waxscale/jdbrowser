@@ -285,12 +285,14 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
+        crumb_area = self._strip_prefix(self.area_label)
         crumb_id = self._strip_prefix(self.id_label)
         crumb_ext = self._strip_prefix(self.ext_label)
         self.breadcrumb_bar = self._build_breadcrumb(
             [
                 ("Home", self.ascend_to_area),
-                (crumb_id, self.ascend_to_id),
+                (crumb_area, self.ascend_to_id),
+                (crumb_id, self.ascend_level),
                 (crumb_ext, None),
             ]
         )
