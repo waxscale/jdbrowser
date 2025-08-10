@@ -7,6 +7,7 @@ from .database import (
     rebuild_state_jd_directory_tags,
     create_jd_directory_tag,
 )
+from .dialogs import EditTagDialog
 from .constants import *
 
 class JdDirectoryListPage(QtWidgets.QWidget):
@@ -68,6 +69,43 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         new_page.updateSelection()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
+
+    def _warn(self, title: str, message: str) -> None:
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Warning)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.setStyleSheet(
+            f"""
+            QMessageBox {{
+                background-color: {BACKGROUND_COLOR};
+                color: {TEXT_COLOR};
+                border: 1px solid {BORDER_COLOR};
+            }}
+            QLabel {{
+                background-color: transparent;
+                color: {TEXT_COLOR};
+            }}
+            QLabel#qt_msgbox_label,
+            QLabel#qt_msgboxex_icon_label {{
+                background-color: transparent;
+            }}
+            QPushButton {{
+                background-color: {BUTTON_COLOR};
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: {HIGHLIGHT_COLOR};
+            }}
+            QPushButton:pressed {{
+                background-color: {HOVER_COLOR};
+            }}
+            """
+        )
+        box.exec()
 
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -199,6 +237,75 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if self.items:
             self.set_selection(len(self.items) - 1)
 
+    def _edit_tag_label_with_icon(self):
+        if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
+            return
+        current_item = self.items[self.selected_index]
+        tag_id = current_item.tag_id
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT [order], label FROM state_jd_directory_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        order, current_label = row
+        cursor.execute(
+            "SELECT icon FROM state_jd_directory_tag_icons WHERE tag_id = ?",
+            (tag_id,),
+        )
+        icon_row = cursor.fetchone()
+        icon_data = icon_row[0] if icon_row else None
+        while True:
+            dialog = EditTagDialog(current_label, icon_data, 3, order, self)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                new_order = dialog.get_order()
+                new_label = dialog.get_label()
+                new_icon_data = dialog.get_icon_data()
+                cursor.execute(
+                    "SELECT tag_id FROM state_jd_directory_tags WHERE parent_uuid IS ? AND [order] = ? AND tag_id != ?",
+                    (self.parent_uuid, new_order, tag_id),
+                )
+                if cursor.fetchone():
+                    self._warn(
+                        "Constraint Violation",
+                        f"Order {new_order} is already in use.",
+                    )
+                    current_label, icon_data, order = new_label, new_icon_data, new_order
+                    continue
+                if new_order != order:
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_order')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_jd_directory_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)",
+                        (event_id, tag_id, self.parent_uuid, new_order),
+                    )
+                if new_label != current_label:
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_label')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_jd_directory_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
+                        (event_id, tag_id, new_label),
+                    )
+                if new_icon_data:
+                    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_icon')")
+                    event_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO event_set_jd_directory_tag_icon (event_id, tag_id, icon) VALUES (?, ?, ?)",
+                        (event_id, tag_id, new_icon_data),
+                    )
+                self.conn.commit()
+                rebuild_state_jd_directory_tags(self.conn)
+                self._load_directories()
+                for i, item in enumerate(self.items):
+                    if item.tag_id == tag_id:
+                        self.set_selection(i)
+                        break
+                break
+            else:
+                break
+
     def closeEvent(self, event):
         self.conn.close()
         super().closeEvent(event)
@@ -232,6 +339,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 QtCore.Qt.KeyboardModifier.AltModifier,
             ),
             (QtCore.Qt.Key_A, self._add_directory, None),
+            (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
         ]
         self.shortcuts = []
         for mapping in mappings:
