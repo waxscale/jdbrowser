@@ -31,7 +31,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 f"File Browser - [{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
             )
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background-color: black;")
 
         xdg_data_home = os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
         db_dir = os.path.join(xdg_data_home, "jdbrowser")
@@ -64,10 +63,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("border: none; background-color: transparent;")
+        self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
         layout.addWidget(self.scroll_area)
 
         self.container = QtWidgets.QWidget()
+        self.container.setStyleSheet("background-color: #000000;")
         self.scroll_area.setWidget(self.container)
         self.vlayout = QtWidgets.QVBoxLayout(self.container)
         self.vlayout.setContentsMargins(5, 5, 5, 5)
@@ -76,6 +76,36 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._load_directories()
         if self.items:
             self.set_selection(0)
+
+        style = f'''
+        * {{ font-family: 'FiraCode Nerd Font'; }}
+        QWidget {{ background-color: #000000; }}
+        QMainWindow {{ background-color: #000000; }}
+        QScrollArea {{ border: none; background-color: #000000; }}
+        QScrollBar:vertical {{
+            width: 8px;
+            background: #000000;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {BORDER_COLOR};
+            min-height: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+        QScrollBar:horizontal {{
+            height: 8px;
+            background: #000000;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {BORDER_COLOR};
+            min-width: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
+        '''
+        self.setStyleSheet(style)
 
     def _clear_items(self):
         while self.vlayout.count():

@@ -702,8 +702,19 @@ class JdAreaPage(QtWidgets.QWidget):
             min-height: 20px;
             border-radius: 4px;
         }}
-        QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-        QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+        QScrollBar:horizontal {{
+            height: 8px;
+            background: #000000;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {BORDER_COLOR};
+            min-width: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
         '''
         self.setStyleSheet(style)
 
