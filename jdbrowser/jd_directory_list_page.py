@@ -388,7 +388,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 SELECT dt.tag_id,
                        COALESCE(ext.label, id.label, area.label) AS label,
                        COALESCE(ext.[order], id.[order], area.[order]) AS [order],
-                       COALESCE(ext.parent_uuid, id.parent_uuid, area.parent_uuid) AS parent_uuid
+                       COALESCE(ext.parent_uuid, id.parent_uuid) AS parent_uuid
                 FROM state_jd_directory_tags dt
                 LEFT JOIN state_jd_ext_tags ext ON dt.tag_id = ext.tag_id
                 LEFT JOIN state_jd_id_tags id ON dt.tag_id = id.tag_id
@@ -448,8 +448,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
-        create_jd_directory(self.conn, self.parent_uuid, new_order, "")
+        directory_id = create_jd_directory(self.conn, self.parent_uuid, new_order, "")
+        if directory_id:
+            add_directory_tag(self.conn, directory_id, self.parent_uuid)
         rebuild_state_jd_directories(self.conn)
+        rebuild_state_directory_tags(self.conn)
         self._load_directories()
         if self.items:
             self.set_selection(len(self.items) - 1)
