@@ -111,6 +111,32 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         for i, item in enumerate(self.items):
             item.isSelected = i == index
             item.updateStyle()
+        if 0 <= self.selected_index < len(self.items):
+            self.scroll_area.ensureWidgetVisible(self.items[self.selected_index])
+
+    def move_selection(self, direction):
+        if not self.items:
+            return
+        if self.selected_index is None:
+            index = 0 if direction > 0 else len(self.items) - 1
+        else:
+            index = self.selected_index + direction
+            index = max(0, min(index, len(self.items) - 1))
+        self.set_selection(index)
+
+    def move_selection_multiple(self, count):
+        if not self.items:
+            return
+        for _ in range(abs(count)):
+            self.move_selection(1 if count > 0 else -1)
+
+    def move_to_start(self):
+        if self.items:
+            self.set_selection(0)
+
+    def move_to_end(self):
+        if self.items:
+            self.set_selection(len(self.items) - 1)
 
     def _add_directory(self):
         cursor = self.conn.cursor()
@@ -132,6 +158,24 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         mappings = [
+            (QtCore.Qt.Key_J, self.move_selection, 1),
+            (QtCore.Qt.Key_Down, self.move_selection, 1),
+            (QtCore.Qt.Key_K, self.move_selection, -1),
+            (QtCore.Qt.Key_Up, self.move_selection, -1),
+            (QtCore.Qt.Key_U, self.move_selection_multiple, -3, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_D, self.move_selection_multiple, 3, QtCore.Qt.KeyboardModifier.ControlModifier),
+            (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
+            (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
+            (QtCore.Qt.Key_BracketLeft, self.move_to_start, None),
+            (QtCore.Qt.Key_BracketRight, self.move_to_end, None),
+            (QtCore.Qt.Key_G, self.move_to_start, None),
+            (QtCore.Qt.Key_G, self.move_to_end, None, QtCore.Qt.KeyboardModifier.ShiftModifier),
+            (QtCore.Qt.Key_Home, self.move_to_start, None),
+            (QtCore.Qt.Key_End, self.move_to_end, None),
+            (QtCore.Qt.Key_H, lambda: None, None),
+            (QtCore.Qt.Key_Left, lambda: None, None),
+            (QtCore.Qt.Key_L, lambda: None, None),
+            (QtCore.Qt.Key_Right, lambda: None, None),
             (QtCore.Qt.Key_Backspace, self.ascend_level, None),
             (
                 QtCore.Qt.Key_Up,
