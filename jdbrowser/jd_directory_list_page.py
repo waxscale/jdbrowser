@@ -3,6 +3,7 @@ import re
 from PySide6 import QtWidgets, QtGui, QtCore
 import jdbrowser
 from .directory_item import DirectoryItem
+from .recent_directory_item import RecentDirectoryItem
 from .database import (
     setup_database,
     rebuild_state_jd_directories,
@@ -81,6 +82,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.shortcuts = []
         self.search_shortcut_instances = []
         self.tag_search_overlay = None
+        self.recent_items = []
+        self.recent_wrapper = None
+        self.recent_frame = None
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -363,10 +367,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+        self.items = []
+        self.recent_items = []
+        self.recent_wrapper = None
+        self.recent_frame = None
 
     def _load_directories(self):
         self._clear_items()
-        self.items = []
         self.selected_index = None
         cursor = self.conn.cursor()
 
@@ -405,7 +412,58 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
+        self._load_recent_directories()
         self.vlayout.addStretch(1)
+
+    def _load_recent_directories(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT e.directory_id, d.label, d.[order], i.icon
+            FROM event_create_jd_directory e
+            JOIN state_jd_directories d ON e.directory_id = d.directory_id
+            LEFT JOIN state_jd_directory_icons i ON d.directory_id = i.directory_id
+            ORDER BY e.event_id DESC
+            LIMIT 5
+            """
+        )
+        rows = cursor.fetchall()
+        if not rows:
+            return
+        self.recent_items = []
+        self.recent_wrapper = QtWidgets.QWidget()
+        h_layout = QtWidgets.QHBoxLayout(self.recent_wrapper)
+        h_layout.setContentsMargins(0, 0, 0, 0)
+        h_layout.setSpacing(0)
+        h_layout.addStretch(1)
+        self.recent_frame = QtWidgets.QFrame()
+        self.recent_frame.setStyleSheet(
+            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
+            f" background-color: {BACKGROUND_COLOR}; padding: 10px;"
+        )
+        v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
+        v_layout.setContentsMargins(5, 5, 5, 5)
+        v_layout.setSpacing(5)
+        title = QtWidgets.QLabel("Recent Directories")
+        title_font = title.font()
+        title_font.setPointSize(int(title_font.pointSize() * 0.9))
+        title.setFont(title_font)
+        title.setStyleSheet(f"color: {BREADCRUMB_INACTIVE_COLOR};")
+        v_layout.addWidget(title)
+        for directory_id, label, order, icon_data in rows:
+            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            item.updateLabel(self.show_prefix)
+            v_layout.addWidget(item)
+            self.recent_items.append(item)
+        h_layout.addWidget(self.recent_frame)
+        h_layout.addStretch(1)
+        self.vlayout.addWidget(self.recent_wrapper)
+        self._update_recent_width()
+
+    def _update_recent_width(self):
+        if self.recent_frame:
+            width = int(self.scroll_area.viewport().width() * 0.8)
+            self.recent_frame.setFixedWidth(width)
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
@@ -648,6 +706,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.show_prefix = not self.show_prefix
         for item in self.items:
             item.updateLabel(self.show_prefix)
+        for item in self.recent_items:
+            item.updateLabel(self.show_prefix)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -662,6 +722,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.search_input.move(self.width() - 310, self.height() - 40)
         if self.tag_search_overlay and self.tag_search_overlay.isVisible():
             self.tag_search_overlay.reposition()
+        self._update_recent_width()
         super().resizeEvent(event)
 
     def open_tag_search(self):
