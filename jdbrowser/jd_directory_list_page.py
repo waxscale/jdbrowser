@@ -423,33 +423,43 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             FROM event_create_jd_directory e
             JOIN state_jd_directories d ON e.directory_id = d.directory_id
             LEFT JOIN state_jd_directory_icons i ON d.directory_id = i.directory_id
+            LEFT JOIN state_jd_directory_tags t ON d.directory_id = t.directory_id
+                AND t.tag_id = ?
+            WHERE t.tag_id IS NULL
             ORDER BY e.event_id DESC
             LIMIT 5
-            """
+            """,
+            (self.parent_uuid,),
         )
         rows = cursor.fetchall()
         if not rows:
             return
         self.recent_items = []
         self.recent_wrapper = QtWidgets.QWidget()
-        h_layout = QtWidgets.QHBoxLayout(self.recent_wrapper)
+        outer_layout = QtWidgets.QVBoxLayout(self.recent_wrapper)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(5)
+
+        title = QtWidgets.QLabel("Recent Directories")
+        title_font = title.font()
+        title_font.setPointSize(int(title_font.pointSize() * 0.9))
+        title.setFont(title_font)
+        title.setStyleSheet(f"color: {BREADCRUMB_INACTIVE_COLOR};")
+        outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+        center = QtWidgets.QWidget()
+        h_layout = QtWidgets.QHBoxLayout(center)
         h_layout.setContentsMargins(0, 0, 0, 0)
         h_layout.setSpacing(0)
         h_layout.addStretch(1)
         self.recent_frame = QtWidgets.QFrame()
         self.recent_frame.setStyleSheet(
             f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
-            f" background-color: {BACKGROUND_COLOR}; padding: 10px;"
+            f" background-color: #000; padding: 10px;"
         )
         v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
         v_layout.setContentsMargins(5, 5, 5, 5)
         v_layout.setSpacing(5)
-        title = QtWidgets.QLabel("Recent Directories")
-        title_font = title.font()
-        title_font.setPointSize(int(title_font.pointSize() * 0.9))
-        title.setFont(title_font)
-        title.setStyleSheet(f"color: {BREADCRUMB_INACTIVE_COLOR};")
-        v_layout.addWidget(title)
         for directory_id, label, order, icon_data in rows:
             item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
             item.updateLabel(self.show_prefix)
@@ -457,6 +467,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             self.recent_items.append(item)
         h_layout.addWidget(self.recent_frame)
         h_layout.addStretch(1)
+        outer_layout.addWidget(center)
         self.vlayout.addWidget(self.recent_wrapper)
         self._update_recent_width()
 

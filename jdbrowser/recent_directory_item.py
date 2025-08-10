@@ -12,7 +12,7 @@ class RecentDirectoryItem(QtWidgets.QWidget):
         self.page = page
 
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
         if icon_data:
@@ -37,16 +37,19 @@ class RecentDirectoryItem(QtWidgets.QWidget):
                 painter.end()
                 self.icon.setPixmap(rounded_pixmap)
                 self.icon.setFixedSize(120, 75)
+                self.icon.setContentsMargins(0, 0, 0, 0)
                 self.icon.setStyleSheet("background-color: transparent;")
             else:
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(120, 75)
+                self.icon.setContentsMargins(0, 0, 0, 0)
                 self.icon.setStyleSheet(
                     f"background-color: {SLATE_COLOR}; border-radius: 3px;"
                 )
         else:
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(120, 75)
+            self.icon.setContentsMargins(0, 0, 0, 0)
             self.icon.setStyleSheet(
                 f"background-color: {SLATE_COLOR}; border-radius: 3px;"
             )
@@ -60,10 +63,12 @@ class RecentDirectoryItem(QtWidgets.QWidget):
         font.setPointSize(int(font.pointSize() * 0.9))
         self.label.setFont(font)
         self.label.setStyleSheet(
-            f"color: {BREADCRUMB_INACTIVE_COLOR}; padding-left: 5px;"
+            f"color: {BREADCRUMB_INACTIVE_COLOR}; padding-left: 5px; border: none;"
         )
-        layout.addWidget(self.label)
-        layout.addStretch(1)
+        self.label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        layout.addWidget(self.label, 1)
 
     def updateLabel(self, show_prefix):
         if show_prefix:
