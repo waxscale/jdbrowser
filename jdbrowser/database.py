@@ -252,7 +252,6 @@ def setup_database(db_path):
         CREATE TABLE IF NOT EXISTS event_set_jd_directory_order (
             event_id INTEGER PRIMARY KEY,
             directory_id TEXT NOT NULL,
-            parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
@@ -365,7 +364,6 @@ def setup_database(db_path):
         DROP TABLE IF EXISTS state_jd_directories;
         CREATE TABLE state_jd_directories (
             directory_id TEXT PRIMARY KEY,
-            parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             label TEXT NOT NULL,
             UNIQUE([order])
@@ -380,8 +378,6 @@ def setup_database(db_path):
             ON event_set_jd_id_tag_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_event_set_jd_id_header_order_parent_uuid
             ON event_set_jd_id_header_order(parent_uuid);
-        CREATE INDEX IF NOT EXISTS idx_event_set_jd_directory_order_parent_uuid
-            ON event_set_jd_directory_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_tags_parent_uuid
             ON state_jd_ext_tags(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_headers_parent_uuid
@@ -390,8 +386,6 @@ def setup_database(db_path):
             ON state_jd_id_tags(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_id_headers_parent_uuid
             ON state_jd_id_headers(parent_uuid);
-        CREATE INDEX IF NOT EXISTS idx_state_jd_directories_parent_uuid
-            ON state_jd_directories(parent_uuid);
     """)
     # Ensure existing databases have required columns
     def ensure_column(table_name, column_name, column_type="TEXT"):
@@ -410,8 +404,6 @@ def setup_database(db_path):
         "state_jd_ext_tags",
         "event_set_jd_ext_header_order",
         "state_jd_ext_headers",
-        "event_set_jd_directory_order",
-        "state_jd_directories",
     ):
         ensure_column(table, "parent_uuid")
 
@@ -729,7 +721,6 @@ def rebuild_state_jd_directories(conn):
         WITH latest_order AS (
             SELECT
                 o.directory_id,
-                o.parent_uuid,
                 o.[order]
             FROM event_set_jd_directory_order o
             JOIN (
@@ -749,10 +740,9 @@ def rebuild_state_jd_directories(conn):
                 GROUP BY directory_id
             ) ll ON l.directory_id = ll.directory_id AND l.event_id = ll.max_event
         )
-        INSERT INTO state_jd_directories (directory_id, parent_uuid, [order], label)
+        INSERT INTO state_jd_directories (directory_id, [order], label)
         SELECT
             o.directory_id,
-            o.parent_uuid,
             o.[order],
             COALESCE(l.new_label, '') AS label
         FROM latest_order o
@@ -852,7 +842,7 @@ def delete_jd_ext_tag(conn, tag_id):
     )
     conn.commit()
 
-def create_jd_directory(conn, parent_uuid, order, label):
+def create_jd_directory(conn, order, label):
     """Create a new directory and return its directory_id, or None on conflict."""
     cursor = conn.cursor()
     cursor.execute(
@@ -871,8 +861,8 @@ def create_jd_directory(conn, parent_uuid, order, label):
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_directory_order (event_id, directory_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)',
-        (event_id, directory_id, parent_uuid, order),
+        'INSERT INTO event_set_jd_directory_order (event_id, directory_id, [order]) VALUES (?, ?, ?)',
+        (event_id, directory_id, order),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_label')")
     event_id = cursor.lastrowid
