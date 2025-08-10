@@ -83,8 +83,8 @@ class DirectoryItem(QtWidgets.QWidget):
 
         self.updateStyle()
 
-    def updateLabel(self, show_path):
-        if show_path:
+    def updateLabel(self, show_prefix):
+        if show_prefix:
             formatted = f"{self.order:016d}"
             formatted = "_".join(formatted[i:i+4] for i in range(0, 16, 4))
             text = os.path.join(self.page.repository_path, formatted)
