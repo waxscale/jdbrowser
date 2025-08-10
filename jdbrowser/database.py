@@ -334,7 +334,7 @@ def setup_database(db_path):
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             label TEXT NOT NULL,
-            UNIQUE(parent_uuid, [order])
+            UNIQUE([order])
         );
 
         -- Indexes to accelerate lookups by parent_uuid
@@ -782,8 +782,8 @@ def create_jd_directory_tag(conn, parent_uuid, order, label):
     """Create a new directory tag and return its tag_id, or None on conflict."""
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT tag_id FROM state_jd_directory_tags WHERE parent_uuid IS ? AND [order] = ?',
-        (parent_uuid, order),
+        'SELECT tag_id FROM state_jd_directory_tags WHERE [order] = ?',
+        (order,),
     )
     if cursor.fetchone():
         return None
