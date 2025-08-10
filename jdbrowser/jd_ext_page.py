@@ -1107,7 +1107,28 @@ class JdExtPage(QtWidgets.QMainWindow):
             self.updateSelection()
 
     def descend_level(self):
-        pass
+        if not self.sections:
+            return
+        if not (0 <= self.sec_idx < len(self.sections)):
+            return
+        sec = self.sections[self.sec_idx]
+        if not (0 <= self.idx_in_sec < len(sec)):
+            return
+        current_item = sec[self.idx_in_sec]
+        if not current_item.tag_id:
+            return
+        from .jd_directory_list_page import JdDirectoryListPage
+        new_page = JdDirectoryListPage(
+            parent_uuid=current_item.tag_id,
+            jd_area=current_item.jd_area,
+            jd_id=current_item.jd_id,
+            jd_ext=current_item.jd_ext,
+            grandparent_uuid=self.parent_uuid,
+            great_grandparent_uuid=self.grandparent_uuid,
+        )
+        jdbrowser.current_page = new_page
+        new_page.show()
+        self.close()
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
