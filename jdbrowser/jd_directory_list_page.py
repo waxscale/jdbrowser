@@ -452,7 +452,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
-        create_jd_directory_tag(self.conn, self.parent_uuid, new_order, "")
+        create_jd_directory_tag(self.conn, self.parent_uuid, new_order, "", None)
         rebuild_state_jd_directory_tags(self.conn)
         self._load_directories()
         if self.items:
@@ -679,21 +679,31 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         for s in self.shortcuts:
             s.setEnabled(True)
 
-    def apply_tag_to_selected_directory(self, label):
+    def apply_tag_to_selected_directory(self, tag_uuid):
         if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
             return
         current_item = self.items[self.selected_index]
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT 1 FROM state_jd_directory_tags WHERE parent_uuid = ? AND LOWER(label) = LOWER(?)",
-            (current_item.tag_id, label),
+            "SELECT label FROM state_jd_ext_tags WHERE tag_id = ?",
+            (tag_uuid,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        label = row[0]
+        cursor.execute(
+            "SELECT 1 FROM state_jd_directory_tags WHERE parent_uuid = ? AND linked_tag_uuid = ?",
+            (current_item.tag_id, tag_uuid),
         )
         if cursor.fetchone():
             return
         cursor.execute("SELECT MAX([order]) FROM state_jd_directory_tags")
         row = cursor.fetchone()
         max_order = row[0] if row and row[0] is not None else 0
-        create_jd_directory_tag(self.conn, current_item.tag_id, max_order + 1, label)
+        create_jd_directory_tag(
+            self.conn, current_item.tag_id, max_order + 1, label, tag_uuid
+        )
         rebuild_state_jd_directory_tags(self.conn)
         idx = self.selected_index
         self._load_directories()

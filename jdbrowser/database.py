@@ -252,6 +252,7 @@ def setup_database(db_path):
             tag_id TEXT NOT NULL,
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
+            linked_tag_uuid TEXT,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
@@ -344,6 +345,7 @@ def setup_database(db_path):
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             label TEXT NOT NULL,
+            linked_tag_uuid TEXT,
             UNIQUE([order])
         );
 
@@ -369,11 +371,13 @@ def setup_database(db_path):
         CREATE INDEX IF NOT EXISTS idx_state_jd_directory_tags_parent_uuid
             ON state_jd_directory_tags(parent_uuid);
     """)
-    # Ensure existing databases have the parent_uuid column
-    def ensure_parent_uuid(table_name):
+    # Ensure existing databases have required columns
+    def ensure_column(table_name, column_name, column_type="TEXT"):
         cursor.execute(f"PRAGMA table_info({table_name})")
-        if 'parent_uuid' not in [row[1] for row in cursor.fetchall()]:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN parent_uuid TEXT")
+        if column_name not in [row[1] for row in cursor.fetchall()]:
+            cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+            )
 
     for table in (
         "event_set_jd_id_tag_order",
@@ -387,7 +391,13 @@ def setup_database(db_path):
         "event_set_jd_directory_tag_order",
         "state_jd_directory_tags",
     ):
-        ensure_parent_uuid(table)
+        ensure_column(table, "parent_uuid")
+
+    for table in (
+        "event_set_jd_directory_tag_order",
+        "state_jd_directory_tags",
+    ):
+        ensure_column(table, "linked_tag_uuid")
 
     rebuild_state_jd_area_tags(conn)
     rebuild_state_jd_area_headers(conn)
@@ -454,6 +464,7 @@ def rebuild_state_jd_area_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_area_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_area_headers(conn):
     """Rebuild the state_jd_area_headers table from the event log."""
@@ -550,6 +561,7 @@ def rebuild_state_jd_id_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_id_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_id_headers(conn):
     """Rebuild the state_jd_id_headers table from the event log."""
@@ -648,6 +660,7 @@ def rebuild_state_jd_ext_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_ext_tag);
     """)
     conn.commit()
+    rebuild_state_jd_directory_tags(conn)
 
 def rebuild_state_jd_ext_headers(conn):
     """Rebuild the state_jd_ext_headers table from the event log."""
@@ -696,37 +709,42 @@ def rebuild_state_jd_directory_tags(conn):
     cursor.executescript("""
         DELETE FROM state_jd_directory_tags;
 
-        INSERT INTO state_jd_directory_tags (tag_id, parent_uuid, [order], label)
-        SELECT
-            o.tag_id,
-            o.parent_uuid,
-            o.[order],
-            l.new_label
-        FROM (
+        WITH latest_order AS (
             SELECT
                 o.tag_id,
                 o.parent_uuid,
                 o.[order],
-                o.event_id
+                o.linked_tag_uuid
             FROM event_set_jd_directory_tag_order o
             JOIN (
                 SELECT tag_id, MAX(event_id) AS max_event
                 FROM event_set_jd_directory_tag_order
                 GROUP BY tag_id
-            ) latest_order ON o.tag_id = latest_order.tag_id AND o.event_id = latest_order.max_event
-        ) o
-        JOIN (
+            ) lo ON o.tag_id = lo.tag_id AND o.event_id = lo.max_event
+        ),
+        latest_label AS (
             SELECT
                 l.tag_id,
-                l.new_label,
-                l.event_id
+                l.new_label
             FROM event_set_jd_directory_tag_label l
             JOIN (
                 SELECT tag_id, MAX(event_id) AS max_event
                 FROM event_set_jd_directory_tag_label
                 GROUP BY tag_id
-            ) latest_label ON l.tag_id = latest_label.tag_id AND l.event_id = latest_label.max_event
-        ) l ON o.tag_id = l.tag_id
+            ) ll ON l.tag_id = ll.tag_id AND l.event_id = ll.max_event
+        )
+        INSERT INTO state_jd_directory_tags (tag_id, parent_uuid, [order], label, linked_tag_uuid)
+        SELECT
+            o.tag_id,
+            o.parent_uuid,
+            o.[order],
+            COALESCE(ext.label, id.label, area.label, l.new_label) AS label,
+            o.linked_tag_uuid
+        FROM latest_order o
+        LEFT JOIN latest_label l ON o.tag_id = l.tag_id
+        LEFT JOIN state_jd_ext_tags ext ON o.linked_tag_uuid = ext.tag_id
+        LEFT JOIN state_jd_id_tags id ON o.linked_tag_uuid = id.tag_id
+        LEFT JOIN state_jd_area_tags area ON o.linked_tag_uuid = area.tag_id
         WHERE o.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_directory_tag);
     """)
 
@@ -789,7 +807,7 @@ def delete_jd_ext_tag(conn, tag_id):
     )
     conn.commit()
 
-def create_jd_directory_tag(conn, parent_uuid, order, label):
+def create_jd_directory_tag(conn, parent_uuid, order, label, linked_tag_uuid=None):
     """Create a new directory tag and return its tag_id, or None on conflict."""
     cursor = conn.cursor()
     cursor.execute(
@@ -808,8 +826,8 @@ def create_jd_directory_tag(conn, parent_uuid, order, label):
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_directory_tag_order (event_id, tag_id, parent_uuid, [order]) VALUES (?, ?, ?, ?)',
-        (event_id, tag_id, parent_uuid, order),
+        'INSERT INTO event_set_jd_directory_tag_order (event_id, tag_id, parent_uuid, [order], linked_tag_uuid) VALUES (?, ?, ?, ?, ?)',
+        (event_id, tag_id, parent_uuid, order, linked_tag_uuid),
     )
     cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_label')")
     event_id = cursor.lastrowid

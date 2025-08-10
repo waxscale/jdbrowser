@@ -109,9 +109,12 @@ class TagSearchOverlay(QtWidgets.QFrame):
 
     def _load_labels(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT label FROM state_jd_ext_tags")
-        labels = [r[0] for r in cursor.fetchall() if r[0]]
-        self.label_map = {lbl.lower(): lbl for lbl in sorted(set(labels), key=lambda s: s.lower())}
+        cursor.execute("SELECT tag_id, label FROM state_jd_ext_tags")
+        rows = [(r[0], r[1]) for r in cursor.fetchall() if r[1]]
+        self.label_map = {
+            lbl.lower(): (lbl, tag_id)
+            for tag_id, lbl in sorted(rows, key=lambda s: s[1].lower())
+        }
         self.all_labels = list(self.label_map.keys())
 
     def update_results(self, text):
@@ -125,8 +128,10 @@ class TagSearchOverlay(QtWidgets.QFrame):
 
         self.list.clear()
         if results:
-            for label in results:
-                self.list.addItem(label)
+            for label, tag_id in results:
+                item = QtWidgets.QListWidgetItem(label)
+                item.setData(QtCore.Qt.UserRole, tag_id)
+                self.list.addItem(item)
             count = len(results)
             self.list.setFixedHeight(min(count, self.max_results) * self.item_height)
             self.list.show()
@@ -147,12 +152,12 @@ class TagSearchOverlay(QtWidgets.QFrame):
     def select_current(self):
         item = self.list.currentItem()
         if item:
-            self.tagSelected.emit(item.text())
+            self.tagSelected.emit(item.data(QtCore.Qt.UserRole))
         self.close_overlay()
 
     def _item_clicked(self, item):
         if item:
-            self.tagSelected.emit(item.text())
+            self.tagSelected.emit(item.data(QtCore.Qt.UserRole))
         self.close_overlay()
 
     def close_overlay(self):
