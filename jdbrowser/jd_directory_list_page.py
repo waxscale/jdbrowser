@@ -74,6 +74,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.vlayout.setSpacing(5)
 
         self._load_directories()
+        if self.items:
+            self.set_selection(0)
 
     def _clear_items(self):
         while self.vlayout.count():
@@ -85,6 +87,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def _load_directories(self):
         self._clear_items()
         self.items = []
+        self.selected_index = None
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -150,6 +153,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         create_jd_directory_tag(self.conn, self.parent_uuid, new_order, "")
         rebuild_state_jd_directory_tags(self.conn)
         self._load_directories()
+        if self.items:
+            self.set_selection(len(self.items) - 1)
 
     def closeEvent(self, event):
         self.conn.close()
