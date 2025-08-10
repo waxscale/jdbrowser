@@ -3,8 +3,9 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from .constants import (
     TEXT_COLOR,
     TAG_COLOR,
-    BREADCRUMB_BG_COLOR,
-    BREADCRUMB_ACTIVE_COLOR,
+    HIGHLIGHT_COLOR,
+    HOVER_COLOR,
+    SLATE_COLOR,
 )
 
 
@@ -23,9 +24,9 @@ class TagSearchOverlay(QtWidgets.QFrame):
         self.setStyleSheet("background: transparent;")
 
         self._input_style_core = (
-            f"background-color: {TAG_COLOR};"
+            f"background-color: {SLATE_COLOR};"
             f" color: {TEXT_COLOR};"
-            f" border: 2px solid {BREADCRUMB_BG_COLOR};"
+            f" border: 2px solid {HIGHLIGHT_COLOR};"
             " border-top-left-radius: 10px;"
             " border-top-right-radius: 10px;"
             " padding: 12px;"
@@ -45,9 +46,9 @@ class TagSearchOverlay(QtWidgets.QFrame):
 
         self.list_style = f"""
             QListWidget {{
-                background-color: {TAG_COLOR};
+                background-color: {SLATE_COLOR};
                 color: {TEXT_COLOR};
-                border: 2px solid {BREADCRUMB_BG_COLOR};
+                border: 2px solid {HIGHLIGHT_COLOR};
                 border-top: none;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
@@ -58,9 +59,12 @@ class TagSearchOverlay(QtWidgets.QFrame):
             QListWidget::item {{
                 padding: 8px 4px;
             }}
+            QListWidget::item:hover {{
+                background-color: {HOVER_COLOR};
+            }}
             QListWidget::item:selected {{
-                background-color: {BREADCRUMB_BG_COLOR};
-                color: {BREADCRUMB_ACTIVE_COLOR};
+                background-color: {TAG_COLOR};
+                color: {TEXT_COLOR};
             }}
         """
         layout = QtWidgets.QVBoxLayout(self)
@@ -76,10 +80,11 @@ class TagSearchOverlay(QtWidgets.QFrame):
         self.list.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list.hide()
+        self.list.itemClicked.connect(self._item_clicked)
         layout.addWidget(self.list)
 
         self.item_height = QtGui.QFontMetrics(QtGui.QFont("FiraCode Nerd Font", 18)).height() + 16
-        self.max_results = 6
+        self.max_results = 5
 
         self.all_labels = []
         self.label_map = {}
@@ -141,6 +146,11 @@ class TagSearchOverlay(QtWidgets.QFrame):
 
     def select_current(self):
         item = self.list.currentItem()
+        if item:
+            self.tagSelected.emit(item.text())
+        self.close_overlay()
+
+    def _item_clicked(self, item):
         if item:
             self.tagSelected.emit(item.text())
         self.close_overlay()
