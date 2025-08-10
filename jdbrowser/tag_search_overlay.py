@@ -1,6 +1,11 @@
 from difflib import get_close_matches
 from PySide6 import QtWidgets, QtCore, QtGui
-from .constants import BACKGROUND_COLOR, TEXT_COLOR, BORDER_COLOR, HIGHLIGHT_COLOR
+from .constants import (
+    TEXT_COLOR,
+    TAG_COLOR,
+    BREADCRUMB_BG_COLOR,
+    BREADCRUMB_ACTIVE_COLOR,
+)
 
 
 class TagSearchOverlay(QtWidgets.QFrame):
@@ -18,9 +23,9 @@ class TagSearchOverlay(QtWidgets.QFrame):
         self.setStyleSheet("background: transparent;")
 
         self._input_style_core = (
-            f"background-color: {BACKGROUND_COLOR};"
+            f"background-color: {TAG_COLOR};"
             f" color: {TEXT_COLOR};"
-            f" border: 1px solid {BORDER_COLOR};"
+            f" border: 2px solid {BREADCRUMB_BG_COLOR};"
             " border-top-left-radius: 10px;"
             " border-top-right-radius: 10px;"
             " padding: 12px;"
@@ -28,17 +33,21 @@ class TagSearchOverlay(QtWidgets.QFrame):
             " font-size: 24px;"
         )
         self.input_style_no_results = (
-            "QLineEdit {" + self._input_style_core + " border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;}"
+            "QLineEdit {"
+            + self._input_style_core
+            + " border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;}"
         )
         self.input_style_with_results = (
-            "QLineEdit {" + self._input_style_core + " border-bottom: none;}"
+            "QLineEdit {"
+            + self._input_style_core
+            + " border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}"
         )
 
         self.list_style = f"""
             QListWidget {{
-                background-color: {BACKGROUND_COLOR};
+                background-color: {TAG_COLOR};
                 color: {TEXT_COLOR};
-                border: 1px solid {BORDER_COLOR};
+                border: 2px solid {BREADCRUMB_BG_COLOR};
                 border-top: none;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
@@ -50,8 +59,8 @@ class TagSearchOverlay(QtWidgets.QFrame):
                 padding: 8px 4px;
             }}
             QListWidget::item:selected {{
-                background-color: {HIGHLIGHT_COLOR};
-                color: {TEXT_COLOR};
+                background-color: {BREADCRUMB_BG_COLOR};
+                color: {BREADCRUMB_ACTIVE_COLOR};
             }}
         """
         layout = QtWidgets.QVBoxLayout(self)

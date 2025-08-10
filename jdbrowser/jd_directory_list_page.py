@@ -684,6 +684,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             return
         current_item = self.items[self.selected_index]
         cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM state_jd_directory_tags WHERE parent_uuid = ? AND LOWER(label) = LOWER(?)",
+            (current_item.tag_id, label),
+        )
+        if cursor.fetchone():
+            return
         cursor.execute("SELECT MAX([order]) FROM state_jd_directory_tags")
         row = cursor.fetchone()
         max_order = row[0] if row and row[0] is not None else 0
