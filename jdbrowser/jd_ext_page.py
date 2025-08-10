@@ -1126,6 +1126,7 @@ class JdExtPage(QtWidgets.QMainWindow):
             grandparent_uuid=self.parent_uuid,
             great_grandparent_uuid=self.grandparent_uuid,
         )
+        new_page.setGeometry(self.geometry())
         jdbrowser.current_page = new_page
         new_page.show()
         self.close()

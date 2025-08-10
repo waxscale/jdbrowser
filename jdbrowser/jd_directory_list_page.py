@@ -25,6 +25,10 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
         central = QtWidgets.QWidget()
         central.setStyleSheet("background-color: black;")
         self.setCentralWidget(central)
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        if settings.contains("pos") and settings.contains("size"):
+            self.move(settings.value("pos", type=QtCore.QPoint))
+            self.resize(settings.value("size", type=QtCore.QSize))
         self._setup_shortcuts()
 
     def ascend_level(self):
@@ -36,6 +40,7 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
             jd_id=self.current_jd_id,
             grandparent_uuid=self.great_grandparent_uuid,
         )
+        new_page.setGeometry(self.geometry())
         jdbrowser.current_page = new_page
         new_page.show()
         self.close()
@@ -70,3 +75,9 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(self.close)
             self.shortcuts.append(s)
+
+    def closeEvent(self, event):
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("pos", self.pos())
+        settings.setValue("size", self.size())
+        super().closeEvent(event)
