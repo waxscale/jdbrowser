@@ -567,13 +567,13 @@ class JdIdPage(QtWidgets.QWidget):
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             QtCore.QTimer.singleShot(
-                0,
+                100,
                 lambda: self.scroll_area.setVerticalScrollBarPolicy(
                     QtCore.Qt.ScrollBarAsNeeded
                 ),
             )
             QtCore.QTimer.singleShot(
-                0,
+                100,
                 lambda: self.scroll_area.setHorizontalScrollBarPolicy(
                     QtCore.Qt.ScrollBarAsNeeded
                 ),
