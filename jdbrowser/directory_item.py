@@ -124,7 +124,7 @@ class DirectoryItem(QtWidgets.QWidget):
             btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
             btn.setStyleSheet(
                 f"background-color: {TAG_COLOR}; color: {TEXT_COLOR}; border: none;"
-                " border-radius: 10px; padding: 2px 6px;"
+                " border-radius: 10px; padding: 3px 7px;"
             )
             btn.setMinimumWidth(60)
             btn.clicked.connect(
