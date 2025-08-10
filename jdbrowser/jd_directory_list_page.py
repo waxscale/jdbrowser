@@ -87,10 +87,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._navigating = True
 
         def swap():
+            # Close the database connection before the old page is replaced.
+            # QMainWindow takes ownership of the current central widget and
+            # deletes it when a new one is set, so we avoid touching `self`
+            # after calling setCentralWidget to prevent use-after-free errors.
+            self.conn.close()
             jdbrowser.main_window.setCentralWidget(new_page)
             jdbrowser.current_page = new_page
-            self.conn.close()
-            self.deleteLater()
 
         QtCore.QTimer.singleShot(0, swap)
 
