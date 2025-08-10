@@ -17,16 +17,17 @@ class HeaderItem(QtWidgets.QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(5, 5, 5, 5)
 
-        # Colored dot with a soft outer ring
-        self.dot = QtWidgets.QFrame()
+        # Colored dot with soft outer ring using a wrapper
+        self.dot_wrapper = QtWidgets.QFrame()
+        self.dot_wrapper.setFixedSize(24, 24)
+        self.dot_wrapper.setStyleSheet(
+            "background-color: rgba(125,207,255,56); border-radius: 12px;"
+        )
+        self.dot = QtWidgets.QFrame(self.dot_wrapper)
         self.dot.setFixedSize(16, 16)
+        self.dot.move(4, 4)
         self.dot.setStyleSheet(f"background-color: {color}; border-radius: 8px;")
-        ring = QtWidgets.QGraphicsDropShadowEffect(self.dot)
-        ring.setBlurRadius(0)
-        ring.setOffset(0, 0)
-        ring.setColor(QtGui.QColor(125, 207, 255, 56))
-        self.dot.setGraphicsEffect(ring)
-        layout.addWidget(self.dot)
+        layout.addWidget(self.dot_wrapper)
 
         # Section title
         self.title = QtWidgets.QLabel(text.upper())

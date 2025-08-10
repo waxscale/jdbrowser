@@ -93,11 +93,11 @@ class FileItem(QtWidgets.QWidget):
         self.icon.setAutoFillBackground(True)
         box_layout.addWidget(self.icon)
 
-        shadow = QtWidgets.QGraphicsDropShadowEffect(self.box)
-        shadow.setBlurRadius(18)
-        shadow.setOffset(0, 6)
-        shadow.setColor(QtGui.QColor(0, 0, 0, 153))
-        self.box.setGraphicsEffect(shadow)
+        self.box_shadow = QtWidgets.QGraphicsDropShadowEffect(self.box)
+        self.box_shadow.setBlurRadius(18)
+        self.box_shadow.setOffset(0, 6)
+        self.box_shadow.setColor(QtGui.QColor(0, 0, 0, 153))
+        self.box.setGraphicsEffect(self.box_shadow)
 
         layout.addWidget(self.box, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 

@@ -630,16 +630,17 @@ class JdExtPage(QtWidgets.QWidget):
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
 
+
     def _build_breadcrumb(self, crumbs):
         bar = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(bar)
-        layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(0)
+        layout.setContentsMargins(20, 8, 20, 8)
+        layout.setSpacing(8)
         bar.setStyleSheet(f"background-color: {BREADCRUMB_BG_COLOR};")
         for i, (text, handler) in enumerate(crumbs):
             if i:
-                sep = QtWidgets.QLabel(" / ")
-                sep.setStyleSheet(f"color: {BREADCRUMB_ACTIVE_COLOR};")
+                sep = QtWidgets.QLabel("/")
+                sep.setStyleSheet(f"color: {MUTED_COLOR};")
                 sep.setSizePolicy(
                     QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
                 )
@@ -649,7 +650,7 @@ class JdExtPage(QtWidgets.QWidget):
                 btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
                 btn.setFlat(True)
                 btn.setStyleSheet(
-                    f"QPushButton {{ background-color: transparent; border: none; color: {BREADCRUMB_ACTIVE_COLOR}; font-weight: bold; }}"
+                    f"QPushButton {{ background-color: transparent; border: none; color: {BREADCRUMB_ACTIVE_COLOR}; padding: 2px 3px; border-radius: 4px; }}"
                     "QPushButton:hover { text-decoration: underline; }"
                 )
                 btn.clicked.connect(handler)
@@ -660,7 +661,7 @@ class JdExtPage(QtWidgets.QWidget):
             else:
                 label = QtWidgets.QLabel(text)
                 label.setStyleSheet(
-                    f"color: {BREADCRUMB_INACTIVE_COLOR}; font-weight: bold;"
+                    f"color: {BREADCRUMB_INACTIVE_COLOR}; padding: 2px 3px; border-radius: 4px;"
                 )
                 label.setSizePolicy(
                     QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed

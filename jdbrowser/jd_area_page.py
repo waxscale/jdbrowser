@@ -540,17 +540,17 @@ class JdAreaPage(QtWidgets.QWidget):
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.search_shortcut_instances.append(s)
 
+
     def _build_breadcrumb(self, crumbs):
         bar = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(bar)
-        layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(0)
-        bar.setStyleSheet(
-            f"background-color: {BREADCRUMB_BG_COLOR}; color: black;"
-        )
+        layout.setContentsMargins(20, 8, 20, 8)
+        layout.setSpacing(8)
+        bar.setStyleSheet(f"background-color: {BREADCRUMB_BG_COLOR};")
         for i, (text, handler) in enumerate(crumbs):
             if i:
-                sep = QtWidgets.QLabel(" / ")
+                sep = QtWidgets.QLabel("/")
+                sep.setStyleSheet(f"color: {MUTED_COLOR};")
                 sep.setSizePolicy(
                     QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
                 )
@@ -560,7 +560,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
                 btn.setFlat(True)
                 btn.setStyleSheet(
-                    "QPushButton { background-color: transparent; border: none; color: black; }"
+                    f"QPushButton {{ background-color: transparent; border: none; color: {BREADCRUMB_ACTIVE_COLOR}; padding: 2px 3px; border-radius: 4px; }}"
                     "QPushButton:hover { text-decoration: underline; }"
                 )
                 btn.clicked.connect(handler)
@@ -570,6 +570,9 @@ class JdAreaPage(QtWidgets.QWidget):
                 layout.addWidget(btn)
             else:
                 label = QtWidgets.QLabel(text)
+                label.setStyleSheet(
+                    f"color: {BREADCRUMB_INACTIVE_COLOR}; padding: 2px 3px; border-radius: 4px;"
+                )
                 label.setSizePolicy(
                     QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
                 )
