@@ -27,6 +27,9 @@ class JdExtPage(QtWidgets.QMainWindow):
         self.grandparent_uuid = grandparent_uuid
         self.current_jd_area = jd_area
         self.current_jd_id = jd_id
+        # Register this page so descending again can reuse it.
+        self.cache_key = ("ext", parent_uuid)
+        jdbrowser.page_cache[self.cache_key] = self
         self.cols = 10
         self.sections = []
         self.section_paths = []  # Store (jd_area, jd_id, jd_ext) for each section
@@ -346,7 +349,11 @@ class JdExtPage(QtWidgets.QMainWindow):
             previous_page = jdbrowser.page_stack.pop()
             jdbrowser.current_page = previous_page
             previous_page.show()
-        self.close()
+            self.hide()
+        else:
+            # No previous page: remove from cache and close.
+            jdbrowser.page_cache.pop(self.cache_key, None)
+            self.close()
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""

@@ -1072,11 +1072,20 @@ class JdAreaPage(QtWidgets.QMainWindow):
         if not current_item.tag_id:
             return
 
-        # Instantiate the next level page and replace the current one.  Instead
-        # of destroying this page, keep it on a stack so that navigating back is
-        # instantaneous.
+        # Instantiate or reuse the next level page.  Instead of destroying this
+        # page, keep it on a stack so that navigating back is instantaneous.  If
+        # the target page was previously visited, fetch it from the cache to
+        # avoid reconstructing it when descending again.
         jdbrowser.page_stack.append(self)
-        new_page = JdIdPage(parent_uuid=current_item.tag_id, jd_area=current_item.jd_area)
+        key = ("id", current_item.tag_id)
+        if key in jdbrowser.page_cache:
+            new_page = jdbrowser.page_cache[key]
+        else:
+            new_page = JdIdPage(
+                parent_uuid=current_item.tag_id,
+                jd_area=current_item.jd_area,
+            )
+            jdbrowser.page_cache[key] = new_page
         jdbrowser.current_page = new_page
         new_page.show()
         self.hide()

@@ -24,6 +24,9 @@ class JdIdPage(QtWidgets.QMainWindow):
         super().__init__()
         self.parent_uuid = parent_uuid
         self.current_jd_area = jd_area
+        # Cache key used for reusing this page instance when navigating.
+        self.cache_key = ("id", parent_uuid)
+        jdbrowser.page_cache[self.cache_key] = self
         self.current_jd_id = None
         self.setWindowTitle(f"File Browser - [{jd_area:02d}]")
         self.cols = 10
@@ -341,7 +344,11 @@ class JdIdPage(QtWidgets.QMainWindow):
             previous_page = jdbrowser.page_stack.pop()
             jdbrowser.current_page = previous_page
             previous_page.show()
-        self.close()
+            self.hide()
+        else:
+            # No previous page: remove from cache and close.
+            jdbrowser.page_cache.pop(self.cache_key, None)
+            self.close()
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -1099,14 +1106,20 @@ class JdIdPage(QtWidgets.QMainWindow):
         from .jd_ext_page import JdExtPage
 
         # Keep this page on the stack so returning from the extension level is
-        # fast and preserves state.
+        # fast and preserves state.  Reuse a cached extension page when
+        # available to avoid reconstruction on repeated descents.
         jdbrowser.page_stack.append(self)
-        new_page = JdExtPage(
-            parent_uuid=current_item.tag_id,
-            jd_area=current_item.jd_area,
-            jd_id=current_item.jd_id,
-            grandparent_uuid=self.parent_uuid,
-        )
+        key = ("ext", current_item.tag_id)
+        if key in jdbrowser.page_cache:
+            new_page = jdbrowser.page_cache[key]
+        else:
+            new_page = JdExtPage(
+                parent_uuid=current_item.tag_id,
+                jd_area=current_item.jd_area,
+                jd_id=current_item.jd_id,
+                grandparent_uuid=self.parent_uuid,
+            )
+            jdbrowser.page_cache[key] = new_page
         jdbrowser.current_page = new_page
         new_page.show()
         self.hide()
