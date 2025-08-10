@@ -14,6 +14,8 @@ class TagSearchOverlay(QtWidgets.QFrame):
         self.conn = conn
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.setFixedWidth(600)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
 
         self._input_style_core = (
             f"background-color: {BACKGROUND_COLOR};"
@@ -68,7 +70,7 @@ class TagSearchOverlay(QtWidgets.QFrame):
         layout.addWidget(self.list)
 
         self.item_height = QtGui.QFontMetrics(QtGui.QFont("FiraCode Nerd Font", 18)).height() + 16
-        self.max_results = 5
+        self.max_results = 6
 
         self.all_labels = []
         self.label_map = {}
@@ -119,6 +121,7 @@ class TagSearchOverlay(QtWidgets.QFrame):
         else:
             self.list.hide()
             self.input.setStyleSheet(self.input_style_no_results)
+        self.adjustSize()
 
     def move_selection(self, delta):
         count = self.list.count()
@@ -141,11 +144,15 @@ class TagSearchOverlay(QtWidgets.QFrame):
         if obj is self.input and event.type() == QtCore.QEvent.KeyPress:
             key = event.key()
             mods = event.modifiers()
-            if key in (QtCore.Qt.Key_Down, QtCore.Qt.Key_J, QtCore.Qt.Key_Tab) and not (mods & QtCore.Qt.ShiftModifier):
+            if (
+                key in (QtCore.Qt.Key_Down, QtCore.Qt.Key_Tab) and not (mods & QtCore.Qt.ShiftModifier)
+            ) or (key == QtCore.Qt.Key_J and mods & QtCore.Qt.ControlModifier):
                 self.move_selection(1)
                 return True
-            if key in (QtCore.Qt.Key_Up, QtCore.Qt.Key_K, QtCore.Qt.Key_Backtab) or (
-                key == QtCore.Qt.Key_Tab and mods & QtCore.Qt.ShiftModifier
+            if (
+                key in (QtCore.Qt.Key_Up, QtCore.Qt.Key_Backtab)
+                or (key == QtCore.Qt.Key_Tab and mods & QtCore.Qt.ShiftModifier)
+                or (key == QtCore.Qt.Key_K and mods & QtCore.Qt.ControlModifier)
             ):
                 self.move_selection(-1)
                 return True
