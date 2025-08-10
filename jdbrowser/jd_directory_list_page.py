@@ -181,7 +181,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             "SELECT tag_id, label, [order], parent_uuid FROM state_jd_directory_tags WHERE tag_id = ?",
             (self.parent_uuid,),
         )
-        current_tag = cursor.fetchone()
+        row = cursor.fetchone()
+        current_tag = tuple(row) if row else None
 
         cursor.execute(
             """
@@ -200,7 +201,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 "SELECT tag_id, label, [order], parent_uuid FROM state_jd_directory_tags WHERE parent_uuid = ? ORDER BY [order]",
                 (tag_id,),
             )
-            tags = cursor.fetchall()
+            tag_rows = cursor.fetchall()
+            tags = [tuple(t) for t in tag_rows]
             if current_tag:
                 tags.append(current_tag)
             item = DirectoryItem(tag_id, label, order, icon_data, self, idx, tags)

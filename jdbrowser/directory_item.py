@@ -79,6 +79,9 @@ class DirectoryItem(QtWidgets.QWidget):
 
         # Tag pills container
         self.tags_widget = QtWidgets.QWidget()
+        self.tags_widget.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.tags_layout = FlowLayout(self.tags_widget, margin=0, spacing=5)
         right_layout.addWidget(self.tags_widget)
         right_layout.addStretch(1)
@@ -121,6 +124,7 @@ class DirectoryItem(QtWidgets.QWidget):
             )
             self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
+        self.tags_widget.adjustSize()
 
     def updateLabel(self, show_prefix):
         if show_prefix:
