@@ -7,6 +7,8 @@ class FlowLayout(QtWidgets.QLayout):
     def __init__(self, parent=None, margin=0, spacing=-1):
         super().__init__(parent)
         self.itemList = []
+        if parent is not None:
+            parent.setLayout(self)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing if spacing >= 0 else 5)
 
