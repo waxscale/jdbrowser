@@ -1,5 +1,5 @@
 from difflib import get_close_matches
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore, QtGui
 from .constants import BACKGROUND_COLOR, TEXT_COLOR, BORDER_COLOR, HIGHLIGHT_COLOR
 
 
@@ -12,44 +12,63 @@ class TagSearchOverlay(QtWidgets.QFrame):
     def __init__(self, parent, conn):
         super().__init__(parent)
         self.conn = conn
-        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.setStyleSheet(
-            f"""
-            QFrame {{
-                background-color: {BACKGROUND_COLOR};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 5px;
-            }}
-            QLineEdit {{
-                background-color: {BACKGROUND_COLOR};
-                color: {TEXT_COLOR};
-                border: none;
-                padding: 6px;
-                font-family: 'FiraCode Nerd Font';
-            }}
+        self.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.setFixedWidth(600)
+
+        self._input_style_core = (
+            f"background-color: {BACKGROUND_COLOR};"
+            f" color: {TEXT_COLOR};"
+            f" border: 1px solid {BORDER_COLOR};"
+            " border-top-left-radius: 10px;"
+            " border-top-right-radius: 10px;"
+            " padding: 12px;"
+            " font-family: 'FiraCode Nerd Font';"
+            " font-size: 24px;"
+        )
+        self.input_style_no_results = (
+            "QLineEdit {" + self._input_style_core + " border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;}"
+        )
+        self.input_style_with_results = (
+            "QLineEdit {" + self._input_style_core + " border-bottom: none;}"
+        )
+
+        self.list_style = f"""
             QListWidget {{
                 background-color: {BACKGROUND_COLOR};
                 color: {TEXT_COLOR};
-                border-top: 1px solid {BORDER_COLOR};
+                border: 1px solid {BORDER_COLOR};
+                border-top: none;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
                 outline: none;
                 font-family: 'FiraCode Nerd Font';
+                font-size: 18px;
+            }}
+            QListWidget::item {{
+                padding: 8px 4px;
             }}
             QListWidget::item:selected {{
                 background-color: {HIGHLIGHT_COLOR};
                 color: {TEXT_COLOR};
             }}
-            """
-        )
-        self.setFixedWidth(500)
+        """
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         self.input = QtWidgets.QLineEdit()
+        self.input.setStyleSheet(self.input_style_no_results)
         layout.addWidget(self.input)
+
         self.list = QtWidgets.QListWidget()
-        self.list.setFixedHeight(6 * 30)
+        self.list.setStyleSheet(self.list_style)
+        self.list.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.list.hide()
         layout.addWidget(self.list)
+
+        self.item_height = QtGui.QFontMetrics(QtGui.QFont("FiraCode Nerd Font", 18)).height() + 16
+        self.max_results = 5
 
         self.all_labels = []
         self.label_map = {}
@@ -74,32 +93,32 @@ class TagSearchOverlay(QtWidgets.QFrame):
 
     def _load_labels(self):
         cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            SELECT label FROM state_jd_area_tags
-            UNION
-            SELECT label FROM state_jd_id_tags
-            UNION
-            SELECT label FROM state_jd_ext_tags
-            UNION
-            SELECT label FROM state_jd_directory_tags
-            """
-        )
+        cursor.execute("SELECT label FROM state_jd_ext_tags")
         labels = [r[0] for r in cursor.fetchall() if r[0]]
         self.label_map = {lbl.lower(): lbl for lbl in sorted(set(labels), key=lambda s: s.lower())}
         self.all_labels = list(self.label_map.keys())
 
     def update_results(self, text):
         if text:
-            matches_lower = get_close_matches(text.lower(), self.all_labels, n=6, cutoff=0)
+            matches_lower = get_close_matches(
+                text.lower(), self.all_labels, n=self.max_results, cutoff=0
+            )
             results = [self.label_map[m] for m in matches_lower]
         else:
-            results = list(self.label_map.values())[:6]
+            results = list(self.label_map.values())[: self.max_results]
+
         self.list.clear()
-        for label in results:
-            self.list.addItem(label)
         if results:
+            for label in results:
+                self.list.addItem(label)
+            count = len(results)
+            self.list.setFixedHeight(min(count, self.max_results) * self.item_height)
+            self.list.show()
+            self.input.setStyleSheet(self.input_style_with_results)
             self.list.setCurrentRow(0)
+        else:
+            self.list.hide()
+            self.input.setStyleSheet(self.input_style_no_results)
 
     def move_selection(self, delta):
         count = self.list.count()
