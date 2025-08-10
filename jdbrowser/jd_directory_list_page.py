@@ -1,9 +1,7 @@
-import os
 from PySide6 import QtWidgets, QtGui, QtCore
 import jdbrowser
 from .directory_item import DirectoryItem
 from .database import (
-    setup_database,
     rebuild_state_jd_directory_tags,
     create_jd_directory_tag,
 )
@@ -35,11 +33,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             )
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
 
-        xdg_data_home = os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        db_dir = os.path.join(xdg_data_home, "jdbrowser")
-        os.makedirs(db_dir, exist_ok=True)
-        self.db_path = os.path.join(db_dir, "tag.db")
-        self.conn = setup_database(self.db_path)
+        self.conn = jdbrowser.conn
 
         cursor = self.conn.cursor()
         cursor.execute(
@@ -87,11 +81,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._navigating = True
 
         def swap():
-            # Close the database connection before the old page is replaced.
-            # QMainWindow takes ownership of the current central widget and
-            # deletes it when a new one is set, so we avoid touching `self`
-            # after calling setCentralWidget to prevent use-after-free errors.
-            self.conn.close()
             jdbrowser.main_window.setCentralWidget(new_page)
             jdbrowser.current_page = new_page
 
@@ -687,10 +676,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.exit_search_mode_select()
         super().mousePressEvent(event)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
 
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)

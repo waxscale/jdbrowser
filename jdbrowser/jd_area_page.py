@@ -12,7 +12,6 @@ from .database import (
     create_jd_area_tag,
     delete_jd_area_tag,
     rebuild_state_jd_area_tags,
-    setup_database,
     create_jd_area_header,
     update_jd_area_header,
     delete_jd_area_header,
@@ -51,12 +50,8 @@ class JdAreaPage(QtWidgets.QWidget):
         self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.show_hidden = settings.value("show_hidden", False, type=bool)
 
-        # Initialize SQLite database
-        xdg_data_home = os.getenv('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
-        db_dir = os.path.join(xdg_data_home, 'jdbrowser')
-        os.makedirs(db_dir, exist_ok=True)
-        self.db_path = os.path.join(db_dir, 'tag.db')
-        self.conn = setup_database(self.db_path)
+        # Shared SQLite database connection
+        self.conn = jdbrowser.conn
 
         app = QtWidgets.QApplication.instance()
         if app:
@@ -1145,7 +1140,6 @@ class JdAreaPage(QtWidgets.QWidget):
 
         # Instantiate the next level page and replace the current widget
         new_page = JdIdPage(parent_uuid=current_item.tag_id, jd_area=current_item.jd_area)
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1164,7 +1158,6 @@ class JdAreaPage(QtWidgets.QWidget):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        self.conn.close()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):

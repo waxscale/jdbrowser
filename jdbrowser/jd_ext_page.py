@@ -12,7 +12,6 @@ from .database import (
     create_jd_ext_tag,
     delete_jd_ext_tag,
     rebuild_state_jd_ext_tags,
-    setup_database,
     create_jd_ext_header,
     update_jd_ext_header,
     delete_jd_ext_header,
@@ -51,12 +50,8 @@ class JdExtPage(QtWidgets.QWidget):
         self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.show_hidden = settings.value("show_hidden", False, type=bool)
 
-        # Initialize SQLite database
-        xdg_data_home = os.getenv('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
-        db_dir = os.path.join(xdg_data_home, 'jdbrowser')
-        os.makedirs(db_dir, exist_ok=True)
-        self.db_path = os.path.join(db_dir, 'tag.db')
-        self.conn = setup_database(self.db_path)
+        # Shared SQLite database connection
+        self.conn = jdbrowser.conn
 
         cursor = self.conn.cursor()
         cursor.execute(
@@ -366,7 +361,6 @@ class JdExtPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -386,7 +380,6 @@ class JdExtPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1248,7 +1241,6 @@ class JdExtPage(QtWidgets.QWidget):
             grandparent_uuid=self.parent_uuid,
             great_grandparent_uuid=self.grandparent_uuid,
         )
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1267,7 +1259,6 @@ class JdExtPage(QtWidgets.QWidget):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        self.conn.close()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):

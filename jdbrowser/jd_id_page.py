@@ -11,7 +11,6 @@ from .search_line_edit import SearchLineEdit
 from .database import (
     create_jd_id_tag,
     rebuild_state_jd_id_tags,
-    setup_database,
     create_jd_id_header,
     update_jd_id_header,
     delete_jd_id_header,
@@ -50,12 +49,8 @@ class JdIdPage(QtWidgets.QWidget):
         self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.show_hidden = settings.value("show_hidden", False, type=bool)
 
-        # Initialize SQLite database
-        xdg_data_home = os.getenv('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
-        db_dir = os.path.join(xdg_data_home, 'jdbrowser')
-        os.makedirs(db_dir, exist_ok=True)
-        self.db_path = os.path.join(db_dir, 'tag.db')
-        self.conn = setup_database(self.db_path)
+        # Shared SQLite database connection
+        self.conn = jdbrowser.conn
 
         cursor = self.conn.cursor()
         cursor.execute(
@@ -354,7 +349,6 @@ class JdIdPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1195,7 +1189,6 @@ class JdIdPage(QtWidgets.QWidget):
             jd_id=current_item.jd_id,
             grandparent_uuid=self.parent_uuid,
         )
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1214,7 +1207,6 @@ class JdIdPage(QtWidgets.QWidget):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        self.conn.close()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
