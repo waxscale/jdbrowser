@@ -50,11 +50,11 @@ def setup_database(db_path):
                     'set_jd_ext_header_order',
                     'set_jd_ext_header_label',
                     'delete_jd_ext_header',
-                    'create_jd_directory_tag',
-                    'set_jd_directory_tag_order',
-                    'set_jd_directory_tag_label',
-                    'set_jd_directory_tag_icon',
-                    'delete_jd_directory_tag'
+                    'create_jd_directory',
+                    'set_jd_directory_order',
+                    'set_jd_directory_label',
+                    'set_jd_directory_icon',
+                    'delete_jd_directory'
                 )
             ),
             timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -241,38 +241,38 @@ def setup_database(db_path):
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_create_jd_directory_tag (
+        CREATE TABLE IF NOT EXISTS event_create_jd_directory (
             event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
+            directory_id TEXT NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_set_jd_directory_tag_order (
+        CREATE TABLE IF NOT EXISTS event_set_jd_directory_order (
             event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
+            directory_id TEXT NOT NULL,
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             linked_tag_uuid TEXT,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_set_jd_directory_tag_label (
+        CREATE TABLE IF NOT EXISTS event_set_jd_directory_label (
             event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
+            directory_id TEXT NOT NULL,
             new_label TEXT NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_set_jd_directory_tag_icon (
+        CREATE TABLE IF NOT EXISTS event_set_jd_directory_icon (
             event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
+            directory_id TEXT NOT NULL,
             icon BLOB,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS event_delete_jd_directory_tag (
+        CREATE TABLE IF NOT EXISTS event_delete_jd_directory (
             event_id INTEGER PRIMARY KEY,
-            tag_id TEXT NOT NULL,
+            directory_id TEXT NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
         );
 
@@ -313,8 +313,8 @@ def setup_database(db_path):
             icon BLOB
         );
 
-        CREATE TABLE IF NOT EXISTS state_jd_directory_tag_icons (
-            tag_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS state_jd_directory_icons (
+            directory_id TEXT PRIMARY KEY,
             icon BLOB
         );
 
@@ -340,8 +340,8 @@ def setup_database(db_path):
             UNIQUE(parent_uuid, [order])
         );
 
-        CREATE TABLE IF NOT EXISTS state_jd_directory_tags (
-            tag_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS state_jd_directories (
+            directory_id TEXT PRIMARY KEY,
             parent_uuid TEXT,
             [order] INTEGER NOT NULL,
             label TEXT NOT NULL,
@@ -358,8 +358,8 @@ def setup_database(db_path):
             ON event_set_jd_id_tag_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_event_set_jd_id_header_order_parent_uuid
             ON event_set_jd_id_header_order(parent_uuid);
-        CREATE INDEX IF NOT EXISTS idx_event_set_jd_directory_tag_order_parent_uuid
-            ON event_set_jd_directory_tag_order(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_event_set_jd_directory_order_parent_uuid
+            ON event_set_jd_directory_order(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_tags_parent_uuid
             ON state_jd_ext_tags(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_ext_headers_parent_uuid
@@ -368,8 +368,8 @@ def setup_database(db_path):
             ON state_jd_id_tags(parent_uuid);
         CREATE INDEX IF NOT EXISTS idx_state_jd_id_headers_parent_uuid
             ON state_jd_id_headers(parent_uuid);
-        CREATE INDEX IF NOT EXISTS idx_state_jd_directory_tags_parent_uuid
-            ON state_jd_directory_tags(parent_uuid);
+        CREATE INDEX IF NOT EXISTS idx_state_jd_directories_parent_uuid
+            ON state_jd_directories(parent_uuid);
     """)
     # Ensure existing databases have required columns
     def ensure_column(table_name, column_name, column_type="TEXT"):
@@ -388,14 +388,14 @@ def setup_database(db_path):
         "state_jd_ext_tags",
         "event_set_jd_ext_header_order",
         "state_jd_ext_headers",
-        "event_set_jd_directory_tag_order",
-        "state_jd_directory_tags",
+        "event_set_jd_directory_order",
+        "state_jd_directories",
     ):
         ensure_column(table, "parent_uuid")
 
     for table in (
-        "event_set_jd_directory_tag_order",
-        "state_jd_directory_tags",
+        "event_set_jd_directory_order",
+        "state_jd_directories",
     ):
         ensure_column(table, "linked_tag_uuid")
 
@@ -405,7 +405,7 @@ def setup_database(db_path):
     rebuild_state_jd_id_headers(conn)
     rebuild_state_jd_ext_tags(conn)
     rebuild_state_jd_ext_headers(conn)
-    rebuild_state_jd_directory_tags(conn)
+    rebuild_state_jd_directories(conn)
     conn.commit()
     _shared_connection = conn
     return _shared_connection
@@ -464,7 +464,7 @@ def rebuild_state_jd_area_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_area_tag);
     """)
     conn.commit()
-    rebuild_state_jd_directory_tags(conn)
+    rebuild_state_jd_directories(conn)
 
 def rebuild_state_jd_area_headers(conn):
     """Rebuild the state_jd_area_headers table from the event log."""
@@ -561,7 +561,7 @@ def rebuild_state_jd_id_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_id_tag);
     """)
     conn.commit()
-    rebuild_state_jd_directory_tags(conn)
+    rebuild_state_jd_directories(conn)
 
 def rebuild_state_jd_id_headers(conn):
     """Rebuild the state_jd_id_headers table from the event log."""
@@ -660,7 +660,7 @@ def rebuild_state_jd_ext_tags(conn):
         WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_ext_tag);
     """)
     conn.commit()
-    rebuild_state_jd_directory_tags(conn)
+    rebuild_state_jd_directories(conn)
 
 def rebuild_state_jd_ext_headers(conn):
     """Rebuild the state_jd_ext_headers table from the event log."""
@@ -703,65 +703,65 @@ def rebuild_state_jd_ext_headers(conn):
     """)
     conn.commit()
 
-def rebuild_state_jd_directory_tags(conn):
-    """Rebuild the state_jd_directory_tags table from the event log."""
+def rebuild_state_jd_directories(conn):
+    """Rebuild the state_jd_directories table from the event log."""
     cursor = conn.cursor()
     cursor.executescript("""
-        DELETE FROM state_jd_directory_tags;
+        DELETE FROM state_jd_directories;
 
         WITH latest_order AS (
             SELECT
-                o.tag_id,
+                o.directory_id,
                 o.parent_uuid,
                 o.[order],
                 o.linked_tag_uuid
-            FROM event_set_jd_directory_tag_order o
+            FROM event_set_jd_directory_order o
             JOIN (
-                SELECT tag_id, MAX(event_id) AS max_event
-                FROM event_set_jd_directory_tag_order
-                GROUP BY tag_id
-            ) lo ON o.tag_id = lo.tag_id AND o.event_id = lo.max_event
+                SELECT directory_id, MAX(event_id) AS max_event
+                FROM event_set_jd_directory_order
+                GROUP BY directory_id
+            ) lo ON o.directory_id = lo.directory_id AND o.event_id = lo.max_event
         ),
         latest_label AS (
             SELECT
-                l.tag_id,
+                l.directory_id,
                 l.new_label
-            FROM event_set_jd_directory_tag_label l
+            FROM event_set_jd_directory_label l
             JOIN (
-                SELECT tag_id, MAX(event_id) AS max_event
-                FROM event_set_jd_directory_tag_label
-                GROUP BY tag_id
-            ) ll ON l.tag_id = ll.tag_id AND l.event_id = ll.max_event
+                SELECT directory_id, MAX(event_id) AS max_event
+                FROM event_set_jd_directory_label
+                GROUP BY directory_id
+            ) ll ON l.directory_id = ll.directory_id AND l.event_id = ll.max_event
         )
-        INSERT INTO state_jd_directory_tags (tag_id, parent_uuid, [order], label, linked_tag_uuid)
+        INSERT INTO state_jd_directories (directory_id, parent_uuid, [order], label, linked_tag_uuid)
         SELECT
-            o.tag_id,
+            o.directory_id,
             o.parent_uuid,
             o.[order],
             COALESCE(ext.label, id.label, area.label, l.new_label) AS label,
             o.linked_tag_uuid
         FROM latest_order o
-        LEFT JOIN latest_label l ON o.tag_id = l.tag_id
+        LEFT JOIN latest_label l ON o.directory_id = l.directory_id
         LEFT JOIN state_jd_ext_tags ext ON o.linked_tag_uuid = ext.tag_id
         LEFT JOIN state_jd_id_tags id ON o.linked_tag_uuid = id.tag_id
         LEFT JOIN state_jd_area_tags area ON o.linked_tag_uuid = area.tag_id
-        WHERE o.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_directory_tag);
+        WHERE o.directory_id NOT IN (SELECT directory_id FROM event_delete_jd_directory);
     """)
 
     cursor.executescript("""
-        DELETE FROM state_jd_directory_tag_icons;
+        DELETE FROM state_jd_directory_icons;
 
-        INSERT INTO state_jd_directory_tag_icons (tag_id, icon)
+        INSERT INTO state_jd_directory_icons (directory_id, icon)
         SELECT
-            i.tag_id,
+            i.directory_id,
             i.icon
-        FROM event_set_jd_directory_tag_icon i
+        FROM event_set_jd_directory_icon i
         JOIN (
-            SELECT tag_id, MAX(event_id) AS max_event
-            FROM event_set_jd_directory_tag_icon
-            GROUP BY tag_id
-        ) latest ON i.tag_id = latest.tag_id AND i.event_id = latest.max_event
-        WHERE i.tag_id NOT IN (SELECT tag_id FROM event_delete_jd_directory_tag);
+            SELECT directory_id, MAX(event_id) AS max_event
+            FROM event_set_jd_directory_icon
+            GROUP BY directory_id
+        ) latest ON i.directory_id = latest.directory_id AND i.event_id = latest.max_event
+        WHERE i.directory_id NOT IN (SELECT directory_id FROM event_delete_jd_directory);
     """)
     conn.commit()
 
@@ -807,45 +807,45 @@ def delete_jd_ext_tag(conn, tag_id):
     )
     conn.commit()
 
-def create_jd_directory_tag(conn, parent_uuid, order, label, linked_tag_uuid=None):
-    """Create a new directory tag and return its tag_id, or None on conflict."""
+def create_jd_directory(conn, parent_uuid, order, label, linked_tag_uuid=None):
+    """Create a new directory and return its directory_id, or None on conflict."""
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT tag_id FROM state_jd_directory_tags WHERE [order] = ?',
+        'SELECT directory_id FROM state_jd_directories WHERE [order] = ?',
         (order,),
     )
     if cursor.fetchone():
         return None
-    tag_id = str(uuid.uuid4())
-    cursor.execute("INSERT INTO events (event_type) VALUES ('create_jd_directory_tag')")
+    directory_id = str(uuid.uuid4())
+    cursor.execute("INSERT INTO events (event_type) VALUES ('create_jd_directory')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_create_jd_directory_tag (event_id, tag_id) VALUES (?, ?)",
-        (event_id, tag_id),
+        "INSERT INTO event_create_jd_directory (event_id, directory_id) VALUES (?, ?)",
+        (event_id, directory_id),
     )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_order')")
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_order')")
     event_id = cursor.lastrowid
     cursor.execute(
-        'INSERT INTO event_set_jd_directory_tag_order (event_id, tag_id, parent_uuid, [order], linked_tag_uuid) VALUES (?, ?, ?, ?, ?)',
-        (event_id, tag_id, parent_uuid, order, linked_tag_uuid),
+        'INSERT INTO event_set_jd_directory_order (event_id, directory_id, parent_uuid, [order], linked_tag_uuid) VALUES (?, ?, ?, ?, ?)',
+        (event_id, directory_id, parent_uuid, order, linked_tag_uuid),
     )
-    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_tag_label')")
+    cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_label')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_set_jd_directory_tag_label (event_id, tag_id, new_label) VALUES (?, ?, ?)",
-        (event_id, tag_id, label),
+        "INSERT INTO event_set_jd_directory_label (event_id, directory_id, new_label) VALUES (?, ?, ?)",
+        (event_id, directory_id, label),
     )
     conn.commit()
-    return tag_id
+    return directory_id
 
-def delete_jd_directory_tag(conn, tag_id):
-    """Delete an existing directory tag."""
+def delete_jd_directory(conn, directory_id):
+    """Delete an existing directory."""
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO events (event_type) VALUES ('delete_jd_directory_tag')")
+    cursor.execute("INSERT INTO events (event_type) VALUES ('delete_jd_directory')")
     event_id = cursor.lastrowid
     cursor.execute(
-        "INSERT INTO event_delete_jd_directory_tag (event_id, tag_id) VALUES (?, ?)",
-        (event_id, tag_id),
+        "INSERT INTO event_delete_jd_directory (event_id, directory_id) VALUES (?, ?)",
+        (event_id, directory_id),
     )
     conn.commit()
 

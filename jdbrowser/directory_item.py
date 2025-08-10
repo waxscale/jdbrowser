@@ -12,9 +12,11 @@ from .flow_layout import FlowLayout
 
 
 class DirectoryItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, label, order, icon_data, page, index, tags=None):
+    def __init__(
+        self, directory_id, label, order, icon_data, page, index, tags=None
+    ):
         super().__init__()
-        self.tag_id = tag_id
+        self.directory_id = directory_id
         self.label_text = label if label is not None else ""
         self.order = order
         # Each tag tuple: (tag_id, label, order, parent_uuid)
@@ -191,7 +193,7 @@ class DirectoryItem(QtWidgets.QWidget):
         return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event):
-        """Select on left-click; right-click edits the tag."""
+        """Select on left-click; right-click edits the directory."""
         if self.page:
             if event.button() == QtCore.Qt.LeftButton:
                 self.page.set_selection(self.index)
