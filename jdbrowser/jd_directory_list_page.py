@@ -9,6 +9,7 @@ from .database import (
 )
 from .dialogs import EditTagDialog
 from .constants import *
+from .config import read_config
 
 class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
@@ -41,6 +42,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
         self.items = []
         self.selected_index = None
+        self.show_path = False
+        self.repository_path = read_config()
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -183,7 +186,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         rows = cursor.fetchall()
         for idx, row in enumerate(rows):
             tag_id, label, order, icon_data = row
-            item = DirectoryItem(tag_id, label, icon_data, self, idx)
+            item = DirectoryItem(tag_id, label, order, icon_data, self, idx)
+            item.updateLabel(self.show_path)
             self.vlayout.addWidget(item)
             self.items.append(item)
         self.vlayout.addStretch(1)
@@ -306,6 +310,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 break
 
+    def toggle_directory_path(self):
+        self.show_path = not self.show_path
+        for item in self.items:
+            item.updateLabel(self.show_path)
+        if self.selected_index is not None:
+            self.set_selection(self.selected_index)
+
     def closeEvent(self, event):
         self.conn.close()
         super().closeEvent(event)
@@ -340,6 +351,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_A, self._add_directory, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
+            (QtCore.Qt.Key_Tab, self.toggle_directory_path, None),
         ]
         self.shortcuts = []
         for mapping in mappings:

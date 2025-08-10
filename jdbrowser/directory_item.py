@@ -1,12 +1,14 @@
+import os
 from PySide6 import QtWidgets, QtGui, QtCore
 from .constants import HIGHLIGHT_COLOR, HOVER_COLOR, SLATE_COLOR, TEXT_COLOR
 
 
 class DirectoryItem(QtWidgets.QWidget):
-    def __init__(self, tag_id, label, icon_data, page, index):
+    def __init__(self, tag_id, label, order, icon_data, page, index):
         super().__init__()
         self.tag_id = tag_id
         self.label_text = label if label is not None else ""
+        self.order = order
         self.page = page
         self.index = index
         self.isSelected = False
@@ -80,6 +82,15 @@ class DirectoryItem(QtWidgets.QWidget):
             widget.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
 
         self.updateStyle()
+
+    def updateLabel(self, show_path):
+        if show_path:
+            formatted = f"{self.order:016d}"
+            formatted = "_".join(formatted[i:i+4] for i in range(0, 16, 4))
+            text = os.path.join(self.page.repository_path, formatted)
+        else:
+            text = self.label_text
+        self.label.setText(text)
 
     def updateStyle(self):
         bg = HIGHLIGHT_COLOR if self.isSelected else (
