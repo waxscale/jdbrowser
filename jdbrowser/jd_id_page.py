@@ -566,6 +566,18 @@ class JdIdPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            QtCore.QTimer.singleShot(
+                0,
+                lambda: self.scroll_area.setVerticalScrollBarPolicy(
+                    QtCore.Qt.ScrollBarAsNeeded
+                ),
+            )
+            QtCore.QTimer.singleShot(
+                0,
+                lambda: self.scroll_area.setHorizontalScrollBarPolicy(
+                    QtCore.Qt.ScrollBarAsNeeded
+                ),
+            )
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.addWidget(self.scroll_area)
