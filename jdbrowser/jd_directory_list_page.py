@@ -102,8 +102,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
+        self.conn.close()
         jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        QtCore.QTimer.singleShot(
+            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
+        )
 
     def ascend_to_id(self):
         from .jd_id_page import JdIdPage
@@ -123,8 +126,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
+        self.conn.close()
         jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        QtCore.QTimer.singleShot(
+            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
+        )
 
     def ascend_to_area(self):
         from .jd_area_page import JdAreaPage
@@ -142,8 +148,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
+        self.conn.close()
         jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        QtCore.QTimer.singleShot(
+            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
+        )
 
     def _warn(self, title: str, message: str) -> None:
         box = QtWidgets.QMessageBox(self)
@@ -416,8 +425,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             grandparent_uuid=parent_uuid,
             great_grandparent_uuid=self.parent_uuid,
         )
+        self.conn.close()
         jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        QtCore.QTimer.singleShot(
+            0, lambda np=new_page: jdbrowser.main_window.setCentralWidget(np)
+        )
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
