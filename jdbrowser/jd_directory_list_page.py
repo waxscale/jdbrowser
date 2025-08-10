@@ -22,6 +22,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             jdbrowser.main_window.setWindowTitle(
                 f"File Browser - [{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
             )
+        self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         self.setStyleSheet("background-color: black;")
         self._setup_shortcuts()
 

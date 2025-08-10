@@ -538,8 +538,25 @@ class JdAreaPage(QtWidgets.QWidget):
             self.search_shortcut_instances.append(s)
 
     def _setup_ui(self):
-        self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(True)
+        if not hasattr(self, "scroll"):
+            self.scroll = QtWidgets.QScrollArea()
+            self.scroll.setWidgetResizable(True)
+            layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self.scroll)
+
+            # Search input box
+            self.search_input = SearchLineEdit(self)
+            self.search_input.setFixedWidth(300)
+            self.search_input.setFixedHeight(30)
+            self.search_input.hide()
+            self.search_input.textChanged.connect(self.perform_search)
+            self._setup_search_shortcuts()
+        else:
+            old = self.scroll.takeWidget()
+            if old:
+                old.deleteLater()
+
         container = QtWidgets.QWidget()
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
@@ -654,18 +671,7 @@ class JdAreaPage(QtWidgets.QWidget):
         container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll.setWidget(container)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.scroll)
 
-        # Search input box
-        self.search_input = SearchLineEdit(self)
-        self.search_input.setFixedWidth(300)
-        self.search_input.setFixedHeight(30)
-        self.search_input.hide()
-        self.search_input.textChanged.connect(self.perform_search)
-
-        self._setup_search_shortcuts()
         self.search_input.move(self.width() - 310, self.height() - 40)
 
         style = f'''
