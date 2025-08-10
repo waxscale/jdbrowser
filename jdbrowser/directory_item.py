@@ -72,6 +72,12 @@ class DirectoryItem(QtWidgets.QWidget):
         right_layout.addStretch(1)
         layout.addWidget(self.right)
 
+        # Ensure clicks and hover on child widgets behave like the parent item
+        for widget in (self.icon, self.right, self.label):
+            widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            widget.enterEvent = self.enterEvent  # type: ignore[attr-defined]
+            widget.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
+
         self.updateStyle()
 
     def updateStyle(self):
