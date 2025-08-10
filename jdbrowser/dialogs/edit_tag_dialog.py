@@ -67,7 +67,8 @@ class EditTagDialog(QDialog):
 
         # Prefix input (below icon, full width)
         default_prefix = order
-        placeholder = ["jd_area", "jd_id", "jd_ext"][level]
+        placeholders = ["jd_area", "jd_id", "jd_ext", "order"]
+        placeholder = placeholders[level] if level < len(placeholders) else "order"
         self.prefix_input = QLineEdit("" if default_prefix is None else str(default_prefix))
         self.prefix_input.setPlaceholderText(placeholder)
         self.prefix_input.setValidator(QIntValidator())
