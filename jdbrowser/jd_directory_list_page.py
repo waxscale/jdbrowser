@@ -1,7 +1,7 @@
 from PySide6 import QtWidgets, QtGui, QtCore
 import jdbrowser
 
-class JdDirectoryListPage(QtWidgets.QMainWindow):
+class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
         self,
         parent_uuid,
@@ -18,17 +18,12 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
         self.current_jd_ext = jd_ext
         self.grandparent_uuid = grandparent_uuid
         self.great_grandparent_uuid = great_grandparent_uuid
-        self.setWindowTitle(
-            f"File Browser - [{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
-        )
-        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-        central = QtWidgets.QWidget()
-        central.setStyleSheet("background-color: black;")
-        self.setCentralWidget(central)
-        settings = QtCore.QSettings("xAI", "jdbrowser")
-        if settings.contains("pos") and settings.contains("size"):
-            self.move(settings.value("pos", type=QtCore.QPoint))
-            self.resize(settings.value("size", type=QtCore.QSize))
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setWindowTitle(
+                f"File Browser - [{jd_area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+            )
+        self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+        self.setStyleSheet("background-color: black;")
         self._setup_shortcuts()
 
     def ascend_level(self):
@@ -40,10 +35,8 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
             jd_id=self.current_jd_id,
             grandparent_uuid=self.great_grandparent_uuid,
         )
-        new_page.setGeometry(self.geometry())
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -73,11 +66,5 @@ class JdDirectoryListPage(QtWidgets.QMainWindow):
         quit_keys = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
-            s.activated.connect(self.close)
+            s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
-
-    def closeEvent(self, event):
-        settings = QtCore.QSettings("xAI", "jdbrowser")
-        settings.setValue("pos", self.pos())
-        settings.setValue("size", self.size())
-        super().closeEvent(event)

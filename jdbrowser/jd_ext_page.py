@@ -19,10 +19,11 @@ from .database import (
 )
 from .constants import *
 
-class JdExtPage(QtWidgets.QMainWindow):
+class JdExtPage(QtWidgets.QWidget):
     def __init__(self, parent_uuid, jd_area, jd_id, grandparent_uuid):
         super().__init__()
-        self.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setWindowTitle(f"File Browser - [{jd_area:02d}.{jd_id:02d}]")
         self.parent_uuid = parent_uuid
         self.grandparent_uuid = grandparent_uuid
         self.current_jd_area = jd_area
@@ -54,9 +55,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, 'tag.db')
         self.conn = setup_database(self.db_path)
-
-        # Disable window decorations
-        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         app = QtWidgets.QApplication.instance()
         if app:
@@ -90,11 +88,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         self._setup_ui()
         self._setup_shortcuts()
         self.updateSelection()
-
-        # Restore saved position and size
-        if settings.contains("pos") and settings.contains("size"):
-            self.move(settings.value("pos", type=QtCore.QPoint))
-            self.resize(settings.value("size", type=QtCore.QSize))
 
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
@@ -344,9 +337,9 @@ class JdExtPage(QtWidgets.QMainWindow):
         from .jd_id_page import JdIdPage
 
         new_page = JdIdPage(parent_uuid=self.grandparent_uuid, jd_area=self.current_jd_area)
+        self.conn.close()
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -587,8 +580,25 @@ class JdExtPage(QtWidgets.QMainWindow):
             self.search_shortcut_instances.append(s)
 
     def _setup_ui(self):
-        self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(True)
+        if not hasattr(self, "scroll_area"):
+            self.scroll_area = QtWidgets.QScrollArea()
+            self.scroll_area.setWidgetResizable(True)
+            layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self.scroll_area)
+
+            # Search input box
+            self.search_input = SearchLineEdit(self)
+            self.search_input.setFixedWidth(300)
+            self.search_input.setFixedHeight(30)
+            self.search_input.hide()
+            self.search_input.textChanged.connect(self.perform_search)
+            self._setup_search_shortcuts()
+        else:
+            old = self.scroll_area.takeWidget()
+            if old:
+                old.deleteLater()
+
         container = QtWidgets.QWidget()
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
@@ -705,7 +715,7 @@ class JdExtPage(QtWidgets.QMainWindow):
                     section_index,
                     display,
                 )
-                header_item.setMinimumWidth(self.scroll.viewport().width() - 10)
+                header_item.setMinimumWidth(self.scroll_area.viewport().width() - 10)
                 mainLayout.addWidget(header_item)
                 mainLayout.addSpacing(10)
                 last_header_id = obj_id
@@ -735,17 +745,8 @@ class JdExtPage(QtWidgets.QMainWindow):
         mainLayout.addStretch()
         container.setStyleSheet(f'background-color: #000000;')
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.scroll.setWidget(container)
-        self.setCentralWidget(self.scroll)
+        self.scroll_area.setWidget(container)
 
-        # Search input box
-        self.search_input = SearchLineEdit(self)
-        self.search_input.setFixedWidth(300)
-        self.search_input.setFixedHeight(30)
-        self.search_input.hide()
-        self.search_input.textChanged.connect(self.perform_search)
-
-        self._setup_search_shortcuts()
         self.search_input.move(self.width() - 310, self.height() - 40)
 
         style = f'''
@@ -772,7 +773,7 @@ class JdExtPage(QtWidgets.QMainWindow):
         current_tag_id = None
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current_tag_id = self.sections[self.sec_idx][self.idx_in_sec].tag_id
-        old_widget = self.scroll.takeWidget()
+        old_widget = self.scroll_area.takeWidget()
         if old_widget:
             old_widget.deleteLater()
         self.sections = []
@@ -871,7 +872,7 @@ class JdExtPage(QtWidgets.QMainWindow):
             self.shortcuts.append(s)
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
-            s.activated.connect(self.close)
+            s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
 
     def enter_search_mode(self):
@@ -1073,12 +1074,12 @@ class JdExtPage(QtWidgets.QMainWindow):
     def centerSelectedItem(self):
         if not self.in_search_mode and self.sections:
             current = self.sections[self.sec_idx][self.idx_in_sec]
-            self.scroll.ensureWidgetVisible(current)
-            viewport = self.scroll.viewport()
+            self.scroll_area.ensureWidgetVisible(current)
+            viewport = self.scroll_area.viewport()
             viewport_height = viewport.height()
             widget_rect = current.rect()
-            widget_pos = current.mapTo(self.scroll.widget(), widget_rect.topLeft())
-            scroll_bar = self.scroll.verticalScrollBar()
+            widget_pos = current.mapTo(self.scroll_area.widget(), widget_rect.topLeft())
+            scroll_bar = self.scroll_area.verticalScrollBar()
             target_pos = widget_pos.y() - (viewport_height - widget_rect.height()) // 2
             scroll_bar.setValue(max(0, target_pos))
             self.updateSelection()
@@ -1126,15 +1127,14 @@ class JdExtPage(QtWidgets.QMainWindow):
             grandparent_uuid=self.parent_uuid,
             great_grandparent_uuid=self.grandparent_uuid,
         )
-        new_page.setGeometry(self.geometry())
+        self.conn.close()
         jdbrowser.current_page = new_page
-        new_page.show()
-        self.close()
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
             current = self.sections[self.sec_idx][self.idx_in_sec]
-            self.scroll.ensureWidgetVisible(current)
+            self.scroll_area.ensureWidgetVisible(current)
             for s, sec in enumerate(self.sections):
                 for i, item in enumerate(sec):
                     item.isSelected = (s == self.sec_idx and i == self.idx_in_sec)
@@ -1146,9 +1146,6 @@ class JdExtPage(QtWidgets.QMainWindow):
         super().mousePressEvent(event)
 
     def closeEvent(self, event):
-        settings = QtCore.QSettings("xAI", "jdbrowser")
-        settings.setValue("pos", self.pos())
-        settings.setValue("size", self.size())
         self.conn.close()
         super().closeEvent(event)
 
@@ -1158,7 +1155,7 @@ class JdExtPage(QtWidgets.QMainWindow):
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)
         # Update header widths on resize
-        for widget in self.scroll.widget().findChildren(QtWidgets.QLabel):
+        for widget in self.scroll_area.widget().findChildren(QtWidgets.QLabel):
             if widget.styleSheet().startswith(f'background-color: {BUTTON_COLOR}'):
-                widget.setMinimumWidth(self.scroll.viewport().width() - 10)
+                widget.setMinimumWidth(self.scroll_area.viewport().width() - 10)
         super().resizeEvent(event)
