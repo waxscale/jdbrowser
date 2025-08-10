@@ -582,9 +582,7 @@ class JdAreaPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-            self.scroll_area.setStyleSheet(
-                f"border: none; background-color: {BACKGROUND_COLOR};"
-            )
+            self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -616,6 +614,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 old.deleteLater()
 
         container = QtWidgets.QWidget()
+        container.setStyleSheet("background-color: #000000;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
         mainLayout.setContentsMargins(5, 5, 5, 5)
