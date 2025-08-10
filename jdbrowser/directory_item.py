@@ -97,11 +97,11 @@ class DirectoryItem(QtWidgets.QWidget):
         self._build_tag_pills()
         layout.addWidget(self.right)
 
-        # Ensure clicks and hover on child widgets behave like the parent item
+        # Ensure clicks on child widgets behave like the parent item and
+        # monitor their hover events via an event filter
         for widget in (self.icon, self.right, self.label, self.tags_widget):
             widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
-            widget.enterEvent = self.enterEvent  # type: ignore[attr-defined]
-            widget.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
+            widget.installEventFilter(self)
 
         self.updateStyle()
 
@@ -131,8 +131,7 @@ class DirectoryItem(QtWidgets.QWidget):
             # Pass mouse events through to the DirectoryItem so clicking a tag
             # pill still selects the underlying directory entry
             btn.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
-            btn.enterEvent = self.enterEvent  # type: ignore[attr-defined]
-            btn.leaveEvent = self.leaveEvent  # type: ignore[attr-defined]
+            btn.installEventFilter(self)
             self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
         self.tags_widget.adjustSize()
@@ -162,17 +161,34 @@ class DirectoryItem(QtWidgets.QWidget):
         self.right.setGraphicsEffect(right_effect)
         self.setStyleSheet(f"background-color: {bg}; border-radius: 5px;")
 
-    def enterEvent(self, event):
+    def _on_enter(self):
+        """Handle hover entering the item."""
         self.isHover = True
         self.updateStyle()
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        super().enterEvent(event)
 
-    def leaveEvent(self, event):
+    def _on_leave(self):
+        """Handle hover leaving the item."""
         self.isHover = False
         self.updateStyle()
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
+
+    def enterEvent(self, event):
+        self._on_enter()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._on_leave()
         super().leaveEvent(event)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Enter:
+            self._on_enter()
+        elif event.type() == QtCore.QEvent.Leave:
+            pos = self.mapFromGlobal(QtGui.QCursor.pos())
+            if not self.rect().contains(pos):
+                self._on_leave()
+        return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event):
         """Select on left-click; right-click edits the tag."""
