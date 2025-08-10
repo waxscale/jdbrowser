@@ -53,6 +53,19 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             jd_id=self.current_jd_id,
             grandparent_uuid=self.great_grandparent_uuid,
         )
+        # Ensure the item we descended from becomes selected when returning
+        target_tag_id = self.parent_uuid
+        found = False
+        for s, sec in enumerate(new_page.sections):
+            for i, item in enumerate(sec):
+                if item.tag_id == target_tag_id:
+                    new_page.sec_idx = s
+                    new_page.idx_in_sec = i
+                    found = True
+                    break
+            if found:
+                break
+        new_page.updateSelection()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
