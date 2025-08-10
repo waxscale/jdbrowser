@@ -91,6 +91,40 @@ class JdAreaPage(QtWidgets.QWidget):
         self._setup_shortcuts()
         self.updateSelection()
 
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        super().paintEvent(event)
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        rect = self.rect()
+        painter.fillRect(rect, QtGui.QColor(ROOT_BG_COLOR))
+
+        width = rect.width()
+        height = rect.height()
+
+        # Middle layer: blue radial glow
+        blue_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 600)
+        blue_grad.setColorAt(0, QtGui.QColor(0x7A, 0xA2, 0xF7, round(0.14 * 255)))
+        blue_grad.setColorAt(1, QtCore.Qt.transparent)
+        painter.save()
+        painter.translate(1.10 * width, 0.10 * height)
+        painter.scale(1, 800 / 1200)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(blue_grad)
+        painter.drawEllipse(QtCore.QRectF(-600, -600, 1200, 1200))
+        painter.restore()
+
+        # Top layer: purple radial glow
+        purple_grad = QtGui.QRadialGradient(QtCore.QPointF(0, 0), 600)
+        purple_grad.setColorAt(0, QtGui.QColor(0xBB, 0x9A, 0xF7, round(0.16 * 255)))
+        purple_grad.setColorAt(1, QtCore.Qt.transparent)
+        painter.save()
+        painter.translate(0.20 * width, -0.10 * height)
+        painter.scale(1, 800 / 1200)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(purple_grad)
+        painter.drawEllipse(QtCore.QRectF(-600, -600, 1200, 1200))
+        painter.restore()
+
     def set_selection(self, section_idx, item_idx):
         """Update the current selection to the specified section and item index."""
         if 0 <= section_idx < len(self.sections) and 0 <= item_idx < len(self.sections[section_idx]):
@@ -582,7 +616,8 @@ class JdAreaPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-            self.scroll_area.setStyleSheet("border: none; background-color: #000000;")
+            self.scroll_area.setStyleSheet("border: none; background: transparent;")
+            self.scroll_area.viewport().setStyleSheet("background: transparent;")
             scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
@@ -614,7 +649,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 old.deleteLater()
 
         container = QtWidgets.QWidget()
-        container.setStyleSheet("background-color: #000000;")
+        container.setStyleSheet("background: transparent;")
         mainLayout = QtWidgets.QVBoxLayout(container)
         mainLayout.setSpacing(10)
         mainLayout.setContentsMargins(5, 15, 5, 5)
@@ -725,7 +760,7 @@ class JdAreaPage(QtWidgets.QWidget):
             section_index += 1
 
         mainLayout.addStretch()
-        container.setStyleSheet(f'background-color: #000000;')
+        container.setStyleSheet("background: transparent;")
         container.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.scroll_area.setWidget(container)
 
@@ -733,12 +768,12 @@ class JdAreaPage(QtWidgets.QWidget):
 
         style = f'''
         * {{ font-family: 'FiraCode Nerd Font'; }}
-        QWidget {{ background-color: #000000; }}
-        QMainWindow {{ background-color: #000000; }}
-        QScrollArea {{ border: none; background-color: #000000; }}
+        QWidget {{ background-color: transparent; }}
+        QMainWindow {{ background-color: transparent; }}
+        QScrollArea {{ border: none; background-color: transparent; }}
         QScrollBar:vertical {{
             width: 8px;
-            background: #000000;
+            background: {ROOT_BG_COLOR};
         }}
         QScrollBar::handle:vertical {{
             background: {BORDER_COLOR};
@@ -749,7 +784,7 @@ class JdAreaPage(QtWidgets.QWidget):
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         QScrollBar:horizontal {{
             height: 8px;
-            background: #000000;
+            background: {ROOT_BG_COLOR};
         }}
         QScrollBar::handle:horizontal {{
             background: {BORDER_COLOR};
