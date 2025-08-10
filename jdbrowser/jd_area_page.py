@@ -1145,7 +1145,6 @@ class JdAreaPage(QtWidgets.QWidget):
 
         # Instantiate the next level page and replace the current widget
         new_page = JdIdPage(parent_uuid=current_item.tag_id, jd_area=current_item.jd_area)
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1162,10 +1161,6 @@ class JdAreaPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.exit_search_mode_select()
         super().mousePressEvent(event)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)

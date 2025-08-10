@@ -667,10 +667,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             self.exit_search_mode_select()
         super().mousePressEvent(event)
 
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
-
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)
         super().resizeEvent(event)

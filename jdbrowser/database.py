@@ -1,8 +1,18 @@
 import sqlite3
 import uuid
 
+_shared_connection = None
+
+
 def setup_database(db_path):
-    """Initialize SQLite database tables with triggers and state constraints."""
+    """Initialize SQLite database tables with triggers and state constraints.
+
+    A single SQLite connection is reused across the application so that all
+    pages share the same database handle.
+    """
+    global _shared_connection
+    if _shared_connection is not None:
+        return _shared_connection
     conn = sqlite3.connect(db_path)
     conn.execute('PRAGMA foreign_keys = ON')
     cursor = conn.cursor()
@@ -387,7 +397,8 @@ def setup_database(db_path):
     rebuild_state_jd_ext_headers(conn)
     rebuild_state_jd_directory_tags(conn)
     conn.commit()
-    return conn
+    _shared_connection = conn
+    return _shared_connection
 
 def rebuild_state_jd_area_tags(conn):
     """Rebuild the state_jd_area_tags table from the event log."""

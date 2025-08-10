@@ -354,7 +354,6 @@ class JdIdPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1195,7 +1194,6 @@ class JdIdPage(QtWidgets.QWidget):
             jd_id=current_item.jd_id,
             grandparent_uuid=self.parent_uuid,
         )
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1212,10 +1210,6 @@ class JdIdPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.exit_search_mode_select()
         super().mousePressEvent(event)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
