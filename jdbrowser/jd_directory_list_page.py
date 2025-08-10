@@ -455,10 +455,10 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.recent_frame = QtWidgets.QFrame()
         self.recent_frame.setStyleSheet(
             f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
-            f" background-color: #000; padding: 10px;"
+            f" background-color: #000;"
         )
         v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
-        v_layout.setContentsMargins(5, 5, 5, 5)
+        v_layout.setContentsMargins(0, 0, 0, 0)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
             item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
@@ -473,7 +473,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
     def _update_recent_width(self):
         if self.recent_frame:
-            width = int(self.scroll_area.viewport().width() * 0.8)
+            width = int(self.scroll_area.viewport().width() * 0.6)
             self.recent_frame.setFixedWidth(width)
 
     def set_selection(self, index):

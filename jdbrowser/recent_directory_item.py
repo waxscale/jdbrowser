@@ -38,20 +38,23 @@ class RecentDirectoryItem(QtWidgets.QWidget):
                 self.icon.setPixmap(rounded_pixmap)
                 self.icon.setFixedSize(120, 75)
                 self.icon.setContentsMargins(0, 0, 0, 0)
-                self.icon.setStyleSheet("background-color: transparent;")
+                self.icon.setMargin(0)
+                self.icon.setStyleSheet(
+                    "background-color: transparent; padding: 0; margin: 0; border: none;"
+                )
             else:
                 self.icon = QtWidgets.QFrame()
                 self.icon.setFixedSize(120, 75)
                 self.icon.setContentsMargins(0, 0, 0, 0)
                 self.icon.setStyleSheet(
-                    f"background-color: {SLATE_COLOR}; border-radius: 3px;"
+                    f"background-color: {SLATE_COLOR}; border-radius: 3px; padding: 0; margin: 0;"
                 )
         else:
             self.icon = QtWidgets.QFrame()
             self.icon.setFixedSize(120, 75)
             self.icon.setContentsMargins(0, 0, 0, 0)
             self.icon.setStyleSheet(
-                f"background-color: {SLATE_COLOR}; border-radius: 3px;"
+                f"background-color: {SLATE_COLOR}; border-radius: 3px; padding: 0; margin: 0;"
             )
         layout.addWidget(self.icon)
 
