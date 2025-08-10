@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from PySide6 import QtWidgets, QtGui, QtCore
+import shiboken6
 import jdbrowser
 from .dialogs import EditTagDialog, SimpleEditTagDialog, InputTagDialog, DeleteTagDialog
 from .dialogs.header_dialog import HeaderDialog
@@ -544,17 +545,16 @@ class JdAreaPage(QtWidgets.QWidget):
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            scroll_area = self.scroll_area
             QtCore.QTimer.singleShot(
                 100,
-                lambda: self.scroll_area.setVerticalScrollBarPolicy(
-                    QtCore.Qt.ScrollBarAsNeeded
-                ),
+                lambda sa=scroll_area: shiboken6.isValid(sa)
+                and sa.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded),
             )
             QtCore.QTimer.singleShot(
                 100,
-                lambda: self.scroll_area.setHorizontalScrollBarPolicy(
-                    QtCore.Qt.ScrollBarAsNeeded
-                ),
+                lambda sa=scroll_area: shiboken6.isValid(sa)
+                and sa.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded),
             )
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
