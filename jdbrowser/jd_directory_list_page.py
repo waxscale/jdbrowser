@@ -434,9 +434,10 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
-        new_order = max_order + 1
+        directory_order = max_order + 1
+        tag_order = max_order + 2
         directory_id = create_jd_directory(
-            self.conn, self.parent_uuid, new_order, "", None
+            self.conn, self.parent_uuid, directory_order, "", None
         )
 
         if directory_id:
@@ -452,11 +453,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 )
                 row = cursor.fetchone()
             tag_label = row[0] if row else ""
-            cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
-            result = cursor.fetchone()
-            max_order = result[0] if result and result[0] is not None else new_order
             create_jd_directory(
-                self.conn, directory_id, max_order + 1, tag_label, self.parent_uuid
+                self.conn, directory_id, tag_order, tag_label, self.parent_uuid
             )
 
         rebuild_state_jd_directories(self.conn)
