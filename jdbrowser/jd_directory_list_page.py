@@ -42,9 +42,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
 
         self.items = []
         self.selected_index = None
-        self.show_path = False
+        self.show_prefix = False
         settings = QtCore.QSettings("xAI", "jdbrowser")
-        self.show_path = settings.value("show_path", False, type=bool)
+        self.show_prefix = settings.value("show_prefix", False, type=bool)
         self.repository_path = read_config()
 
         self._setup_ui()
@@ -189,7 +189,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         for idx, row in enumerate(rows):
             tag_id, label, order, icon_data = row
             item = DirectoryItem(tag_id, label, order, icon_data, self, idx)
-            item.updateLabel(self.show_path)
+            item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
         self.vlayout.addStretch(1)
@@ -309,14 +309,14 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 break
 
-    def toggle_directory_path(self):
-        self.show_path = not self.show_path
+    def toggle_label_prefix(self):
+        self.show_prefix = not self.show_prefix
         for item in self.items:
-            item.updateLabel(self.show_path)
+            item.updateLabel(self.show_prefix)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)
         settings = QtCore.QSettings("xAI", "jdbrowser")
-        settings.setValue("show_path", self.show_path)
+        settings.setValue("show_prefix", self.show_prefix)
 
     def closeEvent(self, event):
         self.conn.close()
@@ -352,7 +352,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_A, self._add_directory, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
-            (QtCore.Qt.Key_Tab, self.toggle_directory_path, None),
+            (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
         ]
         self.shortcuts = []
         for mapping in mappings:
