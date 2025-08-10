@@ -100,11 +100,13 @@ class JdAreaPage(QtWidgets.QWidget):
         # can only be painted by one painter at a time" and even crashes.
         painter = QtGui.QPainter(self)
         try:
-            painter.setRenderHints(
+            hints = (
                 QtGui.QPainter.RenderHint.Antialiasing
-                | QtGui.QPainter.RenderHint.HighQualityAntialiasing
                 | QtGui.QPainter.RenderHint.SmoothPixmapTransform
             )
+            if hasattr(QtGui.QPainter.RenderHint, "HighQualityAntialiasing"):
+                hints |= QtGui.QPainter.RenderHint.HighQualityAntialiasing
+            painter.setRenderHints(hints)
             rect = self.rect()
             painter.fillRect(rect, QtGui.QColor(ROOT_BG_COLOR))
 
