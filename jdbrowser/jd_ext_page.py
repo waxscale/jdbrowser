@@ -692,6 +692,7 @@ class JdExtPage(QtWidgets.QWidget):
                 [(crumb_area, self.ascend_to_area), (crumb_id, self.ascend_level)]
             )
             layout.addWidget(self.breadcrumb_bar)
+            layout.addSpacing(10)
             layout.addWidget(self.scroll_area)
 
             # Search input box

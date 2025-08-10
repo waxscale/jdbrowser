@@ -644,6 +644,7 @@ class JdIdPage(QtWidgets.QWidget):
             crumb_text = f"{self.current_jd_area:02d} {self.area_label}".strip()
             self.breadcrumb_bar = self._build_breadcrumb([(crumb_text, self.ascend_level)])
             layout.addWidget(self.breadcrumb_bar)
+            layout.addSpacing(10)
             layout.addWidget(self.scroll_area)
 
             # Search input box

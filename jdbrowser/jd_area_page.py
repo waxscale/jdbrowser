@@ -599,6 +599,7 @@ class JdAreaPage(QtWidgets.QWidget):
             layout.setSpacing(0)
             self.breadcrumb_bar = self._build_breadcrumb([("Home", None)])
             layout.addWidget(self.breadcrumb_bar)
+            layout.addSpacing(10)
             layout.addWidget(self.scroll_area)
 
             # Search input box
