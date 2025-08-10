@@ -366,7 +366,6 @@ class JdExtPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -386,7 +385,6 @@ class JdExtPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1248,7 +1246,6 @@ class JdExtPage(QtWidgets.QWidget):
             grandparent_uuid=self.parent_uuid,
             great_grandparent_uuid=self.grandparent_uuid,
         )
-        self.conn.close()
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
@@ -1265,10 +1262,6 @@ class JdExtPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.exit_search_mode_select()
         super().mousePressEvent(event)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
