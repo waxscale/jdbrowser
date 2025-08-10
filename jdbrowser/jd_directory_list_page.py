@@ -176,12 +176,19 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.selected_index = None
         cursor = self.conn.cursor()
 
-        # Fetch info for the current tag so each directory shows at least this tag
+        # Fetch info for the current tag so each directory shows at least this tag.
+        # Depending on depth, the parent may live in the directory or ext tag table.
         cursor.execute(
             "SELECT tag_id, label, [order], parent_uuid FROM state_jd_directory_tags WHERE tag_id = ?",
             (self.parent_uuid,),
         )
         row = cursor.fetchone()
+        if not row:
+            cursor.execute(
+                "SELECT tag_id, label, [order], parent_uuid FROM state_jd_ext_tags WHERE tag_id = ?",
+                (self.parent_uuid,),
+            )
+            row = cursor.fetchone()
         current_tag = tuple(row) if row else None
 
         cursor.execute(
