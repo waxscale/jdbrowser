@@ -168,7 +168,16 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         current_item = self.items[self.selected_index]
         from .jd_directory_page import JdDirectoryPage
 
-        new_page = JdDirectoryPage(current_item.directory_id)
+        new_page = JdDirectoryPage(
+            current_item.directory_id,
+            parent_uuid=self.parent_uuid,
+            jd_area=self.current_jd_area,
+            jd_id=self.current_jd_id,
+            jd_ext=self.current_jd_ext,
+            grandparent_uuid=self.grandparent_uuid,
+            great_grandparent_uuid=self.great_grandparent_uuid,
+            ext_label=self.ext_label,
+        )
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
