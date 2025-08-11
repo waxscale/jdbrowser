@@ -471,8 +471,27 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
+            cursor.execute(
+                """
+                SELECT dt.tag_id,
+                       COALESCE(ext.label, id.label, area.label) AS label,
+                       COALESCE(ext.[order], id.[order], area.[order]) AS [order],
+                       COALESCE(ext.parent_uuid, id.parent_uuid) AS parent_uuid
+                FROM state_jd_directory_tags dt
+                LEFT JOIN state_jd_ext_tags ext ON dt.tag_id = ext.tag_id
+                LEFT JOIN state_jd_id_tags id ON dt.tag_id = id.tag_id
+                LEFT JOIN state_jd_area_tags area ON dt.tag_id = area.tag_id
+                WHERE dt.directory_id = ?
+                ORDER BY [order]
+                """,
+                (directory_id,),
+            )
+            tag_rows = cursor.fetchall()
+            tags = [tuple(t) for t in tag_rows]
             index = len(self.items)
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self, index)
+            item = RecentDirectoryItem(
+                directory_id, label, order, icon_data, self, index, tags
+            )
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.recent_items.append(item)
@@ -525,7 +544,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
             index = len(self.items)
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self, index)
+            item = RecentDirectoryItem(
+                directory_id, label, order, icon_data, self, index, []
+            )
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.untagged_items.append(item)
@@ -578,6 +599,64 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if self.in_search_mode or not self.items:
             return
         self.set_selection(len(self.items) - 1)
+
+    def move_to_section_start(self):
+        if self.in_search_mode or not self.items:
+            return
+        bounds = []
+        if self.main_count:
+            bounds.append((0, self.main_count - 1))
+        if self.recent_items:
+            start = self.main_count
+            bounds.append((start, start + len(self.recent_items) - 1))
+        if self.untagged_items:
+            start = self.main_count + len(self.recent_items)
+            bounds.append((start, start + len(self.untagged_items) - 1))
+        if not bounds:
+            return
+        if self.selected_index is None:
+            self.set_selection(bounds[0][0])
+            return
+        idx = self.selected_index
+        current = 0
+        for i, (s, e) in enumerate(bounds):
+            if s <= idx <= e:
+                current = i
+                start = s
+                break
+        if idx != start:
+            self.set_selection(start)
+        elif current > 0:
+            self.set_selection(bounds[current - 1][0])
+
+    def move_to_section_end(self):
+        if self.in_search_mode or not self.items:
+            return
+        bounds = []
+        if self.main_count:
+            bounds.append((0, self.main_count - 1))
+        if self.recent_items:
+            start = self.main_count
+            bounds.append((start, start + len(self.recent_items) - 1))
+        if self.untagged_items:
+            start = self.main_count + len(self.recent_items)
+            bounds.append((start, start + len(self.untagged_items) - 1))
+        if not bounds:
+            return
+        if self.selected_index is None:
+            self.set_selection(bounds[-1][1])
+            return
+        idx = self.selected_index
+        current = 0
+        for i, (s, e) in enumerate(bounds):
+            if s <= idx <= e:
+                current = i
+                end = e
+                break
+        if idx != end:
+            self.set_selection(end)
+        elif current + 1 < len(bounds):
+            self.set_selection(bounds[current + 1][1])
 
     def _add_directory(self):
         if self.selected_index is not None and self.selected_index >= self.main_count:
@@ -882,8 +961,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_D, self.move_selection_multiple, 3, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
             (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
-            (QtCore.Qt.Key_BracketLeft, self.move_to_start, None),
-            (QtCore.Qt.Key_BracketRight, self.move_to_end, None),
+            (QtCore.Qt.Key_BracketLeft, self.move_to_section_start, None),
+            (QtCore.Qt.Key_BracketRight, self.move_to_section_end, None),
             (QtCore.Qt.Key_G, self.move_to_start, None),
             (QtCore.Qt.Key_G, self.move_to_end, None, QtCore.Qt.KeyboardModifier.ShiftModifier),
             (QtCore.Qt.Key_Home, self.move_to_start, None),
