@@ -460,10 +460,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         self.recent_frame = QtWidgets.QFrame()
-        self.recent_frame.setStyleSheet(
-            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
-            f" background-color: #000;"
-        )
+        self.recent_frame.setStyleSheet("background-color: #000; border: none;")
         self.recent_frame.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
@@ -533,9 +530,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         self.untagged_frame = QtWidgets.QFrame()
-        self.untagged_frame.setStyleSheet(
-            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;" f" background-color: #000;"
-        )
+        self.untagged_frame.setStyleSheet("background-color: #000; border: none;")
         self.untagged_frame.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
