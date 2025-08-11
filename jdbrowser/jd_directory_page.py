@@ -36,6 +36,39 @@ FILE_TYPE_ICONS = {
 }
 DEFAULT_FILE_ICON = "\uf15b"  # nf-fa-file_o
 
+
+THUMBNAIL_EXTS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".bmp",
+    ".gif",
+    ".webp",
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".webm",
+}
+
+
+class ThumbnailLoader(QtCore.QRunnable):
+    def __init__(self, page, label, path):
+        super().__init__()
+        self.page = page
+        self.label = label
+        self.path = path
+
+    def run(self):
+        pixmap = self.page._thumbnail_for_path(self.path)
+        if pixmap:
+            QtCore.QMetaObject.invokeMethod(
+                self.label,
+                "setPixmap",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(QtGui.QPixmap, pixmap),
+            )
+
 class JdDirectoryPage(QtWidgets.QWidget):
     def __init__(
         self,
@@ -418,11 +451,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
         icon_label = QtWidgets.QLabel()
         icon_label.setFixedSize(120, 75)
         icon_label.setStyleSheet("border: none; border-radius: 10px;")
-        pixmap = self._thumbnail_for_path(path)
-        if pixmap:
-            icon_label.setPixmap(pixmap)
+        ext = os.path.splitext(name)[1].lower()
+        if ext in THUMBNAIL_EXTS:
+            placeholder = QtGui.QPixmap(120, 75)
+            placeholder.fill(QtGui.QColor(SLATE_COLOR))
+            icon_label.setPixmap(placeholder)
+            self._load_thumbnail_async(icon_label, path)
         else:
-            char = self._icon_for_extension(os.path.splitext(name)[1].lower())
+            char = self._icon_for_extension(ext)
             pixmap = QtGui.QPixmap(120, 75)
             pixmap.fill(QtGui.QColor(SLATE_COLOR))
             painter = QtGui.QPainter(pixmap)
@@ -510,6 +546,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if ext in {".mp4", ".mkv", ".avi", ".mov", ".webm"}:
             return self._video_thumbnail(path)
         return None
+
+    def _load_thumbnail_async(
+        self, label: QtWidgets.QLabel, path: str
+    ) -> None:
+        QtCore.QThreadPool.globalInstance().start(
+            ThumbnailLoader(self, label, path)
+        )
 
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
