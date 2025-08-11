@@ -179,8 +179,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.file_list.setStyleSheet(
             "QListWidget{background-color: transparent; border: none;}"
             "QListWidget::item{background-color: transparent; border: none; border-radius: 5px;}"
-            f"QListWidget::item:selected{{background-color: {HIGHLIGHT_COLOR};}}"
             f"QListWidget::item:hover{{background-color: {HOVER_COLOR};}}"
+            f"QListWidget::item:selected{{background-color: {HIGHLIGHT_COLOR};}}"
+            f"QListWidget::item:selected:hover{{background-color: {HIGHLIGHT_COLOR};}}"
         )
         self.file_list.setSpacing(2)
         self.file_list.setSelectionMode(
