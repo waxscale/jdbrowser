@@ -861,6 +861,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
         ]
+        for i in range(10):
+            mappings.append(
+                (getattr(QtCore.Qt, f"Key_{i}"), self._apply_header_number, i)
+            )
         for key, func, arg, *mod in mappings:
             seq = QtGui.QKeySequence(mod[0] | key) if mod else QtGui.QKeySequence(key)
             s = QtGui.QShortcut(seq, self)
@@ -1066,6 +1070,75 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 new_name = f"[5-UNRA {ts_str}] {rest}"
         if new_name == name:
             return
+        new_path = os.path.join(dir_path, new_name)
+        if os.path.exists(new_path):
+            self._warn("Rename File", f"File {new_name} already exists.")
+            return
+        try:
+            os.rename(old_path, new_path)
+        except OSError as e:
+            self._warn("Rename File", str(e))
+            return
+        self.refresh_file_list()
+        for i in range(self.file_list.count()):
+            it = self.file_list.item(i)
+            if it.data(QtCore.Qt.UserRole) == new_name:
+                self.file_list.setCurrentRow(i)
+                self.file_list.scrollToItem(it)
+                break
+
+    def _apply_header_number(self, number: int) -> None:
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name == "header":
+            return
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        dir_path = os.path.join(self.repository_path, folder)
+        files = [f for f in os.listdir(dir_path) if f.lower().endswith(".2do")]
+        files.sort(key=lambda x: x.lower())
+        header_prefix = None
+        for fname in files:
+            if fname.startswith(f"[{number}"):
+                match = re.match(r"\[(\d-[^ \]]+)", fname)
+                if match:
+                    header_prefix = match.group(1)
+                    break
+        if not header_prefix:
+            return
+        old_path = os.path.join(dir_path, name)
+        m = re.match(r"^\[(.*?)\]\s*(.*)$", name)
+        if m:
+            inner = m.group(1)
+            rest_name = m.group(2)
+            parts = inner.split(" ", 1)
+            first_part = parts[0]
+            remainder = parts[1] if len(parts) > 1 else ""
+            if not re.match(r"^\d-[^ \]]+$", first_part):
+                return
+            timestamp = remainder.strip()
+        else:
+            rest_name = name
+            timestamp = None
+        if not timestamp:
+            stat = os.stat(old_path)
+            ts = getattr(stat, "st_birthtime", stat.st_mtime)
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            timestamp = dt.strftime("%Y-%m-%d %H.%M.%S")
+        new_inner = f"{header_prefix} {timestamp}".rstrip()
+        if rest_name:
+            if rest_name.startswith('.'):
+                new_name = f"[{new_inner}]{rest_name}"
+            else:
+                new_name = f"[{new_inner}] {rest_name}"
+        else:
+            new_name = f"[{new_inner}]"
         new_path = os.path.join(dir_path, new_name)
         if os.path.exists(new_path):
             self._warn("Rename File", f"File {new_name} already exists.")
