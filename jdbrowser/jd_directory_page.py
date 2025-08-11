@@ -1,5 +1,5 @@
 import os
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore, QtGui
 import jdbrowser
 from .constants import *
 from .database import setup_database
@@ -34,10 +34,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def set_selection(self, index):
         pass
 
-    def _format_directory_id(self, directory_id):
-        d = directory_id.replace('-', '').replace('_', '').upper()
-        parts = [d[i:i+4] for i in range(0, min(len(d), 16), 4)]
-        return '_'.join(parts)
+    def _format_order(self, order):
+        formatted = f"{order:016d}"
+        return "_".join(formatted[i:i+4] for i in range(0, 16, 4))
 
     def _build_breadcrumb(self, crumbs):
         bar = QtWidgets.QWidget()
@@ -65,10 +64,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
-        crumb = self._format_directory_id(self.directory_id)
-        self.breadcrumb_bar = self._build_breadcrumb([(crumb, None)])
-        layout.addWidget(self.breadcrumb_bar)
-
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT label, [order] FROM state_jd_directories WHERE directory_id = ?",
@@ -77,6 +72,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         row = cursor.fetchone()
         label = row[0] if row else ""
         order = row[1] if row else 0
+
+        crumb = self._format_order(order)
+        self.breadcrumb_bar = self._build_breadcrumb([(crumb, None)])
+        layout.addWidget(self.breadcrumb_bar)
 
         cursor.execute(
             "SELECT icon FROM state_jd_directory_icons WHERE directory_id = ?",
@@ -111,3 +110,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.item.updateStyle()
         layout.addWidget(self.item, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)
+
+        self.shortcuts = []
+        self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
+        for seq in self.quit_sequences:
+            s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
+            s.activated.connect(jdbrowser.main_window.close)
+            self.shortcuts.append(s)
