@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
 from .constants import *
@@ -1049,9 +1049,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if use_file_time:
             stat = os.stat(old_path)
             ts = getattr(stat, "st_birthtime", stat.st_mtime)
-            dt = datetime.fromtimestamp(ts)
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
         else:
-            dt = datetime.now()
+            dt = datetime.now(tz=timezone.utc)
         ts_str = dt.strftime("%Y-%m-%d %H.%M.%S")
         rest = re.sub(r"^\[[^\]]*\]\s*", "", name)
         base, ext = os.path.splitext(rest)
