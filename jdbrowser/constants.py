@@ -1,6 +1,6 @@
 # TokyoNight Dark theme colors
 HIGHLIGHT_COLOR = '#44475a'
-HOVER_COLOR = '#5c6370'
+HOVER_COLOR = '#1a1b26'
 SLATE_COLOR = '#2e303e'
 # Dark placeholder thumbnail background and lighter font color for readability
 PLACEHOLDER_COLOR = '#1c1c1c'
