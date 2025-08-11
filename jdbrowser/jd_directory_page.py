@@ -118,6 +118,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.section_bounds: list[tuple[int, int]] = []
 
+        self._thumbs_started = False
+
         self._setup_ui()
         self._setup_shortcuts()
         self.set_selection(0)
@@ -151,7 +153,11 @@ class JdDirectoryPage(QtWidgets.QWidget):
         """
         self.setStyleSheet(style)
 
-        QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._thumbs_started:
+            self._thumbs_started = True
+            QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     # DirectoryItem expects a set_selection method on its page
     def set_selection(self, index):
