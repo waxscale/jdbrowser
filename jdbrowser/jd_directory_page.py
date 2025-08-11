@@ -541,9 +541,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         current = self.file_list.currentRow()
         if current == -1:
-            start = self.section_bounds[0][0]
-            self.file_list.setCurrentRow(start)
-            self.file_list.scrollToItem(self.file_list.item(start))
             return
         for i, (start, end) in enumerate(self.section_bounds):
             if start <= current <= end:
