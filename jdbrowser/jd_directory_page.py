@@ -662,7 +662,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 return
             self.in_search_mode = True
             self.prev_selected_is_directory = self.item.isSelected
-            self.prev_row = self.file_list.currentRow()
+            if self.prev_selected_is_directory:
+                self.item.isSelected = False
+                self.item.updateStyle()
+                self.prev_row = -1
+            else:
+                self.prev_row = self.file_list.currentRow()
+                self.file_list.setCurrentItem(None)
             self.search_matches = []
             self.current_match_idx = -1
             self.search_input.clear()
@@ -682,6 +688,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.in_search_mode = False
             self.search_input.hide()
+            self.item.setGraphicsEffect(None)
             for i in range(self.file_list.count()):
                 widget = self.file_list.itemWidget(self.file_list.item(i))
                 if widget:
@@ -702,6 +709,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.in_search_mode = False
             self.search_input.hide()
+            self.item.setGraphicsEffect(None)
             for i in range(self.file_list.count()):
                 widget = self.file_list.itemWidget(self.file_list.item(i))
                 if widget:
@@ -725,6 +733,11 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def perform_search(self, query):
         query = query.lower()
         self.search_matches = []
+        self.item.setGraphicsEffect(None)
+        if query:
+            effect = QtWidgets.QGraphicsOpacityEffect(self.item)
+            effect.setOpacity(0.4)
+            self.item.setGraphicsEffect(effect)
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
             widget = self.file_list.itemWidget(item)
