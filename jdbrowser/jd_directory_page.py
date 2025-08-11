@@ -541,17 +541,21 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         current = self.file_list.currentRow()
         if current == -1:
-            start = self.section_bounds[0][0]
-            self.file_list.setCurrentRow(start)
-            self.file_list.scrollToItem(self.file_list.item(start))
             return
         for i, (start, end) in enumerate(self.section_bounds):
             if start <= current <= end:
-                target = start if current != start else (
-                    self.section_bounds[i - 1][0] if i > 0 else start
-                )
-                self.file_list.setCurrentRow(target)
-                self.file_list.scrollToItem(self.file_list.item(target))
+                if current != start:
+                    target = start
+                    self.file_list.setCurrentRow(target)
+                    self.file_list.scrollToItem(self.file_list.item(target))
+                else:
+                    if i > 0:
+                        target = self.section_bounds[i - 1][0]
+                        self.file_list.setCurrentRow(target)
+                        self.file_list.scrollToItem(self.file_list.item(target))
+                    else:
+                        self.file_list.setCurrentItem(None)
+                        self.file_list.scrollToTop()
                 break
 
     def move_to_section_end(self) -> None:
@@ -559,7 +563,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         current = self.file_list.currentRow()
         if current == -1:
-            end = self.section_bounds[-1][1]
+            end = self.section_bounds[0][1]
             self.file_list.setCurrentRow(end)
             self.file_list.scrollToItem(self.file_list.item(end))
             return
