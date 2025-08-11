@@ -4,5 +4,5 @@ __version__ = "1.0.0"
 main_window = None
 
 # Global pointer to the currently displayed page widget.
-# This can hold a JdAreaPage, JdIdPage, JdExtPage or JdDirectoryListPage.
+# This can hold a JdAreaPage, JdIdPage, JdExtPage, JdDirectoryListPage or JdDirectoryPage.
 current_page = None

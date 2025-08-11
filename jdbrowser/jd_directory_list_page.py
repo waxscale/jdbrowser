@@ -160,6 +160,18 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
+    def descend_level(self):
+        if self.selected_index is None or not self.items:
+            return
+        if not (0 <= self.selected_index < len(self.items)):
+            return
+        current_item = self.items[self.selected_index]
+        from .jd_directory_page import JdDirectoryPage
+
+        new_page = JdDirectoryPage(current_item.directory_id)
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def _warn(self, title: str, message: str) -> None:
         box = QtWidgets.QMessageBox(self)
         box.setIcon(QtWidgets.QMessageBox.Warning)
@@ -995,6 +1007,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         mappings = [
+            (QtCore.Qt.Key_Return, self.descend_level, None),
+            (QtCore.Qt.Key_Enter, self.descend_level, None),
             (QtCore.Qt.Key_J, self.move_selection, 1),
             (QtCore.Qt.Key_Down, self.move_selection, 1),
             (QtCore.Qt.Key_K, self.move_selection, -1),
