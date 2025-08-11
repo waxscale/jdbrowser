@@ -70,6 +70,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.area_label = row[0] if row else ""
 
         self.items = []
+        self.main_count = 0
         self.selected_index = None
         self.show_prefix = False
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -372,6 +373,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if widget:
                 widget.deleteLater()
         self.items = []
+        self.main_count = 0
         self.recent_items = []
         self.recent_wrapper = None
         self.recent_frame = None
@@ -396,7 +398,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (self.parent_uuid,),
         )
         rows = cursor.fetchall()
-        for idx, row in enumerate(rows):
+        for row in rows:
             directory_id, label, order, icon_data = row
             cursor.execute(
                 """
@@ -415,10 +417,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             )
             tag_rows = cursor.fetchall()
             tags = [tuple(t) for t in tag_rows]
-            item = DirectoryItem(directory_id, label, order, icon_data, self, idx, tags)
+            index = len(self.items)
+            item = DirectoryItem(directory_id, label, order, icon_data, self, index, tags)
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
+        self.main_count = len(self.items)
         self._load_recent_directories()
         self._load_untagged_directories()
         self.vlayout.addStretch(1)
@@ -467,10 +471,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            index = len(self.items)
+            item = RecentDirectoryItem(directory_id, label, order, icon_data, self, index)
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.recent_items.append(item)
+            self.items.append(item)
         outer_layout.addWidget(self.recent_frame)
         self.vlayout.addWidget(
             self.recent_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -518,10 +524,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            index = len(self.items)
+            item = RecentDirectoryItem(directory_id, label, order, icon_data, self, index)
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.untagged_items.append(item)
+            self.items.append(item)
         outer_layout.addWidget(self.untagged_frame)
         self.vlayout.addWidget(
             self.untagged_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -572,6 +580,18 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.set_selection(len(self.items) - 1)
 
     def _add_directory(self):
+        if self.selected_index is not None and self.selected_index >= self.main_count:
+            item = self.items[self.selected_index]
+            directory_id = item.directory_id
+            add_directory_tag(self.conn, directory_id, self.parent_uuid)
+            rebuild_state_directory_tags(self.conn)
+            rebuild_state_jd_directories(self.conn)
+            self._load_directories()
+            for i, it in enumerate(self.items):
+                if it.directory_id == directory_id:
+                    self.set_selection(i)
+                    break
+            return
         cursor = self.conn.cursor()
         cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
         result = cursor.fetchone()
@@ -794,10 +814,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
     def toggle_label_prefix(self):
         self.show_prefix = not self.show_prefix
         for item in self.items:
-            item.updateLabel(self.show_prefix)
-        for item in self.recent_items:
-            item.updateLabel(self.show_prefix)
-        for item in self.untagged_items:
             item.updateLabel(self.show_prefix)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)

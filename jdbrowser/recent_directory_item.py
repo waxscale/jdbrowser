@@ -1,15 +1,26 @@
 import os
 from PySide6 import QtWidgets, QtGui, QtCore
-from .constants import SLATE_COLOR, BREADCRUMB_INACTIVE_COLOR
+from .constants import (
+    SLATE_COLOR,
+    BREADCRUMB_INACTIVE_COLOR,
+    HIGHLIGHT_COLOR,
+    HOVER_COLOR,
+)
 
 
 class RecentDirectoryItem(QtWidgets.QWidget):
-    def __init__(self, directory_id, label, order, icon_data, page):
+    def __init__(self, directory_id, label, order, icon_data, page, index):
         super().__init__()
         self.directory_id = directory_id
         self.label_text = label if label is not None else ""
         self.order = order
         self.page = page
+        self.index = index
+        self.tags = []
+        self.isSelected = False
+        self.isHover = False
+        self.isDimmed = False
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -73,6 +84,12 @@ class RecentDirectoryItem(QtWidgets.QWidget):
         )
         layout.addWidget(self.label, 1)
 
+        for widget in (self.icon, self.label):
+            widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            widget.installEventFilter(self)
+
+        self.updateStyle()
+
     def updateLabel(self, show_prefix):
         if show_prefix:
             formatted = f"{self.order:016d}"
@@ -83,3 +100,54 @@ class RecentDirectoryItem(QtWidgets.QWidget):
         else:
             text = self.label_text
         self.label.setText(text)
+
+    def updateStyle(self):
+        bg = (
+            HIGHLIGHT_COLOR
+            if self.isSelected
+            else (HOVER_COLOR if self.isHover else "transparent")
+        )
+        opacity = 0.4 if self.isDimmed else 1.0
+        icon_effect = QtWidgets.QGraphicsOpacityEffect(self.icon)
+        icon_effect.setOpacity(opacity)
+        self.icon.setGraphicsEffect(icon_effect)
+        label_effect = QtWidgets.QGraphicsOpacityEffect(self.label)
+        label_effect.setOpacity(opacity)
+        self.label.setGraphicsEffect(label_effect)
+        self.setStyleSheet(f"background-color: {bg}; border-radius: 3px;")
+
+    def _on_enter(self):
+        self.isHover = True
+        self.updateStyle()
+        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+
+    def _on_leave(self):
+        self.isHover = False
+        self.updateStyle()
+        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
+
+    def enterEvent(self, event):
+        self._on_enter()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._on_leave()
+        super().leaveEvent(event)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Enter:
+            self._on_enter()
+        elif event.type() == QtCore.QEvent.Leave:
+            pos = self.mapFromGlobal(QtGui.QCursor.pos())
+            if not self.rect().contains(pos):
+                self._on_leave()
+        return super().eventFilter(watched, event)
+
+    def mousePressEvent(self, event):
+        if self.page:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.page.set_selection(self.index)
+            elif event.button() == QtCore.Qt.RightButton:
+                self.page.set_selection(self.index)
+                self.page._edit_tag_label_with_icon()
+        event.accept()
