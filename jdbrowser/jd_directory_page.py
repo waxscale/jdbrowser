@@ -175,14 +175,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
         # List of files within the directory
         self.file_list = QtWidgets.QListWidget()
         self.file_list.setIconSize(QtCore.QSize(120, 75))
+        self.file_list.setMouseTracking(True)
         self.file_list.setStyleSheet(
             "QListWidget{background-color: transparent; border: none;}"
-            "QListWidget::item{background-color: transparent; border: none;}"
+            "QListWidget::item{background-color: transparent; border: none; border-radius: 5px;}"
+            f"QListWidget::item:selected{{background-color: {HIGHLIGHT_COLOR};}}"
+            f"QListWidget::item:hover{{background-color: {HOVER_COLOR};}}"
         )
         self.file_list.setSpacing(2)
         self.file_list.setSelectionMode(
             QtWidgets.QAbstractItemView.SingleSelection
         )
+        self.file_list.currentItemChanged.connect(self._file_selection_changed)
         layout.addWidget(self.file_list)
 
         self._populate_files(order)
@@ -208,8 +212,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
             item.setSizeHint(widget.sizeHint())
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
-        if self.file_list.count():
-            self.file_list.setCurrentRow(0)
 
     def _create_file_row(self, path: str, name: str) -> QtWidgets.QWidget:
         row = QtWidgets.QWidget()
@@ -341,9 +343,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         current = self.file_list.currentRow()
         if current == -1:
-            index = 0 if direction > 0 else count - 1
-        else:
-            index = max(0, min(current + direction, count - 1))
+            if direction > 0:
+                self.file_list.setCurrentRow(0)
+                self.file_list.scrollToItem(self.file_list.item(0))
+            return
+        if current == 0 and direction < 0:
+            self.file_list.setCurrentItem(None)
+            return
+        index = max(0, min(current + direction, count - 1))
         self.file_list.setCurrentRow(index)
         item = self.file_list.item(index)
         if item:
@@ -368,6 +375,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         idx = count - 1
         self.file_list.setCurrentRow(idx)
         self.file_list.scrollToItem(self.file_list.item(idx))
+
+    def _file_selection_changed(
+        self, current: QtWidgets.QListWidgetItem | None, _prev
+    ) -> None:
+        self.item.isSelected = current is None
+        self.item.updateStyle()
 
     def _setup_shortcuts(self):
         self.shortcuts = []
