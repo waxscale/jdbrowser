@@ -84,6 +84,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     # DirectoryItem expects a set_selection method on its page
     def set_selection(self, index):
+        if index == 0:
+            # Deselect any file items so only the directory entry is selected
+            self.file_list.setCurrentItem(None)
+            self.file_list.clearSelection()
         self.item.isSelected = index == 0
         self.item.updateStyle()
 
