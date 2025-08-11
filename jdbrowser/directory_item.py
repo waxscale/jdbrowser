@@ -201,7 +201,7 @@ class DirectoryItem(QtWidgets.QWidget):
         if show_prefix:
             formatted = f"{self.order:016d}"
             formatted = "_".join(formatted[i:i+4] for i in range(0, 16, 4))
-            text = os.path.join(self.page.repository_path, formatted)
+            text = formatted
         else:
             text = self.label_text
         self.label.setText(text)
