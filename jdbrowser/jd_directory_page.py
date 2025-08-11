@@ -108,6 +108,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.remove_tag_overlay = None
 
         self._pending_thumbnails: list[tuple[QtWidgets.QLabel, str]] = []
+        self._thumb_pool = QtCore.QThreadPool()
+        self._thumb_pool.setMaxThreadCount(1)
 
         self.in_search_mode = False
         self.prev_selected_is_directory = False
@@ -372,6 +374,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.file_list.clear()
         self.section_bounds = []
         self._pending_thumbnails = []
+        self._thumb_pool.clear()
         current_start = None
         non_header_names = [n for n in files if not n.lower().endswith('.2do')]
         target_name = None
@@ -562,14 +565,16 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _load_thumbnail_async(
         self, label: QtWidgets.QLabel, path: str
     ) -> None:
-        QtCore.QThreadPool.globalInstance().start(
-            ThumbnailLoader(self, label, path)
-        )
+        runnable = ThumbnailLoader(self, label, path)
+        self._thumb_pool.start(runnable, QtCore.QThread.LowestPriority)
 
     def _start_pending_thumbnails(self) -> None:
-        for label, path in self._pending_thumbnails:
-            self._load_thumbnail_async(label, path)
-        self._pending_thumbnails.clear()
+        if not self._pending_thumbnails:
+            return
+        label, path = self._pending_thumbnails.pop()
+        self._load_thumbnail_async(label, path)
+        if self._pending_thumbnails:
+            QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
