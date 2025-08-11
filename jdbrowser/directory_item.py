@@ -107,12 +107,71 @@ class DirectoryItem(QtWidgets.QWidget):
 
         self.updateStyle()
 
-    def _format_prefix(self, order):
-        s = f"{order:016d}"
-        area = int(s[0:4])
-        jd_id = int(s[4:8])
-        jd_ext = int(s[8:12])
-        return f"[{area:02d}.{jd_id:02d}+{jd_ext:04d}]"
+    def _format_prefix(self, tag_id):
+        """Return a formatted prefix for the given tag.
+
+        The prefix should reflect the tag's position in the JD hierarchy. For
+        an ext tag this is ``[area.id+ext]``, for an id tag ``[area.id]`` and
+        for an area tag ``[area]``. Previously this method attempted to derive
+        the prefix from a single ``order`` value which only represented the
+        tag's local order within its parent, resulting in prefixes like
+        ``[00.00+0000]``. Instead we look up the complete hierarchy in the
+        database using the ``tag_id``.
+        """
+
+        cursor = self.page.conn.cursor()
+
+        # Try ext tag: ext -> id -> area
+        cursor.execute(
+            "SELECT parent_uuid, [order] FROM state_jd_ext_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            id_uuid, ext_order = row
+            cursor.execute(
+                "SELECT parent_uuid, [order] FROM state_jd_id_tags WHERE tag_id = ?",
+                (id_uuid,),
+            )
+            id_row = cursor.fetchone()
+            if id_row:
+                area_uuid, id_order = id_row
+                cursor.execute(
+                    "SELECT [order] FROM state_jd_area_tags WHERE tag_id = ?",
+                    (area_uuid,),
+                )
+                area_row = cursor.fetchone()
+                area_order = area_row[0] if area_row else 0
+                return f"[{area_order:02d}.{id_order:02d}+{ext_order:04d}]"
+
+        # Try id tag: id -> area
+        cursor.execute(
+            "SELECT parent_uuid, [order] FROM state_jd_id_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            area_uuid, id_order = row
+            cursor.execute(
+                "SELECT [order] FROM state_jd_area_tags WHERE tag_id = ?",
+                (area_uuid,),
+            )
+            area_row = cursor.fetchone()
+            area_order = area_row[0] if area_row else 0
+            return f"[{area_order:02d}.{id_order:02d}]"
+
+        # Try area tag
+        cursor.execute(
+            "SELECT [order] FROM state_jd_area_tags WHERE tag_id = ?",
+            (tag_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            area_order = row[0]
+            return f"[{area_order:02d}]"
+
+        # Fallback if tag not found
+        return "[00.00+0000]"
 
     def _build_tag_pills(self):
         # Clear existing pills
@@ -122,7 +181,7 @@ class DirectoryItem(QtWidgets.QWidget):
                 w.deleteLater()
         self.tag_buttons = []
         for t_id, t_label, t_order, parent_uuid in self.tags:
-            text = t_label if not self.page.show_prefix else self._format_prefix(t_order)
+            text = t_label if not self.page.show_prefix else self._format_prefix(t_id)
             btn = QtWidgets.QPushButton(text)
             btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
             btn.setStyleSheet(
@@ -148,7 +207,7 @@ class DirectoryItem(QtWidgets.QWidget):
         self.label.setText(text)
         # Update tag pills
         for btn, t_id, t_label, t_order, _ in self.tag_buttons:
-            btn.setText(t_label if not show_prefix else self._format_prefix(t_order))
+            btn.setText(t_label if not show_prefix else self._format_prefix(t_id))
 
     def updateStyle(self):
         bg = HIGHLIGHT_COLOR if self.isSelected else (
