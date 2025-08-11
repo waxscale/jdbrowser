@@ -3,6 +3,7 @@ import re
 from PySide6 import QtWidgets, QtGui, QtCore
 import jdbrowser
 from .directory_item import DirectoryItem
+from .recent_directory_item import RecentDirectoryItem
 from .database import (
     setup_database,
     rebuild_state_jd_directories,
@@ -81,6 +82,9 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.shortcuts = []
         self.search_shortcut_instances = []
         self.tag_search_overlay = None
+        self.recent_items = []
+        self.recent_wrapper = None
+        self.recent_frame = None
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -363,10 +367,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+        self.items = []
+        self.recent_items = []
+        self.recent_wrapper = None
+        self.recent_frame = None
 
     def _load_directories(self):
         self._clear_items()
-        self.items = []
         self.selected_index = None
         cursor = self.conn.cursor()
 
@@ -405,7 +412,67 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
+        self._load_recent_directories()
         self.vlayout.addStretch(1)
+
+    def _load_recent_directories(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT e.directory_id, d.label, d.[order], i.icon
+            FROM event_create_jd_directory e
+            JOIN state_jd_directories d ON e.directory_id = d.directory_id
+            LEFT JOIN state_jd_directory_icons i ON d.directory_id = i.directory_id
+            LEFT JOIN state_jd_directory_tags t ON d.directory_id = t.directory_id
+                AND t.tag_id = ?
+            WHERE t.tag_id IS NULL
+            ORDER BY e.event_id DESC
+            LIMIT 5
+            """,
+            (self.parent_uuid,),
+        )
+        rows = cursor.fetchall()
+        if not rows:
+            return
+        self.recent_items = []
+        self.recent_wrapper = QtWidgets.QWidget()
+        outer_layout = QtWidgets.QVBoxLayout(self.recent_wrapper)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(5)
+
+        title = QtWidgets.QLabel("Recent Directories")
+        title_font = title.font()
+        title_font.setPointSize(int(title_font.pointSize() * 0.9))
+        title.setFont(title_font)
+        title.setStyleSheet(f"color: {BREADCRUMB_INACTIVE_COLOR};")
+        outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+        self.recent_frame = QtWidgets.QFrame()
+        self.recent_frame.setStyleSheet(
+            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
+            f" background-color: #000;"
+        )
+        self.recent_frame.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        v_layout = QtWidgets.QVBoxLayout(self.recent_frame)
+        v_layout.setContentsMargins(10, 10, 10, 10)
+        v_layout.setSpacing(5)
+        for directory_id, label, order, icon_data in rows:
+            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            item.updateLabel(self.show_prefix)
+            v_layout.addWidget(item)
+            self.recent_items.append(item)
+        outer_layout.addWidget(self.recent_frame)
+        self.vlayout.addWidget(
+            self.recent_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        QtCore.QTimer.singleShot(0, self._update_recent_width)
+
+    def _update_recent_width(self):
+        if self.recent_wrapper:
+            width = int(self.width() * 0.6)
+            self.recent_wrapper.setFixedWidth(width)
 
     def set_selection(self, index):
         if not (0 <= index < len(self.items)):
@@ -648,6 +715,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.show_prefix = not self.show_prefix
         for item in self.items:
             item.updateLabel(self.show_prefix)
+        for item in self.recent_items:
+            item.updateLabel(self.show_prefix)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -662,6 +731,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.search_input.move(self.width() - 310, self.height() - 40)
         if self.tag_search_overlay and self.tag_search_overlay.isVisible():
             self.tag_search_overlay.reposition()
+        self._update_recent_width()
         super().resizeEvent(event)
 
     def open_tag_search(self):
