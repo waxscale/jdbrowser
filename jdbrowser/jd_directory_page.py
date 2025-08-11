@@ -1054,14 +1054,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             dt = datetime.now(tz=timezone.utc)
         ts_str = dt.strftime("%Y-%m-%d %H.%M.%S")
         rest = re.sub(r"^\[[^\]]*\]\s*", "", name)
-        base, ext = os.path.splitext(rest)
+        _, ext = os.path.splitext(rest)
         if replace_entire:
+            if not ext and rest.startswith("."):
+                ext = rest
             new_name = f"[5-UNRA {ts_str}]" + ext
         else:
-            if base:
-                new_name = f"[5-UNRA {ts_str}] {base}{ext}"
-            else:
-                new_name = f"[5-UNRA {ts_str}]" + ext
+            new_name = f"[5-UNRA {ts_str}] {rest}" if rest else f"[5-UNRA {ts_str}]"
         if new_name == name:
             return
         new_path = os.path.join(dir_path, new_name)
