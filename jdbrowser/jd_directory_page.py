@@ -218,6 +218,64 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
 
+    def refresh_file_list(self) -> None:
+        scrollbar = self.file_list.verticalScrollBar()
+        scroll_pos = scrollbar.value()
+
+        current_name = None
+        current_item = self.file_list.currentItem()
+        if current_item is not None:
+            widget = self.file_list.itemWidget(current_item)
+            if widget is not None:
+                label_widget = widget.layout().itemAt(1).widget()
+                if isinstance(label_widget, QtWidgets.QLabel):
+                    current_name = label_widget.text()
+
+        order = getattr(self.item, "order", None)
+        if order is None:
+            self.file_list.clear()
+            return
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        if not os.path.isdir(path):
+            self.file_list.clear()
+            return
+
+        files = [
+            f
+            for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f))
+        ]
+        files.sort(key=lambda x: x.lower())
+
+        self.file_list.clear()
+        index_to_select = -1
+        for i, name in enumerate(files):
+            full_path = os.path.join(path, name)
+            widget = self._create_file_row(full_path, name)
+            item = QtWidgets.QListWidgetItem(self.file_list)
+            item.setSizeHint(widget.sizeHint())
+            self.file_list.addItem(item)
+            self.file_list.setItemWidget(item, widget)
+            if current_name:
+                if name == current_name:
+                    index_to_select = i
+                elif index_to_select == -1 and name > current_name:
+                    index_to_select = i - 1
+
+        if current_name:
+            if index_to_select == -1 and files:
+                if files[-1] < current_name:
+                    index_to_select = len(files) - 1
+            if index_to_select >= 0:
+                self.file_list.setCurrentRow(index_to_select)
+            else:
+                self.file_list.setCurrentItem(None)
+        else:
+            self.file_list.setCurrentItem(None)
+
+        QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
+
     def _create_file_row(self, path: str, name: str) -> QtWidgets.QWidget:
         row = QtWidgets.QWidget()
         row.setSizePolicy(
@@ -437,6 +495,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+            (QtCore.Qt.Key_F5, self.refresh_file_list, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
             (
