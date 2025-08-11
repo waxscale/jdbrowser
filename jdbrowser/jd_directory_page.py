@@ -821,8 +821,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_L, lambda: None, None),
             (QtCore.Qt.Key_Right, lambda: None, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
-            (QtCore.Qt.Key_R, self._rename_tag_label, None),
-            (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+            (QtCore.Qt.Key_R, self._rename_selected, None),
+            (QtCore.Qt.Key_F2, self._rename_selected, None),
             (QtCore.Qt.Key_F5, self.refresh_file_list, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
@@ -978,6 +978,48 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 f"background-color: {SLATE_COLOR}; border-radius: 5px;"
             )
         self.item.updateStyle()
+
+    def _rename_file(self) -> None:
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name == "header":
+            return
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        dir_path = os.path.join(self.repository_path, folder)
+        old_path = os.path.join(dir_path, name)
+        dialog = SimpleEditTagDialog(name, self)
+        dialog.setWindowTitle("Rename File")
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            new_name = dialog.get_label()
+            if not new_name or new_name == name:
+                return
+            new_path = os.path.join(dir_path, new_name)
+            if os.path.exists(new_path):
+                self._warn("Rename File", f"File {new_name} already exists.")
+                return
+            try:
+                os.rename(old_path, new_path)
+            except OSError as e:
+                self._warn("Rename File", str(e))
+                return
+            self.refresh_file_list()
+            for i in range(self.file_list.count()):
+                it = self.file_list.item(i)
+                if it.data(QtCore.Qt.UserRole) == new_name:
+                    self.file_list.setCurrentRow(i)
+                    self.file_list.scrollToItem(it)
+                    break
+
+    def _rename_selected(self) -> None:
+        if self._is_directory_selected():
+            self._rename_tag_label()
+        else:
+            self._rename_file()
 
     def _rename_tag_label(self):
         if not self._is_directory_selected():
