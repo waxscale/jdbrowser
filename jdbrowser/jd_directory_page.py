@@ -601,8 +601,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
     ) -> None:
-        self.item.isSelected = current is None
-        self.item.updateStyle()
+        if not self.in_search_mode:
+            self.item.isSelected = current is None
+            self.item.updateStyle()
 
     def _is_directory_selected(self) -> bool:
         return self.file_list.currentItem() is None
@@ -668,7 +669,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.prev_row = -1
             else:
                 self.prev_row = self.file_list.currentRow()
-                self.file_list.setCurrentItem(None)
             self.search_matches = []
             self.current_match_idx = -1
             self.search_input.clear()
@@ -688,7 +688,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.in_search_mode = False
             self.search_input.hide()
-            self.item.setGraphicsEffect(None)
+            self.item.isDimmed = False
+            self.item.updateStyle()
             for i in range(self.file_list.count()):
                 widget = self.file_list.itemWidget(self.file_list.item(i))
                 if widget:
@@ -709,7 +710,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self.in_search_mode:
             self.in_search_mode = False
             self.search_input.hide()
-            self.item.setGraphicsEffect(None)
+            self.item.isDimmed = False
+            self.item.updateStyle()
             for i in range(self.file_list.count()):
                 widget = self.file_list.itemWidget(self.file_list.item(i))
                 if widget:
@@ -733,11 +735,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def perform_search(self, query):
         query = query.lower()
         self.search_matches = []
-        self.item.setGraphicsEffect(None)
-        if query:
-            effect = QtWidgets.QGraphicsOpacityEffect(self.item)
-            effect.setOpacity(0.4)
-            self.item.setGraphicsEffect(effect)
+        self.item.isDimmed = bool(query)
+        self.item.updateStyle()
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
             widget = self.file_list.itemWidget(item)
@@ -760,7 +759,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.scrollToItem(self.file_list.item(idx))
         else:
             self.current_match_idx = -1
-            self.file_list.setCurrentItem(None)
+            if query:
+                self.file_list.setCurrentItem(None)
 
     def next_match(self):
         if self.in_search_mode and self.current_match_idx < len(self.search_matches) - 1:
