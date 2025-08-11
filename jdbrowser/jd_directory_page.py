@@ -179,6 +179,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             "QListWidget{background-color: transparent; border: none;}"
             "QListWidget::item{background-color: transparent; border: none;}"
         )
+        self.file_list.setSpacing(5)
         layout.addWidget(self.file_list)
 
         self._populate_files(order)
@@ -212,12 +213,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         row.setStyleSheet("background-color: transparent;")
         layout = QtWidgets.QHBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(10)
 
         icon_label = QtWidgets.QLabel()
         icon_label.setFixedSize(120, 75)
-        icon_label.setStyleSheet("border: none;")
+        icon_label.setStyleSheet("border: none; border-radius: 10px;")
         pixmap = self._thumbnail_for_path(path)
         if pixmap:
             icon_label.setPixmap(pixmap)
@@ -232,7 +233,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             painter.setPen(QtGui.QColor(TEXT_COLOR))
             painter.drawText(pixmap.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, char)
             painter.end()
-            icon_label.setPixmap(pixmap)
+            icon_label.setPixmap(self._rounded_pixmap(pixmap))
         layout.addWidget(icon_label)
 
         label = QtWidgets.QLabel(name)
@@ -263,7 +264,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         painter = QtGui.QPainter(rounded)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         path = QtGui.QPainterPath()
-        path.addRoundedRect(0, 0, 120, 75, 5, 5)
+        path.addRoundedRect(0, 0, 120, 75, 10, 10)
         painter.setClipPath(path)
         painter.drawPixmap(
             (120 - scaled.width()) // 2,
@@ -300,11 +301,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _thumbnail_for_path(self, path: str) -> QtGui.QPixmap | None:
         ext = os.path.splitext(path)[1].lower()
-        if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif"}:
+        if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
             pixmap = QtGui.QPixmap(path)
-            if pixmap.isNull():
-                return None
-            return self._rounded_pixmap(pixmap)
+            if not pixmap.isNull():
+                return self._rounded_pixmap(pixmap)
+            if ext == ".webp":
+                return self._video_thumbnail(path)
+            return None
         if ext in {".mp4", ".mkv", ".avi", ".mov", ".webm"}:
             return self._video_thumbnail(path)
         return None
