@@ -264,6 +264,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
             pixmap = QtGui.QPixmap()
             pixmap.loadFromData(icon_data)
             if not pixmap.isNull():
+                if not isinstance(self.item.icon, QtWidgets.QLabel):
+                    layout = self.item.layout()
+                    layout.removeWidget(self.item.icon)
+                    self.item.icon.deleteLater()
+                    self.item.icon = QtWidgets.QLabel()
+                    self.item.icon.mousePressEvent = self.item.mousePressEvent  # type: ignore[attr-defined]
+                    self.item.icon.installEventFilter(self.item)
+                    layout.insertWidget(0, self.item.icon)
                 rounded = QtGui.QPixmap(240, 150)
                 rounded.fill(QtCore.Qt.transparent)
                 painter = QtGui.QPainter(rounded)
@@ -283,7 +291,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.item.icon.setFixedSize(240, 150)
                 self.item.icon.setStyleSheet("background-color: transparent;")
         else:
-            self.item.icon.setPixmap(QtGui.QPixmap())
+            if not isinstance(self.item.icon, QtWidgets.QFrame):
+                layout = self.item.layout()
+                layout.removeWidget(self.item.icon)
+                self.item.icon.deleteLater()
+                self.item.icon = QtWidgets.QFrame()
+                self.item.icon.mousePressEvent = self.item.mousePressEvent  # type: ignore[attr-defined]
+                self.item.icon.installEventFilter(self.item)
+                layout.insertWidget(0, self.item.icon)
             self.item.icon.setFixedSize(240, 150)
             self.item.icon.setStyleSheet(
                 f"background-color: {SLATE_COLOR}; border-radius: 5px;"
