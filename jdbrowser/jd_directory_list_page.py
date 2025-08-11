@@ -786,6 +786,10 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
             return
         current_item = self.items[self.selected_index]
+        # Recent and untagged directories are guaranteed not to have the current
+        # tag, so pressing "d" on them should be a no-op.
+        if current_item in self.recent_items or current_item in self.untagged_items:
+            return
         directory_id = current_item.directory_id
         dialog = RemoveDirectoryTagDialog(current_item.label_text, self.ext_label, self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
