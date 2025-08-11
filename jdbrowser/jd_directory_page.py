@@ -133,7 +133,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.item.updateLabel(self.show_prefix)
         self.item.isSelected = False
         self.item.updateStyle()
-        layout.addWidget(self.item, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+        self.item.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        layout.addWidget(self.item)
         layout.addStretch(1)
 
     def _strip_prefix(self, text: str) -> str:

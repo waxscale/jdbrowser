@@ -28,6 +28,9 @@ class DirectoryItem(QtWidgets.QWidget):
         self.isHover = False
         self.isDimmed = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
@@ -71,6 +74,9 @@ class DirectoryItem(QtWidgets.QWidget):
         layout.addWidget(self.icon)
 
         self.right = QtWidgets.QWidget()
+        self.right.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         right_layout = QtWidgets.QVBoxLayout(self.right)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(5)
@@ -97,7 +103,7 @@ class DirectoryItem(QtWidgets.QWidget):
         right_layout.addWidget(self.tags_widget)
         right_layout.addStretch(1)
         self._build_tag_pills()
-        layout.addWidget(self.right)
+        layout.addWidget(self.right, 1)
 
         # Ensure clicks on child widgets behave like the parent item and
         # monitor their hover events via an event filter
