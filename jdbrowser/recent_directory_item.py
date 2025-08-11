@@ -6,7 +6,6 @@ from .constants import (
     BREADCRUMB_ACTIVE_COLOR,
     HIGHLIGHT_COLOR,
     HOVER_COLOR,
-    TEXT_COLOR,
 )
 from .flow_layout import FlowLayout
 
@@ -151,7 +150,7 @@ class RecentDirectoryItem(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(t_label)
             btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
             btn.setStyleSheet(
-                f"background-color: {BREADCRUMB_INACTIVE_COLOR}; color: {TEXT_COLOR}; border: none;"
+                f"background-color: {HIGHLIGHT_COLOR}; color: {BREADCRUMB_ACTIVE_COLOR}; border: none;"
                 " border-radius: 10px; padding: 3px 7px;"
             )
             btn.setMinimumWidth(60)
