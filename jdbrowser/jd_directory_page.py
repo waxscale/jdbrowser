@@ -86,12 +86,35 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._setup_ui()
         self._setup_shortcuts()
         self.set_selection(0)
-
-        self.setStyleSheet(
-            """
-            QWidget { background-color: #000000; }
-            """
-        )
+        style = f"""
+        * {{ font-family: 'FiraCode Nerd Font'; }}
+        QWidget {{ background-color: #000000; }}
+        QMainWindow {{ background-color: #000000; }}
+        QScrollArea {{ border: none; background-color: #000000; }}
+        QScrollBar:vertical {{
+            width: 8px;
+            background: #000000;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {BORDER_COLOR};
+            min-height: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+        QScrollBar:horizontal {{
+            height: 8px;
+            background: #000000;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {BORDER_COLOR};
+            min-width: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
+        """
+        self.setStyleSheet(style)
 
     # DirectoryItem expects a set_selection method on its page
     def set_selection(self, index):
