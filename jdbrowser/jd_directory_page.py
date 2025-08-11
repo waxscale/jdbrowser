@@ -568,12 +568,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 if current != start:
                     target = start
                     self.file_list.setCurrentRow(target)
-                    self.file_list.scrollToItem(self.file_list.item(target))
+                    self._scroll_with_header(target, -1)
                 else:
                     if i > 0:
                         target = self.section_bounds[i - 1][0]
                         self.file_list.setCurrentRow(target)
-                        self.file_list.scrollToItem(self.file_list.item(target))
+                        self._scroll_with_header(target, -1)
                     else:
                         self.file_list.setCurrentItem(None)
                         self.file_list.scrollToTop()
@@ -586,7 +586,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if current == -1:
             end = self.section_bounds[0][1]
             self.file_list.setCurrentRow(end)
-            self.file_list.scrollToItem(self.file_list.item(end))
+            self._scroll_with_header(end, 1)
             return
         for i, (start, end) in enumerate(self.section_bounds):
             if start <= current <= end:
@@ -596,8 +596,22 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     else end
                 )
                 self.file_list.setCurrentRow(target)
-                self.file_list.scrollToItem(self.file_list.item(target))
+                self._scroll_with_header(target, 1)
                 break
+
+    def _scroll_with_header(self, row: int, direction: int) -> None:
+        header_row = row + direction
+        if 0 <= header_row < self.file_list.count():
+            header_item = self.file_list.item(header_row)
+            if header_item and header_item.data(QtCore.Qt.UserRole) == "header":
+                position = (
+                    QtWidgets.QAbstractItemView.PositionAtTop
+                    if direction < 0
+                    else QtWidgets.QAbstractItemView.PositionAtBottom
+                )
+                self.file_list.scrollToItem(header_item, position)
+                return
+        self.file_list.scrollToItem(self.file_list.item(row))
 
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
