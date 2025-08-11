@@ -1,5 +1,6 @@
 import os
 import re
+import weakref
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
@@ -35,6 +36,43 @@ FILE_TYPE_ICONS = {
     ".svg": "\uf1c9",  # nf-fa-file_image_o
 }
 DEFAULT_FILE_ICON = "\uf15b"  # nf-fa-file_o
+
+
+THUMBNAIL_EXTS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".bmp",
+    ".gif",
+    ".webp",
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".webm",
+}
+
+
+class ThumbnailLoader(QtCore.QRunnable):
+    def __init__(self, page, label, path):
+        super().__init__()
+        self.page_ref = weakref.ref(page)
+        self.label_ref = weakref.ref(label)
+        self.path = path
+
+    def run(self):
+        page = self.page_ref()
+        label = self.label_ref()
+        if not page or not label:
+            return
+        pixmap = page._thumbnail_for_path(self.path)
+        if pixmap and label:
+            QtCore.QMetaObject.invokeMethod(
+                label,
+                "setPixmap",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(QtGui.QPixmap, pixmap),
+            )
 
 class JdDirectoryPage(QtWidgets.QWidget):
     def __init__(
@@ -74,6 +112,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
 
+        self._pending_thumbnails: list[
+            tuple[weakref.ReferenceType[QtWidgets.QLabel], str]
+        ] = []
+        self._thumb_pool = QtCore.QThreadPool()
+        self._thumb_pool.setMaxThreadCount(1)
+
         self.in_search_mode = False
         self.prev_selected_is_directory = False
         self.prev_row = -1
@@ -82,6 +126,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.search_shortcut_instances: list[QtGui.QShortcut] = []
 
         self.section_bounds: list[tuple[int, int]] = []
+
+        self._thumbs_started = False
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -115,6 +161,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
         """
         self.setStyleSheet(style)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._thumbs_started:
+            self._thumbs_started = True
+            QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     # DirectoryItem expects a set_selection method on its page
     def set_selection(self, index):
@@ -328,6 +380,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.file_list.clear()
         self.section_bounds = []
+        self._pending_thumbnails = []
+        self._thumb_pool.clear()
         current_start = None
         non_header_names = [n for n in files if not n.lower().endswith('.2do')]
         target_name = None
@@ -391,6 +445,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setCurrentItem(None)
 
         QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
+        QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _is_header_row(self, row: int) -> bool:
         item = self.file_list.item(row)
@@ -418,11 +473,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
         icon_label = QtWidgets.QLabel()
         icon_label.setFixedSize(120, 75)
         icon_label.setStyleSheet("border: none; border-radius: 10px;")
-        pixmap = self._thumbnail_for_path(path)
-        if pixmap:
-            icon_label.setPixmap(pixmap)
+        ext = os.path.splitext(name)[1].lower()
+        if ext in THUMBNAIL_EXTS:
+            placeholder = QtGui.QPixmap(120, 75)
+            placeholder.fill(QtGui.QColor(SLATE_COLOR))
+            icon_label.setPixmap(placeholder)
+            self._pending_thumbnails.append((weakref.ref(icon_label), path))
         else:
-            char = self._icon_for_extension(os.path.splitext(name)[1].lower())
+            char = self._icon_for_extension(ext)
             pixmap = QtGui.QPixmap(120, 75)
             pixmap.fill(QtGui.QColor(SLATE_COLOR))
             painter = QtGui.QPainter(pixmap)
@@ -510,6 +568,22 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if ext in {".mp4", ".mkv", ".avi", ".mov", ".webm"}:
             return self._video_thumbnail(path)
         return None
+
+    def _load_thumbnail_async(
+        self, label: QtWidgets.QLabel, path: str
+    ) -> None:
+        runnable = ThumbnailLoader(self, label, path)
+        self._thumb_pool.start(runnable)
+
+    def _start_pending_thumbnails(self) -> None:
+        if not self._pending_thumbnails:
+            return
+        label_ref, path = self._pending_thumbnails.pop()
+        label = label_ref()
+        if label:
+            self._load_thumbnail_async(label, path)
+        if self._pending_thumbnails:
+            QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
