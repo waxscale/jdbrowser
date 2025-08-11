@@ -467,11 +467,11 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.vlayout.addWidget(
             self.recent_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self._update_recent_width()
+        QtCore.QTimer.singleShot(0, self._update_recent_width)
 
     def _update_recent_width(self):
         if self.recent_wrapper:
-            width = int(self.scroll_area.viewport().width() * 0.6)
+            width = int(self.width() * 0.6)
             self.recent_wrapper.setFixedWidth(width)
 
     def set_selection(self, index):
