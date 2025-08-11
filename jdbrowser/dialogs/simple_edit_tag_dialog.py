@@ -32,7 +32,8 @@ class SimpleEditTagDialog(QDialog):
 
         layout = QVBoxLayout(self)
         self.input = QLineEdit(current_label)
-        self.input.setMinimumWidth(200)
+        # Make the rename dialog significantly wider for better usability
+        self.input.setMinimumWidth(600)
         self.input.selectAll()  # Select all text in the input box
         layout.addWidget(self.input)
 
