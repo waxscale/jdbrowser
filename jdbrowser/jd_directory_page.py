@@ -72,6 +72,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
 
+        self.section_bounds: list[tuple[int, int]] = []
+
         self._setup_ui()
         self._setup_shortcuts()
         self.set_selection(0)
@@ -210,13 +212,49 @@ class JdDirectoryPage(QtWidgets.QWidget):
             if os.path.isfile(os.path.join(path, f))
         ]
         files.sort(key=lambda x: x.lower())
+        self.section_bounds = []
+        current_start = None
         for name in files:
             full_path = os.path.join(path, name)
+            if name.lower().endswith(".2do"):
+                if current_start is not None:
+                    self.section_bounds.append(
+                        (current_start, self.file_list.count() - 1)
+                    )
+                    current_start = None
+                label = self._strip_prefix(os.path.splitext(name)[0])
+                header = QtWidgets.QLabel(label)
+                header.setAlignment(
+                    QtCore.Qt.AlignmentFlag.AlignLeft
+                    | QtCore.Qt.AlignmentFlag.AlignVCenter
+                )
+                font = header.font()
+                font.setPointSize(int(font.pointSize() * 0.75))
+                font.setBold(True)
+                header.setFont(font)
+                header.setStyleSheet(
+                    f"background-color: {BUTTON_COLOR}; color: black; padding-left:5px; padding-right:5px;"
+                )
+                header.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+                )
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(header.sizeHint())
+                item.setFlags(QtCore.Qt.ItemIsEnabled)
+                item.setData(QtCore.Qt.UserRole, "header")
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, header)
+                continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
+            item.setData(QtCore.Qt.UserRole, name)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
+            if current_start is None:
+                current_start = self.file_list.count() - 1
+        if current_start is not None:
+            self.section_bounds.append((current_start, self.file_list.count() - 1))
 
     def refresh_file_list(self) -> None:
         scrollbar = self.file_list.verticalScrollBar()
@@ -249,32 +287,83 @@ class JdDirectoryPage(QtWidgets.QWidget):
         files.sort(key=lambda x: x.lower())
 
         self.file_list.clear()
-        index_to_select = -1
-        for i, name in enumerate(files):
+        self.section_bounds = []
+        current_start = None
+        non_header_names = [n for n in files if not n.lower().endswith('.2do')]
+        target_name = None
+        if current_name:
+            if current_name in non_header_names:
+                target_name = current_name
+            else:
+                for n in non_header_names:
+                    if n < current_name:
+                        target_name = n
+                    else:
+                        break
+        target_row = None
+        for name in files:
             full_path = os.path.join(path, name)
+            if name.lower().endswith('.2do'):
+                if current_start is not None:
+                    self.section_bounds.append(
+                        (current_start, self.file_list.count() - 1)
+                    )
+                    current_start = None
+                label = self._strip_prefix(os.path.splitext(name)[0])
+                header = QtWidgets.QLabel(label)
+                header.setAlignment(
+                    QtCore.Qt.AlignmentFlag.AlignLeft
+                    | QtCore.Qt.AlignmentFlag.AlignVCenter
+                )
+                font = header.font()
+                font.setPointSize(int(font.pointSize() * 0.75))
+                font.setBold(True)
+                header.setFont(font)
+                header.setStyleSheet(
+                    f"background-color: {BUTTON_COLOR}; color: black; padding-left:5px; padding-right:5px;"
+                )
+                header.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+                )
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(header.sizeHint())
+                item.setFlags(QtCore.Qt.ItemIsEnabled)
+                item.setData(QtCore.Qt.UserRole, 'header')
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, header)
+                continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
+            item.setData(QtCore.Qt.UserRole, name)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
-            if current_name:
-                if name == current_name:
-                    index_to_select = i
-                elif index_to_select == -1 and name > current_name:
-                    index_to_select = i - 1
+            if current_start is None:
+                current_start = self.file_list.count() - 1
+            if target_name is not None and name == target_name:
+                target_row = self.file_list.count() - 1
+        if current_start is not None:
+            self.section_bounds.append((current_start, self.file_list.count() - 1))
 
-        if current_name:
-            if index_to_select == -1 and files:
-                if files[-1] < current_name:
-                    index_to_select = len(files) - 1
-            if index_to_select >= 0:
-                self.file_list.setCurrentRow(index_to_select)
-            else:
-                self.file_list.setCurrentItem(None)
+        if target_row is not None:
+            self.file_list.setCurrentRow(target_row)
         else:
             self.file_list.setCurrentItem(None)
 
         QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
+
+    def _is_header_row(self, row: int) -> bool:
+        item = self.file_list.item(row)
+        return bool(item and item.data(QtCore.Qt.UserRole) == "header")
+
+    def _next_non_header_index(self, start: int, step: int) -> int | None:
+        count = self.file_list.count()
+        idx = start
+        while 0 <= idx < count and self._is_header_row(idx):
+            idx += step
+        if 0 <= idx < count:
+            return idx
+        return None
 
     def _create_file_row(self, path: str, name: str) -> QtWidgets.QWidget:
         row = QtWidgets.QWidget()
@@ -407,13 +496,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
         current = self.file_list.currentRow()
         if current == -1:
             if direction > 0:
-                self.file_list.setCurrentRow(0)
-                self.file_list.scrollToItem(self.file_list.item(0))
+                index = self._next_non_header_index(0, 1)
+                if index is not None:
+                    self.file_list.setCurrentRow(index)
+                    self.file_list.scrollToItem(self.file_list.item(index))
             return
-        if current == 0 and direction < 0:
-            self.file_list.setCurrentItem(None)
+        index = current + direction
+        index = max(0, min(index, count - 1))
+        index = self._next_non_header_index(index, 1 if direction > 0 else -1)
+        if index is None:
+            if direction < 0:
+                self.file_list.setCurrentItem(None)
             return
-        index = max(0, min(current + direction, count - 1))
         self.file_list.setCurrentRow(index)
         item = self.file_list.item(index)
         if item:
@@ -428,16 +522,57 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def move_to_start(self) -> None:
         if self.file_list.count() == 0:
             return
-        self.file_list.setCurrentRow(0)
-        self.file_list.scrollToItem(self.file_list.item(0))
+        index = self._next_non_header_index(0, 1)
+        if index is not None:
+            self.file_list.setCurrentRow(index)
+            self.file_list.scrollToItem(self.file_list.item(index))
 
     def move_to_end(self) -> None:
         count = self.file_list.count()
         if count == 0:
             return
-        idx = count - 1
-        self.file_list.setCurrentRow(idx)
-        self.file_list.scrollToItem(self.file_list.item(idx))
+        index = self._next_non_header_index(count - 1, -1)
+        if index is not None:
+            self.file_list.setCurrentRow(index)
+            self.file_list.scrollToItem(self.file_list.item(index))
+
+    def move_to_section_start(self) -> None:
+        if not self.section_bounds:
+            return
+        current = self.file_list.currentRow()
+        if current == -1:
+            start = self.section_bounds[0][0]
+            self.file_list.setCurrentRow(start)
+            self.file_list.scrollToItem(self.file_list.item(start))
+            return
+        for i, (start, end) in enumerate(self.section_bounds):
+            if start <= current <= end:
+                target = start if current != start else (
+                    self.section_bounds[i - 1][0] if i > 0 else start
+                )
+                self.file_list.setCurrentRow(target)
+                self.file_list.scrollToItem(self.file_list.item(target))
+                break
+
+    def move_to_section_end(self) -> None:
+        if not self.section_bounds:
+            return
+        current = self.file_list.currentRow()
+        if current == -1:
+            end = self.section_bounds[-1][1]
+            self.file_list.setCurrentRow(end)
+            self.file_list.scrollToItem(self.file_list.item(end))
+            return
+        for i, (start, end) in enumerate(self.section_bounds):
+            if start <= current <= end:
+                target = end if current != end else (
+                    self.section_bounds[i + 1][1]
+                    if i + 1 < len(self.section_bounds)
+                    else end
+                )
+                self.file_list.setCurrentRow(target)
+                self.file_list.scrollToItem(self.file_list.item(target))
+                break
 
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
@@ -477,8 +612,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
             (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
-            (QtCore.Qt.Key_BracketLeft, self.move_to_start, None),
-            (QtCore.Qt.Key_BracketRight, self.move_to_end, None),
+            (QtCore.Qt.Key_BracketLeft, self.move_to_section_start, None),
+            (QtCore.Qt.Key_BracketRight, self.move_to_section_end, None),
             (QtCore.Qt.Key_G, self.move_to_start, None),
             (
                 QtCore.Qt.Key_G,
