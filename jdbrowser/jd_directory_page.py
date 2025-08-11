@@ -175,11 +175,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
         # List of files within the directory
         self.file_list = QtWidgets.QListWidget()
         self.file_list.setIconSize(QtCore.QSize(120, 75))
+        self.file_list.setMouseTracking(True)
         self.file_list.setStyleSheet(
             "QListWidget{background-color: transparent; border: none;}"
-            "QListWidget::item{background-color: transparent; border: none;}"
+            "QListWidget::item{background-color: transparent; border: none; border-radius: 5px;}"
+            f"QListWidget::item:selected{{background-color: {HIGHLIGHT_COLOR};}}"
+            f"QListWidget::item:hover{{background-color: {HOVER_COLOR};}}"
         )
         self.file_list.setSpacing(2)
+        self.file_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.SingleSelection
+        )
+        self.file_list.currentItemChanged.connect(self._file_selection_changed)
         layout.addWidget(self.file_list)
 
         self._populate_files(order)
@@ -330,6 +337,51 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if os.path.isdir(path):
             QtCore.QProcess.startDetached("thunar", [path])
 
+    def move_selection(self, direction: int) -> None:
+        count = self.file_list.count()
+        if count == 0:
+            return
+        current = self.file_list.currentRow()
+        if current == -1:
+            if direction > 0:
+                self.file_list.setCurrentRow(0)
+                self.file_list.scrollToItem(self.file_list.item(0))
+            return
+        if current == 0 and direction < 0:
+            self.file_list.setCurrentItem(None)
+            return
+        index = max(0, min(current + direction, count - 1))
+        self.file_list.setCurrentRow(index)
+        item = self.file_list.item(index)
+        if item:
+            self.file_list.scrollToItem(item)
+
+    def move_selection_multiple(self, count: int) -> None:
+        if self.file_list.count() == 0:
+            return
+        for _ in range(abs(count)):
+            self.move_selection(1 if count > 0 else -1)
+
+    def move_to_start(self) -> None:
+        if self.file_list.count() == 0:
+            return
+        self.file_list.setCurrentRow(0)
+        self.file_list.scrollToItem(self.file_list.item(0))
+
+    def move_to_end(self) -> None:
+        count = self.file_list.count()
+        if count == 0:
+            return
+        idx = count - 1
+        self.file_list.setCurrentRow(idx)
+        self.file_list.scrollToItem(self.file_list.item(idx))
+
+    def _file_selection_changed(
+        self, current: QtWidgets.QListWidgetItem | None, _prev
+    ) -> None:
+        self.item.isSelected = current is None
+        self.item.updateStyle()
+
     def _setup_shortcuts(self):
         self.shortcuts = []
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -341,6 +393,39 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 None,
                 QtCore.Qt.KeyboardModifier.AltModifier,
             ),
+            (QtCore.Qt.Key_J, self.move_selection, 1),
+            (QtCore.Qt.Key_Down, self.move_selection, 1),
+            (QtCore.Qt.Key_K, self.move_selection, -1),
+            (QtCore.Qt.Key_Up, self.move_selection, -1),
+            (
+                QtCore.Qt.Key_U,
+                self.move_selection_multiple,
+                -3,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (
+                QtCore.Qt.Key_D,
+                self.move_selection_multiple,
+                3,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
+            (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
+            (QtCore.Qt.Key_BracketLeft, self.move_to_start, None),
+            (QtCore.Qt.Key_BracketRight, self.move_to_end, None),
+            (QtCore.Qt.Key_G, self.move_to_start, None),
+            (
+                QtCore.Qt.Key_G,
+                self.move_to_end,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (QtCore.Qt.Key_Home, self.move_to_start, None),
+            (QtCore.Qt.Key_End, self.move_to_end, None),
+            (QtCore.Qt.Key_H, lambda: None, None),
+            (QtCore.Qt.Key_Left, lambda: None, None),
+            (QtCore.Qt.Key_L, lambda: None, None),
+            (QtCore.Qt.Key_Right, lambda: None, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
