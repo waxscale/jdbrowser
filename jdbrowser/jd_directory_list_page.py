@@ -9,9 +9,10 @@ from .database import (
     rebuild_state_jd_directories,
     create_jd_directory,
     add_directory_tag,
+    remove_directory_tag,
     rebuild_state_directory_tags,
 )
-from .dialogs import EditTagDialog, SimpleEditTagDialog
+from .dialogs import EditTagDialog, SimpleEditTagDialog, RemoveDirectoryTagDialog
 from .constants import *
 from .config import read_config
 from .search_line_edit import SearchLineEdit
@@ -626,6 +627,25 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 break
 
+    def _remove_tag_from_directory(self):
+        """Remove the current jd_ext tag from the selected directory."""
+        if self.selected_index is None or not (0 <= self.selected_index < len(self.items)):
+            return
+        current_item = self.items[self.selected_index]
+        directory_id = current_item.directory_id
+        dialog = RemoveDirectoryTagDialog(current_item.label_text, self.ext_label, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            remove_directory_tag(self.conn, directory_id, self.parent_uuid)
+            rebuild_state_directory_tags(self.conn)
+            idx = self.selected_index
+            self._load_directories()
+            if self.items:
+                if idx is None or idx >= len(self.items):
+                    idx = len(self.items) - 1
+                self.set_selection(idx)
+            else:
+                self.selected_index = None
+
     def enter_search_mode(self):
         if not self.in_search_mode:
             if not self.items:
@@ -805,6 +825,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
+            (QtCore.Qt.Key_D, self._remove_tag_from_directory, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
