@@ -179,7 +179,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             "QListWidget{background-color: transparent; border: none;}"
             "QListWidget::item{background-color: transparent; border: none;}"
         )
-        self.file_list.setSpacing(5)
+        self.file_list.setSpacing(2)
         layout.addWidget(self.file_list)
 
         self._populate_files(order)
@@ -213,7 +213,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         row.setStyleSheet("background-color: transparent;")
         layout = QtWidgets.QHBoxLayout(row)
-        layout.setContentsMargins(0, 5, 0, 5)
+        layout.setContentsMargins(0, 2, 0, 2)
         layout.setSpacing(10)
 
         icon_label = QtWidgets.QLabel()
