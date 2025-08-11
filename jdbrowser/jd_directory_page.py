@@ -1132,7 +1132,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
             timestamp = dt.strftime("%Y-%m-%d %H.%M.%S")
         new_inner = f"{header_prefix} {timestamp}".rstrip()
-        new_name = f"[{new_inner}] {rest_name}" if rest_name else f"[{new_inner}]"
+        if rest_name:
+            if rest_name.startswith('.'):
+                new_name = f"[{new_inner}]{rest_name}"
+            else:
+                new_name = f"[{new_inner}] {rest_name}"
+        else:
+            new_name = f"[{new_inner}]"
         new_path = os.path.join(dir_path, new_name)
         if os.path.exists(new_path):
             self._warn("Rename File", f"File {new_name} already exists.")
