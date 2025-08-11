@@ -693,6 +693,30 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         result = cursor.fetchone()
         max_order = result[0] if result and result[0] is not None else 0
         new_order = max_order + 1
+
+        os.makedirs(self.repository_path, exist_ok=True)
+        folder_name = "_".join(f"{new_order:016d}"[i : i + 4] for i in range(0, 16, 4))
+        folder_path = os.path.join(self.repository_path, folder_name)
+
+        if os.path.exists(folder_path):
+            pattern = re.compile(r"^\d{4}_\d{4}_\d{4}_\d{4}$")
+            highest = max(
+                (
+                    int(name.replace("_", ""))
+                    for name in os.listdir(self.repository_path)
+                    if os.path.isdir(os.path.join(self.repository_path, name))
+                    and pattern.fullmatch(name)
+                ),
+                default=0,
+            )
+            new_order = highest + 1
+            folder_name = "_".join(
+                f"{new_order:016d}"[i : i + 4] for i in range(0, 16, 4)
+            )
+            folder_path = os.path.join(self.repository_path, folder_name)
+
+        os.makedirs(folder_path, exist_ok=True)
+
         directory_id = create_jd_directory(self.conn, new_order, "")
         if directory_id:
             add_directory_tag(self.conn, directory_id, self.parent_uuid)
