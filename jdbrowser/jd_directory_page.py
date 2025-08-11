@@ -13,6 +13,7 @@ from .database import (
 from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .directory_item import DirectoryItem
 from .tag_search_overlay import TagSearchOverlay
+from .search_line_edit import SearchLineEdit
 from .config import read_config
 
 # Mapping of common file extensions to FiraCode Nerd Font icons
@@ -71,6 +72,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
+
+        self.in_search_mode = False
+        self.prev_selected_is_directory = False
+        self.prev_row = -1
+        self.search_matches: list[int] = []
+        self.current_match_idx = -1
+        self.search_shortcut_instances: list[QtGui.QShortcut] = []
 
         self.section_bounds: list[tuple[int, int]] = []
 
@@ -197,6 +205,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout.addWidget(self.file_list)
 
         self._populate_files(order)
+
+        self.search_input = SearchLineEdit(self)
+        self.search_input.setFixedWidth(300)
+        self.search_input.setFixedHeight(30)
+        self.search_input.hide()
+        self.search_input.textChanged.connect(self.perform_search)
+        self._setup_search_shortcuts()
+        self.search_input.move(self.width() - 310, self.height() - 40)
 
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
@@ -490,6 +506,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtCore.QProcess.startDetached("thunar", [path])
 
     def move_selection(self, direction: int) -> None:
+        if self.in_search_mode:
+            return
         count = self.file_list.count()
         if count == 0:
             return
@@ -514,13 +532,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.scrollToItem(item)
 
     def move_selection_multiple(self, count: int) -> None:
-        if self.file_list.count() == 0:
+        if self.in_search_mode or self.file_list.count() == 0:
             return
         for _ in range(abs(count)):
             self.move_selection(1 if count > 0 else -1)
 
     def move_to_start(self) -> None:
-        if self.file_list.count() == 0:
+        if self.in_search_mode or self.file_list.count() == 0:
             return
         index = self._next_non_header_index(0, 1)
         if index is not None:
@@ -528,6 +546,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.scrollToItem(self.file_list.item(index))
 
     def move_to_end(self) -> None:
+        if self.in_search_mode:
+            return
         count = self.file_list.count()
         if count == 0:
             return
@@ -537,7 +557,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.scrollToItem(self.file_list.item(index))
 
     def move_to_section_start(self) -> None:
-        if not self.section_bounds:
+        if self.in_search_mode or not self.section_bounds:
             return
         current = self.file_list.currentRow()
         if current == -1:
@@ -559,7 +579,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 break
 
     def move_to_section_end(self) -> None:
-        if not self.section_bounds:
+        if self.in_search_mode or not self.section_bounds:
             return
         current = self.file_list.currentRow()
         if current == -1:
@@ -586,6 +606,162 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _is_directory_selected(self) -> bool:
         return self.file_list.currentItem() is None
+
+    def _setup_search_shortcuts(self):
+        for s in self.search_shortcut_instances:
+            s.deleteLater()
+        self.search_shortcut_instances = []
+        search_shortcuts = [
+            (QtCore.Qt.Key_Escape, self.exit_search_mode_revert, None),
+            (
+                QtCore.Qt.Key_BracketLeft,
+                self.exit_search_mode_revert,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (QtCore.Qt.Key_Return, self.exit_search_mode_select, None),
+            (
+                QtCore.Qt.Key_G,
+                self.next_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (
+                QtCore.Qt.Key_G,
+                self.prev_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier
+                | QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_N,
+                self.next_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+            (
+                QtCore.Qt.Key_P,
+                self.prev_match,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
+        ]
+        for key, func, arg, *mod in search_shortcuts:
+            modifiers = mod[0] if mod else QtCore.Qt.KeyboardModifier.NoModifier
+            s = QtGui.QShortcut(QtGui.QKeySequence(key | modifiers), self.search_input)
+            s.setEnabled(False)
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
+            self.search_shortcut_instances.append(s)
+
+    def enter_search_mode(self):
+        if not self.in_search_mode:
+            if self.file_list.count() == 0:
+                return
+            self.in_search_mode = True
+            self.prev_selected_is_directory = self.item.isSelected
+            self.prev_row = self.file_list.currentRow()
+            self.search_matches = []
+            self.current_match_idx = -1
+            self.search_input.clear()
+            self.search_input.show()
+            self.search_input.setFocus()
+            for s in self.shortcuts:
+                key_str = s.key().toString()
+                if key_str and not any(
+                    key_str.lower() == seq.lower() for seq in self.quit_sequences
+                ):
+                    s.setEnabled(False)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(True)
+            self.perform_search("")
+
+    def exit_search_mode_revert(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            for i in range(self.file_list.count()):
+                widget = self.file_list.itemWidget(self.file_list.item(i))
+                if widget:
+                    widget.setGraphicsEffect(None)
+            if self.prev_selected_is_directory:
+                self.set_selection(0)
+            elif self.prev_row >= 0:
+                self.file_list.setCurrentRow(self.prev_row)
+            self.search_matches = []
+            self.current_match_idx = -1
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            self.setFocus()
+
+    def exit_search_mode_select(self):
+        if self.in_search_mode:
+            self.in_search_mode = False
+            self.search_input.hide()
+            for i in range(self.file_list.count()):
+                widget = self.file_list.itemWidget(self.file_list.item(i))
+                if widget:
+                    widget.setGraphicsEffect(None)
+            if self.search_matches and self.current_match_idx >= 0:
+                idx = self.search_matches[self.current_match_idx]
+                self.file_list.setCurrentRow(idx)
+                self.file_list.scrollToItem(self.file_list.item(idx))
+            elif self.prev_selected_is_directory:
+                self.set_selection(0)
+            elif self.prev_row >= 0:
+                self.file_list.setCurrentRow(self.prev_row)
+            self.search_matches = []
+            self.current_match_idx = -1
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            self.setFocus()
+
+    def perform_search(self, query):
+        query = query.lower()
+        self.search_matches = []
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            widget = self.file_list.itemWidget(item)
+            if widget:
+                widget.setGraphicsEffect(None)
+            data = item.data(QtCore.Qt.UserRole)
+            if data == "header":
+                continue
+            name = str(data).lower()
+            if query and query in name:
+                self.search_matches.append(i)
+            elif query and widget:
+                effect = QtWidgets.QGraphicsOpacityEffect(widget)
+                effect.setOpacity(0.4)
+                widget.setGraphicsEffect(effect)
+        if self.search_matches:
+            self.current_match_idx = 0
+            idx = self.search_matches[0]
+            self.file_list.setCurrentRow(idx)
+            self.file_list.scrollToItem(self.file_list.item(idx))
+        else:
+            self.current_match_idx = -1
+            self.file_list.setCurrentItem(None)
+
+    def next_match(self):
+        if self.in_search_mode and self.current_match_idx < len(self.search_matches) - 1:
+            self.current_match_idx += 1
+            idx = self.search_matches[self.current_match_idx]
+            self.file_list.setCurrentRow(idx)
+            self.file_list.scrollToItem(self.file_list.item(idx))
+
+    def prev_match(self):
+        if self.in_search_mode and self.current_match_idx > 0:
+            self.current_match_idx -= 1
+            idx = self.search_matches[self.current_match_idx]
+            self.file_list.setCurrentRow(idx)
+            self.file_list.scrollToItem(self.file_list.item(idx))
 
     def _setup_shortcuts(self):
         self.shortcuts = []
@@ -648,6 +824,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self._open_thunar,
                 None,
                 QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
+            (
+                QtCore.Qt.Key_F,
+                self.enter_search_mode,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
         ]
         for key, func, arg, *mod in mappings:
@@ -870,6 +1053,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 break
             else:
                 break
+
+    def resizeEvent(self, event):
+        self.search_input.move(self.width() - 310, self.height() - 40)
+        if self.tag_search_overlay and self.tag_search_overlay.isVisible():
+            self.tag_search_overlay.reposition()
+        if self.remove_tag_overlay and self.remove_tag_overlay.isVisible():
+            self.remove_tag_overlay.reposition()
+        super().resizeEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.in_search_mode:
+            self.exit_search_mode_select()
+        super().mousePressEvent(event)
 
     def open_tag_search(self):
         if not self._is_directory_selected():
