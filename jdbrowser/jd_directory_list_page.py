@@ -70,6 +70,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.area_label = row[0] if row else ""
 
         self.items = []
+        self.main_count = 0
         self.selected_index = None
         self.show_prefix = False
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -372,6 +373,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if widget:
                 widget.deleteLater()
         self.items = []
+        self.main_count = 0
         self.recent_items = []
         self.recent_wrapper = None
         self.recent_frame = None
@@ -396,7 +398,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (self.parent_uuid,),
         )
         rows = cursor.fetchall()
-        for idx, row in enumerate(rows):
+        for row in rows:
             directory_id, label, order, icon_data = row
             cursor.execute(
                 """
@@ -415,10 +417,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             )
             tag_rows = cursor.fetchall()
             tags = [tuple(t) for t in tag_rows]
-            item = DirectoryItem(directory_id, label, order, icon_data, self, idx, tags)
+            index = len(self.items)
+            item = DirectoryItem(directory_id, label, order, icon_data, self, index, tags)
             item.updateLabel(self.show_prefix)
             self.vlayout.addWidget(item)
             self.items.append(item)
+        self.main_count = len(self.items)
         self._load_recent_directories()
         self._load_untagged_directories()
         self.vlayout.addStretch(1)
@@ -456,10 +460,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         self.recent_frame = QtWidgets.QFrame()
-        self.recent_frame.setStyleSheet(
-            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;"
-            f" background-color: #000;"
-        )
+        self.recent_frame.setStyleSheet("background-color: #000; border: none;")
         self.recent_frame.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
@@ -467,10 +468,31 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            cursor.execute(
+                """
+                SELECT dt.tag_id,
+                       COALESCE(ext.label, id.label, area.label) AS label,
+                       COALESCE(ext.[order], id.[order], area.[order]) AS [order],
+                       COALESCE(ext.parent_uuid, id.parent_uuid) AS parent_uuid
+                FROM state_jd_directory_tags dt
+                LEFT JOIN state_jd_ext_tags ext ON dt.tag_id = ext.tag_id
+                LEFT JOIN state_jd_id_tags id ON dt.tag_id = id.tag_id
+                LEFT JOIN state_jd_area_tags area ON dt.tag_id = area.tag_id
+                WHERE dt.directory_id = ?
+                ORDER BY [order]
+                """,
+                (directory_id,),
+            )
+            tag_rows = cursor.fetchall()
+            tags = [tuple(t) for t in tag_rows]
+            index = len(self.items)
+            item = RecentDirectoryItem(
+                directory_id, label, order, icon_data, self, index, tags
+            )
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.recent_items.append(item)
+            self.items.append(item)
         outer_layout.addWidget(self.recent_frame)
         self.vlayout.addWidget(
             self.recent_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -508,9 +530,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         outer_layout.addWidget(title, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         self.untagged_frame = QtWidgets.QFrame()
-        self.untagged_frame.setStyleSheet(
-            f"border: 1px solid {BORDER_COLOR}; border-radius: 8px;" f" background-color: #000;"
-        )
+        self.untagged_frame.setStyleSheet("background-color: #000; border: none;")
         self.untagged_frame.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
@@ -518,10 +538,14 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
-            item = RecentDirectoryItem(directory_id, label, order, icon_data, self)
+            index = len(self.items)
+            item = RecentDirectoryItem(
+                directory_id, label, order, icon_data, self, index, []
+            )
             item.updateLabel(self.show_prefix)
             v_layout.addWidget(item)
             self.untagged_items.append(item)
+            self.items.append(item)
         outer_layout.addWidget(self.untagged_frame)
         self.vlayout.addWidget(
             self.untagged_wrapper, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -571,7 +595,77 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             return
         self.set_selection(len(self.items) - 1)
 
+    def move_to_section_start(self):
+        if self.in_search_mode or not self.items:
+            return
+        bounds = []
+        if self.main_count:
+            bounds.append((0, self.main_count - 1))
+        if self.recent_items:
+            start = self.main_count
+            bounds.append((start, start + len(self.recent_items) - 1))
+        if self.untagged_items:
+            start = self.main_count + len(self.recent_items)
+            bounds.append((start, start + len(self.untagged_items) - 1))
+        if not bounds:
+            return
+        if self.selected_index is None:
+            self.set_selection(bounds[0][0])
+            return
+        idx = self.selected_index
+        current = 0
+        for i, (s, e) in enumerate(bounds):
+            if s <= idx <= e:
+                current = i
+                start = s
+                break
+        if idx != start:
+            self.set_selection(start)
+        elif current > 0:
+            self.set_selection(bounds[current - 1][0])
+
+    def move_to_section_end(self):
+        if self.in_search_mode or not self.items:
+            return
+        bounds = []
+        if self.main_count:
+            bounds.append((0, self.main_count - 1))
+        if self.recent_items:
+            start = self.main_count
+            bounds.append((start, start + len(self.recent_items) - 1))
+        if self.untagged_items:
+            start = self.main_count + len(self.recent_items)
+            bounds.append((start, start + len(self.untagged_items) - 1))
+        if not bounds:
+            return
+        if self.selected_index is None:
+            self.set_selection(bounds[-1][1])
+            return
+        idx = self.selected_index
+        current = 0
+        for i, (s, e) in enumerate(bounds):
+            if s <= idx <= e:
+                current = i
+                end = e
+                break
+        if idx != end:
+            self.set_selection(end)
+        elif current + 1 < len(bounds):
+            self.set_selection(bounds[current + 1][1])
+
     def _add_directory(self):
+        if self.selected_index is not None and self.selected_index >= self.main_count:
+            item = self.items[self.selected_index]
+            directory_id = item.directory_id
+            add_directory_tag(self.conn, directory_id, self.parent_uuid)
+            rebuild_state_directory_tags(self.conn)
+            rebuild_state_jd_directories(self.conn)
+            self._load_directories()
+            for i, it in enumerate(self.items):
+                if it.directory_id == directory_id:
+                    self.set_selection(i)
+                    break
+            return
         cursor = self.conn.cursor()
         cursor.execute("SELECT MAX([order]) FROM state_jd_directories")
         result = cursor.fetchone()
@@ -795,10 +889,6 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.show_prefix = not self.show_prefix
         for item in self.items:
             item.updateLabel(self.show_prefix)
-        for item in self.recent_items:
-            item.updateLabel(self.show_prefix)
-        for item in self.untagged_items:
-            item.updateLabel(self.show_prefix)
         if self.selected_index is not None:
             self.set_selection(self.selected_index)
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -866,8 +956,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_D, self.move_selection_multiple, 3, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
             (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
-            (QtCore.Qt.Key_BracketLeft, self.move_to_start, None),
-            (QtCore.Qt.Key_BracketRight, self.move_to_end, None),
+            (QtCore.Qt.Key_BracketLeft, self.move_to_section_start, None),
+            (QtCore.Qt.Key_BracketRight, self.move_to_section_end, None),
             (QtCore.Qt.Key_G, self.move_to_start, None),
             (QtCore.Qt.Key_G, self.move_to_end, None, QtCore.Qt.KeyboardModifier.ShiftModifier),
             (QtCore.Qt.Key_Home, self.move_to_start, None),
