@@ -566,7 +566,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self, label: QtWidgets.QLabel, path: str
     ) -> None:
         runnable = ThumbnailLoader(self, label, path)
-        self._thumb_pool.start(runnable, QtCore.QThread.LowestPriority)
+        self._thumb_pool.start(runnable)
 
     def _start_pending_thumbnails(self) -> None:
         if not self._pending_thumbnails:
