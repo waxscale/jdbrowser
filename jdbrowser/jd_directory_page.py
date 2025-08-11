@@ -387,6 +387,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.item.isSelected = current is None
         self.item.updateStyle()
 
+    def _is_directory_selected(self) -> bool:
+        return self.file_list.currentItem() is None
+
     def _setup_shortcuts(self):
         self.shortcuts = []
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -583,6 +586,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.item.updateStyle()
 
     def _rename_tag_label(self):
+        if not self._is_directory_selected():
+            return
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT label FROM state_jd_directories WHERE directory_id = ?",
@@ -606,6 +611,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self._refresh_item()
 
     def _edit_tag_label_with_icon(self):
+        if not self._is_directory_selected():
+            return
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT [order], label FROM state_jd_directories WHERE directory_id = ?",
@@ -667,6 +674,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 break
 
     def open_tag_search(self):
+        if not self._is_directory_selected():
+            return
         if not self.tag_search_overlay:
             self.tag_search_overlay = TagSearchOverlay(self, self.conn)
             self.tag_search_overlay.tagSelected.connect(self.apply_tag_to_directory)
@@ -698,6 +707,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._refresh_item()
 
     def open_remove_tag_search(self):
+        if not self._is_directory_selected():
+            return
         cursor = self.conn.cursor()
         cursor.execute(
             """
