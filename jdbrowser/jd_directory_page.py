@@ -1060,7 +1060,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 ext = rest
             new_name = f"[5-UNRA {ts_str}]" + ext
         else:
-            new_name = f"[5-UNRA {ts_str}] {rest}" if rest else f"[5-UNRA {ts_str}]"
+            if not rest or rest.startswith("."):
+                new_name = f"[5-UNRA {ts_str}]{rest}"
+            else:
+                new_name = f"[5-UNRA {ts_str}] {rest}"
         if new_name == name:
             return
         new_path = os.path.join(dir_path, new_name)
