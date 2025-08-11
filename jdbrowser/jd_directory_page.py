@@ -1,5 +1,6 @@
 import os
 import re
+import weakref
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
@@ -55,15 +56,19 @@ THUMBNAIL_EXTS = {
 class ThumbnailLoader(QtCore.QRunnable):
     def __init__(self, page, label, path):
         super().__init__()
-        self.page = page
-        self.label = label
+        self.page_ref = weakref.ref(page)
+        self.label_ref = weakref.ref(label)
         self.path = path
 
     def run(self):
-        pixmap = self.page._thumbnail_for_path(self.path)
-        if pixmap:
+        page = self.page_ref()
+        label = self.label_ref()
+        if not page or not label:
+            return
+        pixmap = page._thumbnail_for_path(self.path)
+        if pixmap and label:
             QtCore.QMetaObject.invokeMethod(
-                self.label,
+                label,
                 "setPixmap",
                 QtCore.Qt.QueuedConnection,
                 QtCore.Q_ARG(QtGui.QPixmap, pixmap),
@@ -107,7 +112,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
 
-        self._pending_thumbnails: list[tuple[QtWidgets.QLabel, str]] = []
+        self._pending_thumbnails: list[
+            tuple[weakref.ReferenceType[QtWidgets.QLabel], str]
+        ] = []
         self._thumb_pool = QtCore.QThreadPool()
         self._thumb_pool.setMaxThreadCount(1)
 
@@ -471,7 +478,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             placeholder = QtGui.QPixmap(120, 75)
             placeholder.fill(QtGui.QColor(SLATE_COLOR))
             icon_label.setPixmap(placeholder)
-            self._pending_thumbnails.append((icon_label, path))
+            self._pending_thumbnails.append((weakref.ref(icon_label), path))
         else:
             char = self._icon_for_extension(ext)
             pixmap = QtGui.QPixmap(120, 75)
@@ -571,8 +578,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _start_pending_thumbnails(self) -> None:
         if not self._pending_thumbnails:
             return
-        label, path = self._pending_thumbnails.pop()
-        self._load_thumbnail_async(label, path)
+        label_ref, path = self._pending_thumbnails.pop()
+        label = label_ref()
+        if label:
+            self._load_thumbnail_async(label, path)
         if self._pending_thumbnails:
             QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
