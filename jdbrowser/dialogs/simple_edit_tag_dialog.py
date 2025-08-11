@@ -1,4 +1,11 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+)
 from PySide6.QtCore import Qt
 from ..constants import *
 
@@ -32,17 +39,24 @@ class SimpleEditTagDialog(QDialog):
 
         layout = QVBoxLayout(self)
         self.input = QLineEdit(current_label)
-        self.input.setMinimumWidth(200)
+        # Make the rename dialog significantly wider for better usability
+        self.input.setMinimumWidth(600)
         self.input.selectAll()  # Select all text in the input box
         layout.addWidget(self.input)
 
         self.ok_button = QPushButton("OK")
         self.ok_button.clicked.connect(self.accept)
-        layout.addWidget(self.ok_button)
 
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.reject)
-        layout.addWidget(self.cancel_button)
+
+        button_layout = QHBoxLayout()
+        for b in (self.ok_button, self.cancel_button):
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            button_layout.addWidget(b)
+        button_layout.setStretch(0, 1)
+        button_layout.setStretch(1, 1)
+        layout.addLayout(button_layout)
 
         self.setFixedSize(self.sizeHint())
 
