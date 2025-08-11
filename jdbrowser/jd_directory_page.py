@@ -1,4 +1,5 @@
 import os
+import re
 from PySide6 import QtWidgets, QtCore, QtGui
 import jdbrowser
 from .constants import *
@@ -6,9 +7,26 @@ from .database import setup_database
 from .directory_item import DirectoryItem
 
 class JdDirectoryPage(QtWidgets.QWidget):
-    def __init__(self, directory_id):
+    def __init__(
+        self,
+        directory_id,
+        parent_uuid=None,
+        jd_area=None,
+        jd_id=None,
+        jd_ext=None,
+        grandparent_uuid=None,
+        great_grandparent_uuid=None,
+        ext_label=None,
+    ):
         super().__init__()
         self.directory_id = directory_id
+        self.parent_uuid = parent_uuid
+        self.current_jd_area = jd_area
+        self.current_jd_id = jd_id
+        self.current_jd_ext = jd_ext
+        self.grandparent_uuid = grandparent_uuid
+        self.great_grandparent_uuid = great_grandparent_uuid
+        self.ext_label = ext_label
         if jdbrowser.main_window:
             jdbrowser.main_window.setWindowTitle(f"File Browser - [{directory_id}]")
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -23,6 +41,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.show_prefix = settings.value("show_prefix", False, type=bool)
 
         self._setup_ui()
+        self._setup_shortcuts()
 
         self.setStyleSheet(
             """
@@ -74,7 +93,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
         order = row[1] if row else 0
 
         crumb = self._format_order(order)
-        self.breadcrumb_bar = self._build_breadcrumb([(crumb, None)])
+        if self.parent_uuid is not None and self.ext_label:
+            parent_crumb = self._strip_prefix(self.ext_label)
+            self.breadcrumb_bar = self._build_breadcrumb(
+                [(parent_crumb, self.ascend_level), (crumb, None)]
+            )
+        else:
+            self.breadcrumb_bar = self._build_breadcrumb([(crumb, None)])
         layout.addWidget(self.breadcrumb_bar)
 
         cursor.execute(
@@ -111,9 +136,52 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout.addWidget(self.item, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)
 
+    def _strip_prefix(self, text: str) -> str:
+        return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
+
+    def _setup_shortcuts(self):
         self.shortcuts = []
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        mappings = [
+            (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+            (
+                QtCore.Qt.Key_Up,
+                self.ascend_level,
+                None,
+                QtCore.Qt.KeyboardModifier.AltModifier,
+            ),
+        ]
+        for key, func, arg, *mod in mappings:
+            seq = QtGui.QKeySequence(mod[0] | key) if mod else QtGui.QKeySequence(key)
+            s = QtGui.QShortcut(seq, self)
+            if arg is None:
+                s.activated.connect(func)
+            else:
+                s.activated.connect(lambda f=func, a=arg: f(a))
+            self.shortcuts.append(s)
         self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
         for seq in self.quit_sequences:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
+
+    def ascend_level(self):
+        if self.parent_uuid is None:
+            return
+        from .jd_directory_list_page import JdDirectoryListPage
+
+        new_page = JdDirectoryListPage(
+            parent_uuid=self.parent_uuid,
+            jd_area=self.current_jd_area,
+            jd_id=self.current_jd_id,
+            jd_ext=self.current_jd_ext,
+            grandparent_uuid=self.grandparent_uuid,
+            great_grandparent_uuid=self.great_grandparent_uuid,
+        )
+        target_id = self.directory_id
+        for i, item in enumerate(new_page.items):
+            if item.directory_id == target_id:
+                new_page.set_selection(i)
+                break
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
