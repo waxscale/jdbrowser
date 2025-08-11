@@ -107,6 +107,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
 
+        self._pending_thumbnails: list[tuple[QtWidgets.QLabel, str]] = []
+
         self.in_search_mode = False
         self.prev_selected_is_directory = False
         self.prev_row = -1
@@ -148,6 +150,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
         """
         self.setStyleSheet(style)
+
+        QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     # DirectoryItem expects a set_selection method on its page
     def set_selection(self, index):
@@ -361,6 +365,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.file_list.clear()
         self.section_bounds = []
+        self._pending_thumbnails = []
         current_start = None
         non_header_names = [n for n in files if not n.lower().endswith('.2do')]
         target_name = None
@@ -424,6 +429,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setCurrentItem(None)
 
         QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
+        QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _is_header_row(self, row: int) -> bool:
         item = self.file_list.item(row)
@@ -456,7 +462,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             placeholder = QtGui.QPixmap(120, 75)
             placeholder.fill(QtGui.QColor(SLATE_COLOR))
             icon_label.setPixmap(placeholder)
-            self._load_thumbnail_async(icon_label, path)
+            self._pending_thumbnails.append((icon_label, path))
         else:
             char = self._icon_for_extension(ext)
             pixmap = QtGui.QPixmap(120, 75)
@@ -553,6 +559,11 @@ class JdDirectoryPage(QtWidgets.QWidget):
         QtCore.QThreadPool.globalInstance().start(
             ThumbnailLoader(self, label, path)
         )
+
+    def _start_pending_thumbnails(self) -> None:
+        for label, path in self._pending_thumbnails:
+            self._load_thumbnail_async(label, path)
+        self._pending_thumbnails.clear()
 
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
