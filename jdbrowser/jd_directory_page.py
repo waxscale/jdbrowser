@@ -1,6 +1,6 @@
 import os
 import re
-from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
 from .constants import *
 from .database import (
@@ -14,6 +14,25 @@ from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .directory_item import DirectoryItem
 from .tag_search_overlay import TagSearchOverlay
 from .config import read_config
+
+# Mapping of common file extensions to FiraCode Nerd Font icons
+FILE_TYPE_ICONS = {
+    ".txt": "\uf15c",  # nf-fa-file_text_o
+    ".md": "\ue73e",  # nf-oct-markdown
+    ".csv": "\uf1c3",  # nf-fa-file_excel_o
+    ".json": "\ufb25",  # nf-mdi-json
+    ".py": "\ue606",  # nf-dev-python
+    ".sh": "\uf489",  # nf-oct-terminal
+    ".pdf": "\uf1c1",  # nf-fa-file_pdf_o
+    ".zip": "\uf1c6",  # nf-fa-file_archive_o
+    ".mp3": "\uf001",  # nf-fa-music
+    ".wav": "\uf1c7",  # nf-fa-file_audio_o
+    ".html": "\uf13b",  # nf-fa-html5
+    ".css": "\uf13c",  # nf-fa-css3
+    ".js": "\uf3b8",  # nf-dev-javascript
+    ".svg": "\uf1c9",  # nf-fa-file_image_o
+}
+DEFAULT_FILE_ICON = "\uf15b"  # nf-fa-file_o
 
 class JdDirectoryPage(QtWidgets.QWidget):
     def __init__(
@@ -152,10 +171,146 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
         )
         layout.addWidget(self.item)
-        layout.addStretch(1)
+
+        # List of files within the directory
+        self.file_list = QtWidgets.QListWidget()
+        self.file_list.setIconSize(QtCore.QSize(120, 75))
+        self.file_list.setStyleSheet(
+            "QListWidget{background-color: transparent; border: none;}"
+            "QListWidget::item{background-color: transparent; border: none;}"
+        )
+        self.file_list.setSpacing(5)
+        layout.addWidget(self.file_list)
+
+        self._populate_files(order)
 
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
+
+    def _populate_files(self, order: int) -> None:
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        if not os.path.isdir(path):
+            return
+        files = [
+            f
+            for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f))
+        ]
+        files.sort(key=lambda x: x.lower())
+        for name in files:
+            full_path = os.path.join(path, name)
+            widget = self._create_file_row(full_path, name)
+            item = QtWidgets.QListWidgetItem(self.file_list)
+            item.setSizeHint(widget.sizeHint())
+            self.file_list.addItem(item)
+            self.file_list.setItemWidget(item, widget)
+
+    def _create_file_row(self, path: str, name: str) -> QtWidgets.QWidget:
+        row = QtWidgets.QWidget()
+        row.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        row.setStyleSheet("background-color: transparent;")
+        layout = QtWidgets.QHBoxLayout(row)
+        layout.setContentsMargins(0, 5, 0, 5)
+        layout.setSpacing(10)
+
+        icon_label = QtWidgets.QLabel()
+        icon_label.setFixedSize(120, 75)
+        icon_label.setStyleSheet("border: none; border-radius: 10px;")
+        pixmap = self._thumbnail_for_path(path)
+        if pixmap:
+            icon_label.setPixmap(pixmap)
+        else:
+            char = self._icon_for_extension(os.path.splitext(name)[1].lower())
+            pixmap = QtGui.QPixmap(120, 75)
+            pixmap.fill(QtGui.QColor(SLATE_COLOR))
+            painter = QtGui.QPainter(pixmap)
+            painter.setRenderHint(QtGui.QPainter.Antialiasing)
+            font = QtGui.QFont("FiraCode Nerd Font", 48)
+            painter.setFont(font)
+            painter.setPen(QtGui.QColor(TEXT_COLOR))
+            painter.drawText(pixmap.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, char)
+            painter.end()
+            icon_label.setPixmap(self._rounded_pixmap(pixmap))
+        layout.addWidget(icon_label)
+
+        label = QtWidgets.QLabel(name)
+        label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+        label.setStyleSheet(f"color: {TEXT_COLOR};")
+        label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        layout.addWidget(label, 1)
+        return row
+
+    def _icon_for_extension(self, ext: str) -> str:
+        return FILE_TYPE_ICONS.get(ext, DEFAULT_FILE_ICON)
+
+    def _rounded_pixmap(self, pixmap: QtGui.QPixmap) -> QtGui.QPixmap:
+        if pixmap.isNull():
+            return pixmap
+        scaled = pixmap.scaled(
+            120,
+            75,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        rounded = QtGui.QPixmap(120, 75)
+        rounded.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(rounded)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(0, 0, 120, 75, 10, 10)
+        painter.setClipPath(path)
+        painter.drawPixmap(
+            (120 - scaled.width()) // 2,
+            (75 - scaled.height()) // 2,
+            scaled,
+        )
+        painter.end()
+        return rounded
+
+    def _video_thumbnail(self, path: str) -> QtGui.QPixmap | None:
+        player = QtMultimedia.QMediaPlayer()
+        sink = QtMultimedia.QVideoSink()
+        player.setVideoSink(sink)
+        thumb = {"pixmap": None}
+
+        def handle_frame(frame: QtMultimedia.QVideoFrame):
+            if frame.isValid() and thumb["pixmap"] is None:
+                image = frame.toImage()
+                thumb["pixmap"] = self._rounded_pixmap(
+                    QtGui.QPixmap.fromImage(image)
+                )
+                player.stop()
+
+        sink.videoFrameChanged.connect(handle_frame)
+        player.setSource(QtCore.QUrl.fromLocalFile(path))
+        player.play()
+
+        loop = QtCore.QEventLoop()
+        sink.videoFrameChanged.connect(loop.quit)
+        QtCore.QTimer.singleShot(1000, loop.quit)
+        loop.exec()
+        player.stop()
+        return thumb["pixmap"]
+
+    def _thumbnail_for_path(self, path: str) -> QtGui.QPixmap | None:
+        ext = os.path.splitext(path)[1].lower()
+        if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
+            pixmap = QtGui.QPixmap(path)
+            if not pixmap.isNull():
+                return self._rounded_pixmap(pixmap)
+            if ext == ".webp":
+                return self._video_thumbnail(path)
+            return None
+        if ext in {".mp4", ".mkv", ".avi", ".mov", ".webm"}:
+            return self._video_thumbnail(path)
+        return None
 
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
