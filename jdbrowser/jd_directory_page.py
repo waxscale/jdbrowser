@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
 from .constants import *
@@ -826,6 +827,20 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_F5, self.refresh_file_list, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
+            (QtCore.Qt.Key_Equal, self._apply_unra_prefix, (True, False)),
+            (
+                QtCore.Qt.Key_Equal,
+                self._apply_unra_prefix,
+                (True, True),
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (QtCore.Qt.Key_Minus, self._apply_unra_prefix, (False, False)),
+            (
+                QtCore.Qt.Key_Minus,
+                self._apply_unra_prefix,
+                (False, True),
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (
                 QtCore.Qt.Key_T,
                 self._open_terminal,
@@ -1014,6 +1029,59 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     self.file_list.setCurrentRow(i)
                     self.file_list.scrollToItem(it)
                     break
+
+    def _apply_unra_prefix(self, opts: tuple[bool, bool]) -> None:
+        use_file_time, replace_entire = opts
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name == "header":
+            return
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        dir_path = os.path.join(self.repository_path, folder)
+        old_path = os.path.join(dir_path, name)
+        if use_file_time:
+            stat = os.stat(old_path)
+            ts = getattr(stat, "st_birthtime", stat.st_mtime)
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        else:
+            dt = datetime.now(tz=timezone.utc)
+        ts_str = dt.strftime("%Y-%m-%d %H.%M.%S")
+        rest = re.sub(r"^\[[^\]]*\]\s*", "", name)
+        _, ext = os.path.splitext(rest)
+        if replace_entire:
+            if not ext and rest.startswith("."):
+                ext = rest
+            new_name = f"[5-UNRA {ts_str}]" + ext
+        else:
+            if not rest or rest.startswith("."):
+                new_name = f"[5-UNRA {ts_str}]{rest}"
+            else:
+                new_name = f"[5-UNRA {ts_str}] {rest}"
+        if new_name == name:
+            return
+        new_path = os.path.join(dir_path, new_name)
+        if os.path.exists(new_path):
+            self._warn("Rename File", f"File {new_name} already exists.")
+            return
+        try:
+            os.rename(old_path, new_path)
+        except OSError as e:
+            self._warn("Rename File", str(e))
+            return
+        self.refresh_file_list()
+        for i in range(self.file_list.count()):
+            it = self.file_list.item(i)
+            if it.data(QtCore.Qt.UserRole) == new_name:
+                self.file_list.setCurrentRow(i)
+                self.file_list.scrollToItem(it)
+                break
 
     def _rename_selected(self) -> None:
         if self._is_directory_selected():
