@@ -13,6 +13,7 @@ from .database import (
 from .dialogs import EditTagDialog, SimpleEditTagDialog
 from .directory_item import DirectoryItem
 from .tag_search_overlay import TagSearchOverlay
+from .config import read_config
 
 class JdDirectoryPage(QtWidgets.QWidget):
     def __init__(
@@ -35,6 +36,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.grandparent_uuid = grandparent_uuid
         self.great_grandparent_uuid = great_grandparent_uuid
         self.ext_label = ext_label
+        self.repository_path = read_config()
         if jdbrowser.main_window:
             jdbrowser.main_window.setWindowTitle(f"File Browser - [{directory_id}]")
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -155,6 +157,24 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
 
+    def _open_terminal(self) -> None:
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        if os.path.isdir(path):
+            QtCore.QProcess.startDetached("kitty", [], path)
+
+    def _open_thunar(self) -> None:
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        if os.path.isdir(path):
+            QtCore.QProcess.startDetached("thunar", [path])
+
     def _setup_shortcuts(self):
         self.shortcuts = []
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -171,6 +191,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_F2, self._rename_tag_label, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
+            (
+                QtCore.Qt.Key_T,
+                self._open_terminal,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_D,
+                self._open_thunar,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
         ]
         for key, func, arg, *mod in mappings:
             seq = QtGui.QKeySequence(mod[0] | key) if mod else QtGui.QKeySequence(key)
