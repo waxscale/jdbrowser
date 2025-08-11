@@ -92,8 +92,11 @@ class TagSearchOverlay(QtWidgets.QFrame):
         self.input.textChanged.connect(self.update_results)
         self.input.installEventFilter(self)
 
-    def open(self):
-        self._load_labels()
+    def open(self, label_rows=None):
+        if label_rows is None:
+            self._load_labels()
+        else:
+            self._set_labels(label_rows)
         self.input.clear()
         self.update_results("")
         self.reposition()
@@ -111,6 +114,9 @@ class TagSearchOverlay(QtWidgets.QFrame):
         cursor = self.conn.cursor()
         cursor.execute("SELECT tag_id, label FROM state_jd_ext_tags")
         rows = [(r[0], r[1]) for r in cursor.fetchall() if r[1]]
+        self._set_labels(rows)
+
+    def _set_labels(self, rows):
         self.label_map = {
             lbl.lower(): (lbl, tag_id)
             for tag_id, lbl in sorted(rows, key=lambda s: s[1].lower())
