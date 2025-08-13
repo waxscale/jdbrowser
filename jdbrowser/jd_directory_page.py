@@ -576,7 +576,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         doc = QtGui.QTextDocument()
         doc.setMarkdown(text)
         html = doc.toHtml()
-        style_block = f"<style>body {{ color: {TEXT_COLOR}; }} a {{ color: {LINK_COLOR}; }} a.visited {{ color: {LINK_VISITED_COLOR}; }} a:hover {{ color: {LINK_HOVER_COLOR}; }}</style>"
+        style_block = (
+            f"<style>body {{ color: {TEXT_COLOR}; }} "
+            f"a {{ color: {LINK_COLOR} !important; }} "
+            f"a.visited {{ color: {LINK_VISITED_COLOR} !important; }} "
+            f"a:hover {{ color: {LINK_HOVER_COLOR} !important; }}</style>"
+        )
         html = html.replace("<head>", f"<head>{style_block}")
         container = QtWidgets.QWidget()
         container.setStyleSheet(
@@ -604,7 +609,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             html = sender.toHtml()
             escaped = re.escape(qurl)
             html = re.sub(
-                rf'<a href="{escaped}">(.*?)</a>',
+                rf'<a href="{escaped}"[^>]*>(.*?)</a>',
                 rf'<a href="{qurl}" class="visited">\1</a>',
                 html,
             )
