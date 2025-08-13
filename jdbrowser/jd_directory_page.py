@@ -571,6 +571,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 text = f.read()
         except OSError:
             pass
+        pattern = re.compile(r"\[\[(\d{2})\.(\d{2})\+(\d{4})\]\]")
+
+        def repl(m):
+            code = f"{m.group(1)}.{m.group(2)}+{m.group(3)}"
+            return f"[[[{code}](jdlink:{code})]]"
+
+        text = pattern.sub(repl, text)
         container = QtWidgets.QWidget()
         container.setStyleSheet(
             f"background-color: {SLATE_COLOR}; border-radius: 5px;"
@@ -580,6 +587,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         label = QtWidgets.QLabel()
         label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
         label.setText(text)
+        label.setOpenExternalLinks(False)
+        label.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
+        label.linkActivated.connect(self._open_jd_link)
         label.setWordWrap(True)
         label.setStyleSheet(f"color: {TEXT_COLOR};")
         label.setAlignment(
@@ -588,6 +598,51 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         layout.addWidget(label)
         return container
+
+    def _open_jd_link(self, url: str):
+        m = re.match(r"jdlink:(\d{2})\.(\d{2})\+(\d{4})", url)
+        if not m:
+            return
+        jd_area = int(m.group(1))
+        jd_id = int(m.group(2))
+        jd_ext = int(m.group(3))
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT tag_id FROM state_jd_area_tags WHERE [order] = ?",
+            (jd_area,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        area_tag = row[0]
+        cursor.execute(
+            "SELECT tag_id FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] = ?",
+            (area_tag, jd_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        id_tag = row[0]
+        cursor.execute(
+            "SELECT tag_id FROM state_jd_ext_tags WHERE parent_uuid IS ? AND [order] = ?",
+            (id_tag, jd_ext),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        ext_tag = row[0]
+        from .jd_directory_list_page import JdDirectoryListPage
+        new_page = JdDirectoryListPage(
+            parent_uuid=ext_tag,
+            jd_area=jd_area,
+            jd_id=jd_id,
+            jd_ext=jd_ext,
+            grandparent_uuid=id_tag,
+            great_grandparent_uuid=area_tag,
+        )
+        jdbrowser.current_page = new_page
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setCentralWidget(new_page)
 
     def _icon_for_extension(self, ext: str) -> str:
         return FILE_TYPE_ICONS.get(ext, DEFAULT_FILE_ICON)
