@@ -3,6 +3,7 @@ import re
 import weakref
 import contextlib
 import tempfile
+import hashlib
 from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
@@ -137,6 +138,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         ] = deque()
         self._thumb_pool = QtCore.QThreadPool()
         self._thumb_pool.setMaxThreadCount(1)
+
+        xdg_cache_home = os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+        self.thumb_cache_dir = os.path.join(xdg_cache_home, "jdbrowser")
+        os.makedirs(self.thumb_cache_dir, exist_ok=True)
 
         self.in_search_mode = False
         self.prev_selected_is_directory = False
@@ -566,6 +571,21 @@ class JdDirectoryPage(QtWidgets.QWidget):
         painter.end()
         return rounded
 
+    def _scale_crop_pixmap(
+        self, pixmap: QtGui.QPixmap, width: int = 480, height: int = 300
+    ) -> QtGui.QPixmap:
+        if pixmap.isNull():
+            return pixmap
+        scaled = pixmap.scaled(
+            width,
+            height,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (scaled.width() - width) // 2
+        y = (scaled.height() - height) // 2
+        return scaled.copy(x, y, width, height)
+
     def _video_thumbnail(
         self, path: str, rounded: bool = True
     ) -> QtGui.QPixmap | None:
@@ -606,16 +626,32 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _thumbnail_for_path(self, path: str) -> QtGui.QPixmap | None:
         ext = os.path.splitext(path)[1].lower()
+        if ext not in THUMBNAIL_EXTS:
+            return None
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None
+        key = f"{os.path.abspath(path)}:{mtime}"
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        cache_path = os.path.join(self.thumb_cache_dir, f"{digest}.png")
+        cached = QtGui.QPixmap(cache_path)
+        if not cached.isNull():
+            return self._rounded_pixmap(cached)
         if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
             pixmap = QtGui.QPixmap(path)
-            if not pixmap.isNull():
-                return self._rounded_pixmap(pixmap)
-            if ext == ".webp":
-                return self._video_thumbnail(path)
-            return None
-        if ext in {".mp4", ".mkv", ".avi", ".mov", ".webm"}:
-            return self._video_thumbnail(path)
-        return None
+            if pixmap.isNull():
+                if ext == ".webp":
+                    pixmap = self._video_thumbnail(path, rounded=False)
+                else:
+                    return None
+        else:
+            pixmap = self._video_thumbnail(path, rounded=False)
+            if pixmap is None:
+                return None
+        pixmap = self._scale_crop_pixmap(pixmap)
+        pixmap.save(cache_path, "PNG")
+        return self._rounded_pixmap(pixmap)
 
     def _load_thumbnail_async(
         self, label: QtWidgets.QLabel, path: str
