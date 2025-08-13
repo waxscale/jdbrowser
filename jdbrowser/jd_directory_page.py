@@ -618,7 +618,20 @@ class JdDirectoryPage(QtWidgets.QWidget):
         label.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
         label.linkActivated.connect(self._open_jd_link)
         label.setWordWrap(True)
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
+        label.setStyleSheet(
+            f"""
+            color: {TEXT_COLOR};
+            a, a:link {{
+                color: {LINK_COLOR};
+            }}
+            a:hover {{
+                color: {LINK_HOVER_COLOR};
+            }}
+            a:visited {{
+                color: {LINK_VISITED_COLOR};
+            }}
+            """
+        )
         label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignTop
