@@ -6,6 +6,7 @@ import tempfile
 import hashlib
 import subprocess
 from collections import deque
+from typing import Union
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 from shiboken6 import isValid
@@ -575,38 +576,36 @@ class JdDirectoryPage(QtWidgets.QWidget):
         doc = QtGui.QTextDocument()
         doc.setMarkdown(text)
         html = doc.toHtml()
-        style = (
-            "<style>"
-            f"a {{ color: {LINK_COLOR}; }}"
-            f"a:visited {{ color: {LINK_VISITED_COLOR}; }}"
-            f"a:hover {{ color: {LINK_HOVER_COLOR}; }}"
-            "</style>"
-        )
-        html = html.replace("<head>", f"<head>{style}")
         container = QtWidgets.QWidget()
         container.setStyleSheet(
             f"background-color: {SLATE_COLOR}; border-radius: 5px;"
         )
         layout = QtWidgets.QVBoxLayout(container)
         layout.setContentsMargins(10, 5, 10, 5)
-        label = QtWidgets.QLabel()
-        label.setTextFormat(QtCore.Qt.TextFormat.RichText)
-        label.setText(html)
-        label.setWordWrap(True)
-        label.setOpenExternalLinks(False)
-        label.setTextInteractionFlags(
-            QtCore.Qt.TextInteractionFlag.TextBrowserInteraction
+        browser = QtWidgets.QTextBrowser()
+        browser.setHtml(html)
+        browser.setOpenExternalLinks(False)
+        browser.setReadOnly(True)
+        browser.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        browser.anchorClicked.connect(self._open_link_in_firefox)
+        palette = browser.palette()
+        palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(LINK_COLOR))
+        palette.setColor(
+            QtGui.QPalette.ColorRole.LinkVisited, QtGui.QColor(LINK_VISITED_COLOR)
         )
-        label.linkActivated.connect(self._open_link_in_firefox)
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
-        label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignTop
+        browser.setPalette(palette)
+        browser.setStyleSheet(
+            f"color: {TEXT_COLOR}; background-color: transparent; a:hover {{ color: {LINK_HOVER_COLOR}; }}"
         )
-        layout.addWidget(label)
+        browser.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop
+        )
+        layout.addWidget(browser)
         return container
 
-    def _open_link_in_firefox(self, url: str) -> None:
+    def _open_link_in_firefox(self, url: Union[QtCore.QUrl, str]) -> None:
+        if isinstance(url, QtCore.QUrl):
+            url = url.toString()
         try:
             subprocess.Popen(["firefox", url])
         except Exception:
