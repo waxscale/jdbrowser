@@ -390,7 +390,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             if current_start is None:
                 current_start = self.file_list.count() - 1
             last_file_index = self.file_list.count() - 1
-            if name.lower().endswith(".md"):
+            base_name, ext = os.path.splitext(name)
+            if ext.lower() == ".md" and "#inline" in base_name.lower():
                 md_widget = self._create_markdown_widget(full_path)
                 md_item = QtWidgets.QListWidgetItem(self.file_list)
                 md_item.setSizeHint(md_widget.sizeHint())
@@ -490,7 +491,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             last_file_index = self.file_list.count() - 1
             if target_name is not None and name == target_name:
                 target_row = self.file_list.count() - 1
-            if name.lower().endswith('.md'):
+            base_name, ext = os.path.splitext(name)
+            if ext.lower() == '.md' and '#inline' in base_name.lower():
                 md_widget = self._create_markdown_widget(full_path)
                 md_item = QtWidgets.QListWidgetItem(self.file_list)
                 md_item.setSizeHint(md_widget.sizeHint())
