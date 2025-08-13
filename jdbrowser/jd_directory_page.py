@@ -655,6 +655,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setCurrentRow(index)
             self.file_list.scrollToItem(self.file_list.item(index))
 
+    def centerSelectedItem(self) -> None:
+        if self.in_search_mode:
+            return
+        if self._is_directory_selected():
+            self.file_list.scrollToTop()
+        else:
+            item = self.file_list.currentItem()
+            if item:
+                self.file_list.scrollToItem(
+                    item, QtWidgets.QAbstractItemView.PositionAtCenter
+                )
+
     def move_to_section_start(self) -> None:
         if self.in_search_mode or not self.section_bounds:
             return
@@ -918,6 +930,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
             (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 3),
+            (QtCore.Qt.Key_Z, self.centerSelectedItem, None),
             (QtCore.Qt.Key_BracketLeft, self.move_to_section_start, None),
             (QtCore.Qt.Key_BracketRight, self.move_to_section_end, None),
             (QtCore.Qt.Key_G, self.move_to_start, None),
