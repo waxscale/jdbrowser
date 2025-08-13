@@ -544,6 +544,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                         "-hide_banner",
                         "-loglevel",
                         "error",
+                        "-nostats",
                         "-i",
                         path,
                         "-frames:v",
