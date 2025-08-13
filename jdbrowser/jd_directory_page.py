@@ -315,6 +315,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
             f"QListWidget::item:selected:hover{{background-color: {HIGHLIGHT_COLOR};}}"
         )
         self.file_list.setSpacing(2)
+        self.file_list.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollPerPixel
+        )
         self.file_list.setSelectionMode(
             QtWidgets.QAbstractItemView.SingleSelection
         )
