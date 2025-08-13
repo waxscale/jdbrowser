@@ -548,7 +548,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         painter.end()
         return rounded
 
-    def _video_thumbnail(self, path: str) -> QtGui.QPixmap | None:
+    def _video_thumbnail(
+        self, path: str, rounded: bool = True
+    ) -> QtGui.QPixmap | None:
         player = QtMultimedia.QMediaPlayer()
         sink = QtMultimedia.QVideoSink()
         player.setVideoSink(sink)
@@ -557,8 +559,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         def handle_frame(frame: QtMultimedia.QVideoFrame):
             if frame.isValid() and thumb["pixmap"] is None:
                 image = frame.toImage()
-                thumb["pixmap"] = self._rounded_pixmap(
-                    QtGui.QPixmap.fromImage(image)
+                pix = QtGui.QPixmap.fromImage(image)
+                thumb["pixmap"] = (
+                    self._rounded_pixmap(pix) if rounded else pix
                 )
                 player.stop()
 
@@ -619,6 +622,49 @@ class JdDirectoryPage(QtWidgets.QWidget):
         path = os.path.join(self.repository_path, folder)
         if os.path.isdir(path):
             QtCore.QProcess.startDetached("thunar", [path])
+
+    def _set_thumbnail_from_selection(self) -> None:
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name == "header":
+            return
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in THUMBNAIL_EXTS:
+            return
+        order = getattr(self.item, "order", None)
+        if order is None:
+            return
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder, name)
+        icon_data = None
+        if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
+            try:
+                with open(path, "rb") as f:
+                    icon_data = f.read()
+            except OSError:
+                return
+        else:
+            pixmap = self._video_thumbnail(path, rounded=False)
+            if pixmap and not pixmap.isNull():
+                buffer = QtCore.QBuffer()
+                buffer.open(QtCore.QIODevice.WriteOnly)
+                pixmap.save(buffer, "PNG")
+                icon_data = bytes(buffer.data())
+        if icon_data:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO events (event_type) VALUES ('set_jd_directory_icon')")
+            event_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO event_set_jd_directory_icon (event_id, directory_id, icon) VALUES (?, ?, ?)",
+                (event_id, self.directory_id, icon_data),
+            )
+            self.conn.commit()
+            rebuild_state_jd_directories(self.conn)
+            self._refresh_item()
 
     def move_selection(self, direction: int) -> None:
         if self.in_search_mode:
@@ -987,6 +1033,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 (False, True),
                 QtCore.Qt.KeyboardModifier.ShiftModifier,
             ),
+            (QtCore.Qt.Key_T, self._set_thumbnail_from_selection, None),
             (
                 QtCore.Qt.Key_T,
                 self._open_terminal,
