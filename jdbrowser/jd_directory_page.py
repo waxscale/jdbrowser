@@ -626,26 +626,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
 
-        pal = browser.palette()
-        pal.setColor(QtGui.QPalette.Link, QtGui.QColor(LINK_COLOR))
-        pal.setColor(QtGui.QPalette.LinkVisited, QtGui.QColor(LINK_VISITED_COLOR))
-        browser.setPalette(pal)
-
-        def _hover_palette(url):
-            pal = browser.palette()
-            if url:
-                pal.setColor(QtGui.QPalette.Link, QtGui.QColor(LINK_HOVER_COLOR))
-                pal.setColor(
-                    QtGui.QPalette.LinkVisited, QtGui.QColor(LINK_HOVER_COLOR)
-                )
-            else:
-                pal.setColor(QtGui.QPalette.Link, QtGui.QColor(LINK_COLOR))
-                pal.setColor(
-                    QtGui.QPalette.LinkVisited, QtGui.QColor(LINK_VISITED_COLOR)
-                )
-            browser.setPalette(pal)
-
-        browser.anchorHovered.connect(_hover_palette)
+        browser.document().setDefaultStyleSheet(
+            f"""
+            a {{ color: {LINK_COLOR}; text-decoration: none; }}
+            a:visited {{ color: {LINK_VISITED_COLOR}; }}
+            a:hover {{ color: {LINK_HOVER_COLOR}; text-decoration: underline; }}
+            """
+        )
 
         browser.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
