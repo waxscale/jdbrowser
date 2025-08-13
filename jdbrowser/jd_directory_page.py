@@ -182,6 +182,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
         formatted = f"{order:016d}"
         return "_".join(formatted[i:i+4] for i in range(0, 16, 4))
 
+    def _fallback_icon(self, order):
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        for name in (
+            "[0-META 0000-00-00 00.00.00].png",
+            "[0-META 0000-00-00 00.00.00] #auto.png",
+        ):
+            img_path = os.path.join(path, name)
+            if os.path.isfile(img_path):
+                with open(img_path, "rb") as f:
+                    return f.read()
+        return None
+
     def _build_breadcrumb(self, crumbs):
         bar = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(bar)
@@ -233,6 +246,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         row = cursor.fetchone()
         icon_data = row[0] if row else None
+        if icon_data is None:
+            icon_data = self._fallback_icon(order)
 
         cursor.execute(
             """
