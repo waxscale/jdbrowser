@@ -932,6 +932,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 None,
                 QtCore.Qt.KeyboardModifier.AltModifier,
             ),
+            (QtCore.Qt.Key_AsciiTilde, self.ascend_to_area, None),
             (QtCore.Qt.Key_J, self.move_selection, 1),
             (QtCore.Qt.Key_Down, self.move_selection, 1),
             (QtCore.Qt.Key_K, self.move_selection, -1),
@@ -1475,6 +1476,25 @@ class JdDirectoryPage(QtWidgets.QWidget):
         remove_directory_tag(self.conn, self.directory_id, tag_uuid)
         rebuild_state_directory_tags(self.conn)
         self._refresh_item()
+
+    def ascend_to_area(self):
+        from .jd_area_page import JdAreaPage
+
+        new_page = JdAreaPage()
+        target_tag_id = self.great_grandparent_uuid
+        found = False
+        for s, sec in enumerate(new_page.sections):
+            for i, item in enumerate(sec):
+                if item.tag_id == target_tag_id:
+                    new_page.sec_idx = s
+                    new_page.idx_in_sec = i
+                    found = True
+                    break
+            if found:
+                break
+        new_page.updateSelection()
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def ascend_level(self):
         if self.parent_uuid is None:

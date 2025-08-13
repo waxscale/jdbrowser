@@ -912,6 +912,7 @@ class JdIdPage(QtWidgets.QWidget):
               (QtCore.Qt.Key_Enter, self.descend_level, None),
               (QtCore.Qt.Key_Backspace, self.ascend_level, None),
               (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
+              (QtCore.Qt.Key_AsciiTilde, self.ascend_level, None),
           ]
         quit_keys = ['Q', 'Ctrl+Q', 'Ctrl+W', 'Alt+F4']
         self.shortcuts = []

@@ -1087,6 +1087,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
                 None,
                 QtCore.Qt.KeyboardModifier.AltModifier,
             ),
+            (QtCore.Qt.Key_AsciiTilde, self.ascend_to_area, None),
             (QtCore.Qt.Key_A, self._add_directory, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_tag_label, None),
