@@ -1,6 +1,7 @@
 import os
 import re
 import weakref
+from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 import jdbrowser
@@ -112,9 +113,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
 
-        self._pending_thumbnails: list[
+        self._pending_thumbnails: deque[
             tuple[weakref.ReferenceType[QtWidgets.QLabel], str]
-        ] = []
+        ] = deque()
         self._thumb_pool = QtCore.QThreadPool()
         self._thumb_pool.setMaxThreadCount(1)
 
@@ -380,7 +381,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.file_list.clear()
         self.section_bounds = []
-        self._pending_thumbnails = []
+        self._pending_thumbnails = deque()
         self._thumb_pool.clear()
         current_start = None
         non_header_names = [n for n in files if not n.lower().endswith('.2do')]
@@ -578,7 +579,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _start_pending_thumbnails(self) -> None:
         if not self._pending_thumbnails:
             return
-        label_ref, path = self._pending_thumbnails.pop()
+        label_ref, path = self._pending_thumbnails.popleft()
         label = label_ref()
         if label:
             self._load_thumbnail_async(label, path)
