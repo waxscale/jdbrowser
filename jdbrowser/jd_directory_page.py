@@ -635,7 +635,11 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     self.file_list.scrollToItem(self.file_list.item(index))
             return
         index = current + direction
-        index = max(0, min(index, count - 1))
+        if index < 0:
+            self.file_list.setCurrentItem(None)
+            return
+        if index >= count:
+            index = count - 1
         index = self._next_non_header_index(index, 1 if direction > 0 else -1)
         if index is None:
             if direction < 0:
