@@ -96,6 +96,29 @@ class ThumbnailLoader(QtCore.QRunnable):
                 QtCore.Q_ARG(QtGui.QPixmap, pixmap),
             )
 
+
+class FileListWidget(QtWidgets.QListWidget):
+    def startDrag(self, actions: QtCore.Qt.DropActions) -> None:
+        items = self.selectedItems()
+        if not items:
+            return
+        item = items[0]
+        path = item.data(QtCore.Qt.UserRole + 1)
+        if not path:
+            super().startDrag(actions)
+            return
+        drag = QtGui.QDrag(self)
+        mime = QtCore.QMimeData()
+        mime.setText(path)
+        mime.setUrls([QtCore.QUrl.fromLocalFile(path)])
+        drag.setMimeData(mime)
+        widget = self.itemWidget(item)
+        if widget:
+            pixmap = widget.grab()
+            if not pixmap.isNull():
+                drag.setPixmap(pixmap)
+        drag.exec(QtCore.Qt.CopyAction)
+
 class JdDirectoryPage(QtWidgets.QWidget):
     def __init__(
         self,
@@ -306,7 +329,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout.addWidget(self.item)
 
         # List of files within the directory
-        self.file_list = QtWidgets.QListWidget()
+        self.file_list = FileListWidget()
+        self.file_list.setDragEnabled(True)
         self.file_list.setIconSize(QtCore.QSize(120, 75))
         self.file_list.setMouseTracking(True)
         self.file_list.setStyleSheet(
@@ -354,7 +378,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         current_start = None
         last_file_index = None
         for name in files:
-            full_path = os.path.join(path, name)
+            full_path = os.path.abspath(os.path.join(path, name))
             if name.lower().endswith(".2do"):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
@@ -387,6 +411,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
             item.setData(QtCore.Qt.UserRole, name)
+            item.setData(QtCore.Qt.UserRole + 1, full_path)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
             if current_start is None:
@@ -457,7 +483,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                         break
         target_row = None
         for name in files:
-            full_path = os.path.join(path, name)
+            full_path = os.path.abspath(os.path.join(path, name))
             if name.lower().endswith('.2do'):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
@@ -490,6 +516,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
             item.setData(QtCore.Qt.UserRole, name)
+            item.setData(QtCore.Qt.UserRole + 1, full_path)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
             if current_start is None:
