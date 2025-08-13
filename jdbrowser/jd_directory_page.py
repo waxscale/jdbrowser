@@ -1637,21 +1637,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
         edit.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         layout.addWidget(edit)
 
-        links_layout = QtWidgets.QHBoxLayout()
-        links_layout.addStretch(1)
-        cancel_link = QtWidgets.QLabel("<a href='cancel'>cancel</a>")
-        cancel_link.setStyleSheet(
-            f"color: {LINK_COLOR}; font-size: 10pt;"
-        )
-        save_link = QtWidgets.QLabel("<a href='save'>save</a>")
-        save_link.setStyleSheet(
-            f"color: {LINK_COLOR}; font-size: 10pt;"
-        )
-        links_layout.addWidget(cancel_link)
-        links_layout.addSpacing(5)
-        links_layout.addWidget(save_link)
-        layout.addLayout(links_layout)
-
         item.setSizeHint(container.sizeHint())
         self.file_list.setItemWidget(item, container)
         self.file_list.setCurrentItem(item)
@@ -1674,9 +1659,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
             for s in self.search_shortcut_instances:
                 s.setEnabled(False)
             self._editing_markdown_item = None
-
-        cancel_link.linkActivated.connect(lambda _=None: finish(False))
-        save_link.linkActivated.connect(lambda _=None: finish(True))
 
         esc = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), edit)
         esc.activated.connect(lambda: finish(False))
