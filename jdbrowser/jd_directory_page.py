@@ -633,7 +633,37 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignTop
         )
+        browser.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        browser.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        browser.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Fixed,
+        )
         layout.addWidget(browser)
+
+        text_width = max(
+            0,
+            self.file_list.viewport().width()
+            - layout.contentsMargins().left()
+            - layout.contentsMargins().right(),
+        )
+        browser.document().setTextWidth(text_width)
+        doc_height = int(browser.document().size().height())
+        browser.setFixedHeight(doc_height)
+        container.setFixedHeight(
+            doc_height
+            + layout.contentsMargins().top()
+            + layout.contentsMargins().bottom()
+        )
+        container.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Fixed,
+        )
+        container.adjustSize()
         return container
 
     def _handle_anchor_click(self, url: QtCore.QUrl):
