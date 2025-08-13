@@ -4,6 +4,7 @@ import weakref
 import contextlib
 import tempfile
 import hashlib
+import subprocess
 from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
@@ -581,13 +582,26 @@ class JdDirectoryPage(QtWidgets.QWidget):
         label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
         label.setText(text)
         label.setWordWrap(True)
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
+        label.setOpenExternalLinks(False)
+        label.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.TextBrowserInteraction
+        )
+        label.linkActivated.connect(self._open_link_in_firefox)
+        label.setStyleSheet(
+            f"color: {TEXT_COLOR}; a {{ color: {LINK_COLOR}; }}"
+        )
         label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignTop
         )
         layout.addWidget(label)
         return container
+
+    def _open_link_in_firefox(self, url: str) -> None:
+        try:
+            subprocess.Popen(["firefox", url])
+        except Exception:
+            pass
 
     def _icon_for_extension(self, ext: str) -> str:
         return FILE_TYPE_ICONS.get(ext, DEFAULT_FILE_ICON)
