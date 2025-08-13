@@ -1,6 +1,8 @@
 import os
 import re
 import weakref
+import contextlib
+import tempfile
 from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
@@ -53,6 +55,22 @@ THUMBNAIL_EXTS = {
     ".mov",
     ".webm",
 }
+
+
+@contextlib.contextmanager
+def _capture_ffmpeg_output():
+    with tempfile.TemporaryFile() as tmp:
+        stdout_fd = os.dup(1)
+        stderr_fd = os.dup(2)
+        try:
+            os.dup2(tmp.fileno(), 1)
+            os.dup2(tmp.fileno(), 2)
+            yield tmp
+        finally:
+            os.dup2(stdout_fd, 1)
+            os.dup2(stderr_fd, 2)
+            os.close(stdout_fd)
+            os.close(stderr_fd)
 
 
 class ThumbnailLoader(QtCore.QRunnable):
@@ -566,14 +584,24 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 player.stop()
 
         sink.videoFrameChanged.connect(handle_frame)
-        player.setSource(QtCore.QUrl.fromLocalFile(path))
-        player.play()
+        with _capture_ffmpeg_output() as cap:
+            player.setSource(QtCore.QUrl.fromLocalFile(path))
+            player.play()
 
-        loop = QtCore.QEventLoop()
-        sink.videoFrameChanged.connect(loop.quit)
-        QtCore.QTimer.singleShot(1000, loop.quit)
-        loop.exec()
-        player.stop()
+            loop = QtCore.QEventLoop()
+            sink.videoFrameChanged.connect(loop.quit)
+            QtCore.QTimer.singleShot(1000, loop.quit)
+            loop.exec()
+            player.stop()
+            if player.error() != QtMultimedia.QMediaPlayer.NoError:
+                cap.seek(0)
+                msg = cap.read().decode(errors="ignore")
+                if msg:
+                    print(msg)
+                print(
+                    f"Error generating thumbnail for {path}: {player.errorString()}"
+                )
+                return None
         return thumb["pixmap"]
 
     def _thumbnail_for_path(self, path: str) -> QtGui.QPixmap | None:
