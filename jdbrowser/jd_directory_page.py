@@ -618,7 +618,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         browser = QtWidgets.QTextBrowser()
         browser.setOpenExternalLinks(False)
         browser.setOpenLinks(False)
-        browser.anchorClicked.connect(lambda url: self._open_jd_link(url.toString()))
+        browser.anchorClicked.connect(self._handle_anchor_click)
         browser.setHtml(html)
         browser.setStyleSheet(
             f"color: {TEXT_COLOR}; background-color: transparent; border: none;"
@@ -630,6 +630,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         layout.addWidget(browser)
         return container
+
+    def _handle_anchor_click(self, url: QtCore.QUrl):
+        if url.scheme() == "jdlink":
+            self._open_jd_link(url.toString())
+        else:
+            QtGui.QDesktopServices.openUrl(url)
 
     def _open_jd_link(self, url: str):
         m = re.match(r"jdlink:(\d{2})\.(\d{2})\+(\d{4})", url)
