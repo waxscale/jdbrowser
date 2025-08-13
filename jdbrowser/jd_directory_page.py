@@ -4,6 +4,7 @@ import weakref
 from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
+from shiboken6 import isValid
 import jdbrowser
 from .constants import *
 from .database import (
@@ -64,10 +65,10 @@ class ThumbnailLoader(QtCore.QRunnable):
     def run(self):
         page = self.page_ref()
         label = self.label_ref()
-        if not page or not label:
+        if not page or not label or not isValid(page) or not isValid(label):
             return
         pixmap = page._thumbnail_for_path(self.path)
-        if pixmap and label:
+        if pixmap and isValid(label):
             QtCore.QMetaObject.invokeMethod(
                 label,
                 "setPixmap",
@@ -596,7 +597,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         label_ref, path = self._pending_thumbnails.popleft()
         label = label_ref()
-        if label:
+        if label and isValid(label):
             self._load_thumbnail_async(label, path)
         if self._pending_thumbnails:
             QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
