@@ -611,7 +611,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
             f"<style>"
             f"a {{ color: {LINK_COLOR}; }}"
             f"a:hover {{ color: {LINK_HOVER_COLOR}; }}"
-            f"a:visited {{ color: {LINK_VISITED_COLOR}; }}"
             f"</style>{html}"
         )
 
