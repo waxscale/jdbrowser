@@ -575,7 +575,34 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         def repl(m):
             code = f"{m.group(1)}.{m.group(2)}+{m.group(3)}"
-            return f"[[[{code}](jdlink:{code})]]"
+            jd_area = int(m.group(1))
+            jd_id = int(m.group(2))
+            jd_ext = int(m.group(3))
+            cursor = self.conn.cursor()
+            label = None
+            cursor.execute(
+                "SELECT tag_id FROM state_jd_area_tags WHERE [order] = ?",
+                (jd_area,),
+            )
+            row = cursor.fetchone()
+            if row:
+                area_tag = row[0]
+                cursor.execute(
+                    "SELECT tag_id FROM state_jd_id_tags WHERE parent_uuid IS ? AND [order] = ?",
+                    (area_tag, jd_id),
+                )
+                row = cursor.fetchone()
+                if row:
+                    id_tag = row[0]
+                    cursor.execute(
+                        "SELECT label FROM state_jd_ext_tags WHERE parent_uuid IS ? AND [order] = ?",
+                        (id_tag, jd_ext),
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        label = row[0]
+            link_text = label if label else code
+            return f"[{link_text}](jdlink:{code})"
 
         text = pattern.sub(repl, text)
         container = QtWidgets.QWidget()
