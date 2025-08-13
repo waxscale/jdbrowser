@@ -611,19 +611,31 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         layout = QtWidgets.QVBoxLayout(container)
         layout.setContentsMargins(10, 5, 10, 5)
-        label = QtWidgets.QLabel()
-        label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
-        label.setText(text)
-        label.setOpenExternalLinks(False)
-        label.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
-        label.linkActivated.connect(self._open_jd_link)
-        label.setWordWrap(True)
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
-        label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignTop
+        browser = QtWidgets.QTextBrowser()
+        browser.setMarkdown(text)
+        browser.setOpenExternalLinks(False)
+        browser.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
+        browser.anchorClicked.connect(lambda url: self._open_jd_link(url.toString()))
+        browser.setStyleSheet(
+            f"color: {TEXT_COLOR}; background-color: transparent; border: none;"
         )
-        layout.addWidget(label)
+        browser.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        browser.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        browser.document().setDefaultStyleSheet(
+            f"""
+            a {{ color: {LINK_COLOR}; text-decoration: none; }}
+            a:visited {{ color: {LINK_VISITED_COLOR}; }}
+            a:hover {{ color: {LINK_HOVER_COLOR}; text-decoration: underline; }}
+            """
+        )
+        browser.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        layout.addWidget(browser)
         return container
 
     def _open_jd_link(self, url: str):
