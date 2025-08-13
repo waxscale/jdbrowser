@@ -95,6 +95,23 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self._setup_ui()
         self._setup_shortcuts()
 
+    def _format_order(self, order):
+        formatted = f"{order:016d}"
+        return "_".join(formatted[i:i+4] for i in range(0, 16, 4))
+
+    def _fallback_icon(self, order):
+        folder = self._format_order(order)
+        path = os.path.join(self.repository_path, folder)
+        for name in (
+            "[0-META 0000-00-00 00.00.00].png",
+            "[0-META 0000-00-00 00.00.00] #auto.png",
+        ):
+            img_path = os.path.join(path, name)
+            if os.path.isfile(img_path):
+                with open(img_path, "rb") as f:
+                    return f.read()
+        return None
+
     def ascend_level(self):
         from .jd_ext_page import JdExtPage
 
@@ -422,6 +439,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         rows = cursor.fetchall()
         for row in rows:
             directory_id, label, order, icon_data = row
+            icon_data = icon_data or self._fallback_icon(order)
             cursor.execute(
                 """
                 SELECT dt.tag_id,
@@ -490,6 +508,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
+            icon_data = icon_data or self._fallback_icon(order)
             cursor.execute(
                 """
                 SELECT dt.tag_id,
@@ -560,6 +579,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         v_layout.setContentsMargins(10, 10, 10, 10)
         v_layout.setSpacing(5)
         for directory_id, label, order, icon_data in rows:
+            icon_data = icon_data or self._fallback_icon(order)
             index = len(self.items)
             item = RecentDirectoryItem(
                 directory_id, label, order, icon_data, self, index, []
