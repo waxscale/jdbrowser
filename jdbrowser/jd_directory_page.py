@@ -8,6 +8,7 @@ from collections import deque
 from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 from shiboken6 import isValid
+import markdown
 import jdbrowser
 from .constants import *
 from .database import (
@@ -605,25 +606,29 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return f"[{link_text}](jdlink:{code})"
 
         text = pattern.sub(repl, text)
+        html = markdown.markdown(text)
+        html = f"<style>a, a:visited {{ color: #FF00FF; }}</style>{html}"
+
         container = QtWidgets.QWidget()
         container.setStyleSheet(
             f"background-color: {SLATE_COLOR}; border-radius: 5px;"
         )
         layout = QtWidgets.QVBoxLayout(container)
         layout.setContentsMargins(10, 5, 10, 5)
-        label = QtWidgets.QLabel()
-        label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
-        label.setText(text)
-        label.setOpenExternalLinks(False)
-        label.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
-        label.linkActivated.connect(self._open_jd_link)
-        label.setWordWrap(True)
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
-        label.setAlignment(
+        browser = QtWidgets.QTextBrowser()
+        browser.setOpenExternalLinks(False)
+        browser.setOpenLinks(False)
+        browser.anchorClicked.connect(lambda url: self._open_jd_link(url.toString()))
+        browser.setHtml(html)
+        browser.setStyleSheet(
+            f"color: {TEXT_COLOR}; background-color: transparent; border: none;"
+        )
+        browser.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        browser.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignTop
         )
-        layout.addWidget(label)
+        layout.addWidget(browser)
         return container
 
     def _open_jd_link(self, url: str):
