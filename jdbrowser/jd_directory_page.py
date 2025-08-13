@@ -619,6 +619,11 @@ class JdDirectoryPage(QtWidgets.QWidget):
         browser.setOpenExternalLinks(False)
         browser.setOpenLinks(False)
         browser.anchorClicked.connect(self._handle_anchor_click)
+        # Ensure that relative resources like images are resolved relative to
+        # the markdown file's directory rather than the process's working
+        # directory.
+        base_url = QtCore.QUrl.fromLocalFile(os.path.dirname(path) + "/")
+        browser.document().setBaseUrl(base_url)
         browser.setHtml(html)
         browser.setStyleSheet(
             f"color: {TEXT_COLOR}; background-color: transparent; border: none;"
