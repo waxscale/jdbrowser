@@ -607,7 +607,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         text = pattern.sub(repl, text)
         html = markdown.markdown(text)
-        html = f"<style>a, a:visited {{ color: #FF00FF; }}</style>{html}"
+        html = f"<style>a, a:visited {{ color: {LINK_COLOR}; }}</style>{html}"
 
         container = QtWidgets.QWidget()
         container.setStyleSheet(
