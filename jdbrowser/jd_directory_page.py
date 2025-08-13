@@ -576,6 +576,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         doc = QtGui.QTextDocument()
         doc.setMarkdown(text)
         html = doc.toHtml()
+        style_block = f"<style>body {{ color: {TEXT_COLOR}; }} a {{ color: {LINK_COLOR}; }} a.visited {{ color: {LINK_VISITED_COLOR}; }} a:hover {{ color: {LINK_HOVER_COLOR}; }}</style>"
+        html = html.replace("<head>", f"<head>{style_block}")
         container = QtWidgets.QWidget()
         container.setStyleSheet(
             f"background-color: {SLATE_COLOR}; border-radius: 5px;"
@@ -588,15 +590,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         browser.setReadOnly(True)
         browser.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         browser.anchorClicked.connect(self._open_link_in_firefox)
-        palette = browser.palette()
-        palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(LINK_COLOR))
-        palette.setColor(
-            QtGui.QPalette.ColorRole.LinkVisited, QtGui.QColor(LINK_VISITED_COLOR)
-        )
-        browser.setPalette(palette)
-        browser.setStyleSheet(
-            f"color: {TEXT_COLOR}; background-color: transparent; a:hover {{ color: {LINK_HOVER_COLOR}; }}"
-        )
+        browser.setStyleSheet("background-color: transparent;")
         browser.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop
         )
@@ -604,10 +598,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
         return container
 
     def _open_link_in_firefox(self, url: Union[QtCore.QUrl, str]) -> None:
-        if isinstance(url, QtCore.QUrl):
-            url = url.toString()
+        qurl = url.toString() if isinstance(url, QtCore.QUrl) else str(url)
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QTextBrowser):
+            html = sender.toHtml()
+            escaped = re.escape(qurl)
+            html = re.sub(
+                rf'<a href="{escaped}">(.*?)</a>',
+                rf'<a href="{qurl}" class="visited">\1</a>',
+                html,
+            )
+            sender.setHtml(html)
         try:
-            subprocess.Popen(["firefox", url])
+            subprocess.Popen(["firefox", qurl])
         except Exception:
             pass
 
