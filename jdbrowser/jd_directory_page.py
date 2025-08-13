@@ -572,6 +572,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 text = f.read()
         except OSError:
             pass
+        doc = QtGui.QTextDocument()
+        doc.setMarkdown(text)
+        html = doc.toHtml()
+        html = (
+            f"<style>a {{ color: {LINK_COLOR}; }} "
+            f"a:hover {{ color: {LINK_HOVER_COLOR}; }}</style>" + html
+        )
         container = QtWidgets.QWidget()
         container.setStyleSheet(
             f"background-color: {SLATE_COLOR}; border-radius: 5px;"
@@ -579,17 +586,15 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(container)
         layout.setContentsMargins(10, 5, 10, 5)
         label = QtWidgets.QLabel()
-        label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
-        label.setText(text)
+        label.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        label.setText(html)
         label.setWordWrap(True)
         label.setOpenExternalLinks(False)
         label.setTextInteractionFlags(
             QtCore.Qt.TextInteractionFlag.TextBrowserInteraction
         )
         label.linkActivated.connect(self._open_link_in_firefox)
-        label.setStyleSheet(
-            f"color: {TEXT_COLOR}; a {{ color: {LINK_COLOR}; }}"
-        )
+        label.setStyleSheet(f"color: {TEXT_COLOR};")
         label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignTop
