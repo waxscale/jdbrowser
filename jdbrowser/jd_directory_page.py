@@ -153,6 +153,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
         self.section_bounds: list[tuple[int, int]] = []
 
+        self._editing_markdown_item: QtWidgets.QListWidgetItem | None = None
+
         self._thumbs_started = False
 
         self._setup_ui()
@@ -395,10 +397,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 md_widget = self._create_markdown_widget(full_path)
                 md_item = QtWidgets.QListWidgetItem(self.file_list)
                 md_item.setSizeHint(md_widget.sizeHint())
-                md_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                md_item.setFlags(
+                    QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+                )
                 md_item.setData(QtCore.Qt.UserRole, "markdown")
+                md_item.setData(QtCore.Qt.UserRole + 1, full_path)
                 self.file_list.addItem(md_item)
                 self.file_list.setItemWidget(md_item, md_widget)
+                last_file_index = self.file_list.count() - 1
         if current_start is not None and last_file_index is not None:
             self.section_bounds.append((current_start, last_file_index))
 
@@ -496,10 +502,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 md_widget = self._create_markdown_widget(full_path)
                 md_item = QtWidgets.QListWidgetItem(self.file_list)
                 md_item.setSizeHint(md_widget.sizeHint())
-                md_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                md_item.setFlags(
+                    QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+                )
                 md_item.setData(QtCore.Qt.UserRole, 'markdown')
+                md_item.setData(QtCore.Qt.UserRole + 1, full_path)
                 self.file_list.addItem(md_item)
                 self.file_list.setItemWidget(md_item, md_widget)
+                last_file_index = self.file_list.count() - 1
         if current_start is not None and last_file_index is not None:
             self.section_bounds.append((current_start, last_file_index))
 
@@ -513,9 +523,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _is_header_row(self, row: int) -> bool:
         item = self.file_list.item(row)
-        return bool(
-            item and item.data(QtCore.Qt.UserRole) in {"header", "markdown"}
-        )
+        return bool(item and item.data(QtCore.Qt.UserRole) == "header")
 
     def _next_non_header_index(self, start: int, step: int) -> int | None:
         count = self.file_list.count()
@@ -1257,7 +1265,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_Left, lambda: None, None),
             (QtCore.Qt.Key_L, lambda: None, None),
             (QtCore.Qt.Key_Right, lambda: None, None),
-            (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
             (QtCore.Qt.Key_R, self._rename_selected, None),
             (QtCore.Qt.Key_F2, self._rename_selected, None),
             (QtCore.Qt.Key_F5, self.refresh_file_list, None),
@@ -1310,6 +1317,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
             else:
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.shortcuts.append(s)
+        self.c_shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_C), self)
+        self.c_shortcut.activated.connect(self._handle_c)
+        self.shortcuts.append(self.c_shortcut)
         self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
         for seq in self.quit_sequences:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
@@ -1593,6 +1603,94 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.file_list.scrollToItem(it)
                 break
 
+    def _handle_c(self) -> None:
+        if self._editing_markdown_item is not None:
+            return
+        item = self.file_list.currentItem()
+        if item and item.data(QtCore.Qt.UserRole) == "markdown":
+            self._edit_markdown(item)
+        else:
+            self._edit_tag_label_with_icon()
+
+    def _edit_markdown(self, item: QtWidgets.QListWidgetItem) -> None:
+        path = item.data(QtCore.Qt.UserRole + 1)
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            text = ""
+
+        container = QtWidgets.QWidget()
+        container.setStyleSheet(
+            f"background-color: {SLATE_COLOR}; border-radius: 5px;"
+        )
+        layout = QtWidgets.QVBoxLayout(container)
+        layout.setContentsMargins(10, 5, 10, 5)
+
+        edit = QtWidgets.QTextEdit()
+        edit.setPlainText(text)
+        edit.setStyleSheet(
+            f"color: {TEXT_COLOR}; background-color: transparent; border: none;"
+        )
+        edit.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        layout.addWidget(edit)
+
+        links_layout = QtWidgets.QHBoxLayout()
+        links_layout.addStretch(1)
+        cancel_link = QtWidgets.QLabel("<a href='cancel'>cancel</a>")
+        cancel_link.setStyleSheet(
+            f"color: {LINK_COLOR}; font-size: 10pt;"
+        )
+        save_link = QtWidgets.QLabel("<a href='save'>save</a>")
+        save_link.setStyleSheet(
+            f"color: {LINK_COLOR}; font-size: 10pt;"
+        )
+        links_layout.addWidget(cancel_link)
+        links_layout.addSpacing(5)
+        links_layout.addWidget(save_link)
+        layout.addLayout(links_layout)
+
+        item.setSizeHint(container.sizeHint())
+        self.file_list.setItemWidget(item, container)
+        self.file_list.setCurrentItem(item)
+        edit.setFocus()
+
+        def finish(save: bool) -> None:
+            if save:
+                new_text = edit.toPlainText()
+                try:
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(new_text)
+                except OSError:
+                    pass
+            new_widget = self._create_markdown_widget(path)
+            item.setSizeHint(new_widget.sizeHint())
+            self.file_list.setItemWidget(item, new_widget)
+            self.file_list.setCurrentItem(item)
+            for s in self.shortcuts:
+                s.setEnabled(True)
+            for s in self.search_shortcut_instances:
+                s.setEnabled(False)
+            self._editing_markdown_item = None
+
+        cancel_link.linkActivated.connect(lambda _=None: finish(False))
+        save_link.linkActivated.connect(lambda _=None: finish(True))
+
+        esc = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), edit)
+        esc.activated.connect(lambda: finish(False))
+        save_sc = QtGui.QShortcut(QtGui.QKeySequence.Save, edit)
+        save_sc.activated.connect(lambda: finish(True))
+
+        for s in self.shortcuts:
+            key_str = s.key().toString()
+            if key_str and not any(
+                key_str.lower() == seq.lower() for seq in self.quit_sequences
+            ):
+                s.setEnabled(False)
+        self._editing_markdown_item = item
+        
     def _rename_selected(self) -> None:
         if self._is_directory_selected():
             self._rename_tag_label()
