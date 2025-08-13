@@ -1,8 +1,10 @@
 import os
 import re
 import weakref
+import subprocess
+import tempfile
 from datetime import datetime, timezone
-from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
+from PySide6 import QtWidgets, QtCore, QtGui
 import jdbrowser
 from .constants import *
 from .database import (
@@ -532,29 +534,45 @@ class JdDirectoryPage(QtWidgets.QWidget):
         return rounded
 
     def _video_thumbnail(self, path: str) -> QtGui.QPixmap | None:
-        player = QtMultimedia.QMediaPlayer()
-        sink = QtMultimedia.QVideoSink()
-        player.setVideoSink(sink)
-        thumb = {"pixmap": None}
-
-        def handle_frame(frame: QtMultimedia.QVideoFrame):
-            if frame.isValid() and thumb["pixmap"] is None:
-                image = frame.toImage()
-                thumb["pixmap"] = self._rounded_pixmap(
-                    QtGui.QPixmap.fromImage(image)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            try:
+                result = subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-i",
+                        path,
+                        "-frames:v",
+                        "1",
+                        tmp_path,
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                 )
-                player.stop()
-
-        sink.videoFrameChanged.connect(handle_frame)
-        player.setSource(QtCore.QUrl.fromLocalFile(path))
-        player.play()
-
-        loop = QtCore.QEventLoop()
-        sink.videoFrameChanged.connect(loop.quit)
-        QtCore.QTimer.singleShot(1000, loop.quit)
-        loop.exec()
-        player.stop()
-        return thumb["pixmap"]
+            except OSError as e:
+                QtWidgets.QMessageBox.critical(self, "Error", str(e))
+                return None
+            if result.returncode != 0:
+                if result.stderr:
+                    QtWidgets.QMessageBox.critical(
+                        self,
+                        "Error",
+                        result.stderr.decode("utf-8", errors="replace"),
+                    )
+                return None
+            pixmap = QtGui.QPixmap(tmp_path)
+            if pixmap.isNull():
+                return None
+            return self._rounded_pixmap(pixmap)
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
     def _thumbnail_for_path(self, path: str) -> QtGui.QPixmap | None:
         ext = os.path.splitext(path)[1].lower()
@@ -585,6 +603,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._pending_thumbnails:
             QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
+    def _start_detached(self, command: list[str], cwd: str | None = None) -> None:
+        try:
+            subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=None,
+                start_new_session=True,
+            )
+        except OSError as e:
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))
+
     def _open_terminal(self) -> None:
         order = getattr(self.item, "order", None)
         if order is None:
@@ -592,7 +622,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         folder = self._format_order(order)
         path = os.path.join(self.repository_path, folder)
         if os.path.isdir(path):
-            QtCore.QProcess.startDetached("kitty", [], path)
+            self._start_detached(["kitty"], cwd=path)
 
     def _open_thunar(self) -> None:
         order = getattr(self.item, "order", None)
@@ -601,7 +631,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         folder = self._format_order(order)
         path = os.path.join(self.repository_path, folder)
         if os.path.isdir(path):
-            QtCore.QProcess.startDetached("thunar", [path])
+            self._start_detached(["thunar", path])
 
     def move_selection(self, direction: int) -> None:
         if self.in_search_mode:
