@@ -965,7 +965,7 @@ class JdAreaPage(QtWidgets.QWidget):
                 self.desired_col = self.idx_in_sec % self.cols
             self.updateSelection()
 
-    def moveVert(self, direction):
+    def moveVert(self, direction, update=True):
         if not self.in_search_mode and self.sections:
             pref_col = self.desired_col
             sec_index = self.sec_idx
@@ -984,7 +984,8 @@ class JdAreaPage(QtWidgets.QWidget):
                     length = min(cols, len(sec2))
                     self.sec_idx += 1
                     self.idx_in_sec = min(pref_col, length - 1)
-                self.updateSelection()
+                if update:
+                    self.updateSelection()
             else:
                 if row > 0:
                     r2 = row - 1
@@ -997,7 +998,8 @@ class JdAreaPage(QtWidgets.QWidget):
                     length = min(cols, len(sec2) - last * cols)
                     self.sec_idx -= 1
                     self.idx_in_sec = last * cols + min(pref_col, length - 1)
-                self.updateSelection()
+                if update:
+                    self.updateSelection()
 
     def moveToSectionStart(self):
         if not self.in_search_mode and self.sections:
@@ -1092,7 +1094,8 @@ class JdAreaPage(QtWidgets.QWidget):
     def moveVertMultiple(self, count):
         if not self.in_search_mode and self.sections:
             for _ in range(abs(count)):
-                self.moveVert(1 if count > 0 else -1)
+                self.moveVert(1 if count > 0 else -1, update=False)
+            self.updateSelection()
 
     def centerSelectedItem(self):
         if not self.in_search_mode and self.sections:
