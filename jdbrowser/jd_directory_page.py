@@ -179,6 +179,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._editing_markdown_item: QtWidgets.QListWidgetItem | None = None
 
         self._thumbs_started = False
+        self.selection_anchor = -1
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -225,6 +226,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             # Deselect any file items so only the directory entry is selected
             self.file_list.setCurrentItem(None)
             self.file_list.clearSelection()
+            self.selection_anchor = -1
         self.item.isSelected = index == 0
         self.item.updateStyle()
 
@@ -345,7 +347,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtWidgets.QAbstractItemView.ScrollPerPixel
         )
         self.file_list.setSelectionMode(
-            QtWidgets.QAbstractItemView.SingleSelection
+            QtWidgets.QAbstractItemView.ExtendedSelection
         )
         self.file_list.currentItemChanged.connect(self._file_selection_changed)
         layout.addWidget(self.file_list)
@@ -951,27 +953,33 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if count == 0:
             return
         current = self.file_list.currentRow()
+        extend = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
         if current == -1:
             if direction > 0:
                 index = self._next_non_header_index(0, 1)
                 if index is not None:
-                    self.file_list.setCurrentRow(index)
+                    self._update_selection(index, extend)
                     self._scroll_with_header(index, -1)
             return
         index = current + direction
         if index < 0:
-            self.file_list.setCurrentItem(None)
-            self.file_list.scrollToTop()
+            if not extend:
+                self.file_list.setCurrentItem(None)
+                self.file_list.clearSelection()
+                self.selection_anchor = -1
+                self.file_list.scrollToTop()
             return
         if index >= count:
             index = count - 1
         index = self._next_non_header_index(index, 1 if direction > 0 else -1)
         if index is None:
-            if direction < 0:
+            if direction < 0 and not extend:
                 self.file_list.setCurrentItem(None)
+                self.file_list.clearSelection()
+                self.selection_anchor = -1
                 self.file_list.scrollToTop()
             return
-        self.file_list.setCurrentRow(index)
+        self._update_selection(index, extend)
         item = self.file_list.item(index)
         if item:
             self.file_list.scrollToItem(item)
@@ -987,7 +995,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         index = self._next_non_header_index(0, 1)
         if index is not None:
-            self.file_list.setCurrentRow(index)
+            extend = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
+            self._update_selection(index, extend)
             self._scroll_with_header(index, -1)
 
     def move_to_end(self) -> None:
@@ -998,7 +1007,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         index = self._next_non_header_index(count - 1, -1)
         if index is not None:
-            self.file_list.setCurrentRow(index)
+            extend = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
+            self._update_selection(index, extend)
             self.file_list.scrollToItem(self.file_list.item(index))
 
     def centerSelectedItem(self) -> None:
@@ -1019,29 +1029,34 @@ class JdDirectoryPage(QtWidgets.QWidget):
         current = self.file_list.currentRow()
         if current == -1:
             return
+        extend = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
         for i, (start, end) in enumerate(self.section_bounds):
             if start <= current <= end:
                 if current != start:
                     target = start
-                    self.file_list.setCurrentRow(target)
+                    self._update_selection(target, extend)
                     self._scroll_with_header(target, -1)
                 else:
                     if i > 0:
                         target = self.section_bounds[i - 1][0]
-                        self.file_list.setCurrentRow(target)
+                        self._update_selection(target, extend)
                         self._scroll_with_header(target, -1)
                     else:
-                        self.file_list.setCurrentItem(None)
-                        self.file_list.scrollToTop()
+                        if not extend:
+                            self.file_list.setCurrentItem(None)
+                            self.file_list.clearSelection()
+                            self.selection_anchor = -1
+                            self.file_list.scrollToTop()
                 break
 
     def move_to_section_end(self) -> None:
         if self.in_search_mode or not self.section_bounds:
             return
         current = self.file_list.currentRow()
+        extend = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
         if current == -1:
             end = self.section_bounds[0][1]
-            self.file_list.setCurrentRow(end)
+            self._update_selection(end, extend)
             self._scroll_with_header(end, 1)
             return
         for i, (start, end) in enumerate(self.section_bounds):
@@ -1051,7 +1066,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     if i + 1 < len(self.section_bounds)
                     else end
                 )
-                self.file_list.setCurrentRow(target)
+                self._update_selection(target, extend)
                 self._scroll_with_header(target, 1)
                 break
 
@@ -1075,9 +1090,32 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not self.in_search_mode:
             self.item.isSelected = current is None
             self.item.updateStyle()
+        if current is None:
+            self.selection_anchor = -1
+        else:
+            mods = QtWidgets.QApplication.keyboardModifiers()
+            if not mods & QtCore.Qt.ShiftModifier or self.selection_anchor == -1:
+                self.selection_anchor = self.file_list.row(current)
 
     def _is_directory_selected(self) -> bool:
         return self.file_list.currentItem() is None
+
+    def _update_selection(self, index: int, extend: bool) -> None:
+        if extend:
+            current = self.file_list.currentRow()
+            if self.selection_anchor == -1:
+                self.selection_anchor = current if current != -1 else index
+            start = min(self.selection_anchor, index)
+            end = max(self.selection_anchor, index)
+            self.file_list.selectionModel().clearSelection()
+            for row in range(start, end + 1):
+                item = self.file_list.item(row)
+                if item and item.data(QtCore.Qt.UserRole) != "header":
+                    item.setSelected(True)
+            self.file_list.setCurrentRow(index)
+        else:
+            self.selection_anchor = index
+            self.file_list.setCurrentRow(index)
 
     def _setup_search_shortcuts(self):
         for s in self.search_shortcut_instances:
@@ -1264,6 +1302,30 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_K, self.move_selection, -1),
             (QtCore.Qt.Key_Up, self.move_selection, -1),
             (
+                QtCore.Qt.Key_J,
+                self.move_selection,
+                1,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_Down,
+                self.move_selection,
+                1,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_K,
+                self.move_selection,
+                -1,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_Up,
+                self.move_selection,
+                -1,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
                 QtCore.Qt.Key_U,
                 self.move_selection_multiple,
                 -11,
@@ -1275,11 +1337,49 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 11,
                 QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
+            (
+                QtCore.Qt.Key_U,
+                self.move_selection_multiple,
+                -11,
+                QtCore.Qt.KeyboardModifier.ControlModifier
+                | QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_D,
+                self.move_selection_multiple,
+                11,
+                QtCore.Qt.KeyboardModifier.ControlModifier
+                | QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -11),
             (QtCore.Qt.Key_PageDown, self.move_selection_multiple, 11),
+            (
+                QtCore.Qt.Key_PageUp,
+                self.move_selection_multiple,
+                -11,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_PageDown,
+                self.move_selection_multiple,
+                11,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_Z, self.centerSelectedItem, None),
             (QtCore.Qt.Key_BracketLeft, self.move_to_section_start, None),
             (QtCore.Qt.Key_BracketRight, self.move_to_section_end, None),
+            (
+                QtCore.Qt.Key_BracketLeft,
+                self.move_to_section_start,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_BracketRight,
+                self.move_to_section_end,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_G, self.move_to_start, None),
             (
                 QtCore.Qt.Key_G,
@@ -1289,6 +1389,18 @@ class JdDirectoryPage(QtWidgets.QWidget):
             ),
             (QtCore.Qt.Key_Home, self.move_to_start, None),
             (QtCore.Qt.Key_End, self.move_to_end, None),
+            (
+                QtCore.Qt.Key_Home,
+                self.move_to_start,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_End,
+                self.move_to_end,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_H, lambda: None, None),
             (QtCore.Qt.Key_Left, lambda: None, None),
             (QtCore.Qt.Key_L, lambda: None, None),
