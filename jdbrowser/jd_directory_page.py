@@ -346,14 +346,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
         files.sort(key=lambda x: x.lower())
         self.section_bounds = []
         current_start = None
+        last_file_index = None
         for name in files:
             full_path = os.path.join(path, name)
             if name.lower().endswith(".2do"):
-                if current_start is not None:
-                    self.section_bounds.append(
-                        (current_start, self.file_list.count() - 1)
-                    )
+                if current_start is not None and last_file_index is not None:
+                    self.section_bounds.append((current_start, last_file_index))
                     current_start = None
+                    last_file_index = None
                 label = self._strip_prefix(os.path.splitext(name)[0])
                 header = QtWidgets.QLabel(label)
                 header.setAlignment(
@@ -385,8 +385,17 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setItemWidget(item, widget)
             if current_start is None:
                 current_start = self.file_list.count() - 1
-        if current_start is not None:
-            self.section_bounds.append((current_start, self.file_list.count() - 1))
+            last_file_index = self.file_list.count() - 1
+            if name.lower().endswith(".md"):
+                md_widget = self._create_markdown_widget(full_path)
+                md_item = QtWidgets.QListWidgetItem(self.file_list)
+                md_item.setSizeHint(md_widget.sizeHint())
+                md_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                md_item.setData(QtCore.Qt.UserRole, "markdown")
+                self.file_list.addItem(md_item)
+                self.file_list.setItemWidget(md_item, md_widget)
+        if current_start is not None and last_file_index is not None:
+            self.section_bounds.append((current_start, last_file_index))
 
     def refresh_file_list(self) -> None:
         scrollbar = self.file_list.verticalScrollBar()
@@ -423,6 +432,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._pending_thumbnails = deque()
         self._thumb_pool.clear()
         current_start = None
+        last_file_index = None
         non_header_names = [n for n in files if not n.lower().endswith('.2do')]
         target_name = None
         if current_name:
@@ -438,11 +448,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         for name in files:
             full_path = os.path.join(path, name)
             if name.lower().endswith('.2do'):
-                if current_start is not None:
-                    self.section_bounds.append(
-                        (current_start, self.file_list.count() - 1)
-                    )
+                if current_start is not None and last_file_index is not None:
+                    self.section_bounds.append((current_start, last_file_index))
                     current_start = None
+                    last_file_index = None
                 label = self._strip_prefix(os.path.splitext(name)[0])
                 header = QtWidgets.QLabel(label)
                 header.setAlignment(
@@ -474,10 +483,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setItemWidget(item, widget)
             if current_start is None:
                 current_start = self.file_list.count() - 1
+            last_file_index = self.file_list.count() - 1
             if target_name is not None and name == target_name:
                 target_row = self.file_list.count() - 1
-        if current_start is not None:
-            self.section_bounds.append((current_start, self.file_list.count() - 1))
+            if name.lower().endswith('.md'):
+                md_widget = self._create_markdown_widget(full_path)
+                md_item = QtWidgets.QListWidgetItem(self.file_list)
+                md_item.setSizeHint(md_widget.sizeHint())
+                md_item.setFlags(QtCore.Qt.ItemIsEnabled)
+                md_item.setData(QtCore.Qt.UserRole, 'markdown')
+                self.file_list.addItem(md_item)
+                self.file_list.setItemWidget(md_item, md_widget)
+        if current_start is not None and last_file_index is not None:
+            self.section_bounds.append((current_start, last_file_index))
 
         if target_row is not None:
             self.file_list.setCurrentRow(target_row)
@@ -489,7 +507,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _is_header_row(self, row: int) -> bool:
         item = self.file_list.item(row)
-        return bool(item and item.data(QtCore.Qt.UserRole) == "header")
+        return bool(
+            item and item.data(QtCore.Qt.UserRole) in {"header", "markdown"}
+        )
 
     def _next_non_header_index(self, start: int, step: int) -> int | None:
         count = self.file_list.count()
@@ -543,6 +563,31 @@ class JdDirectoryPage(QtWidgets.QWidget):
         )
         layout.addWidget(label, 1)
         return row
+
+    def _create_markdown_widget(self, path: str) -> QtWidgets.QWidget:
+        text = ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            pass
+        container = QtWidgets.QWidget()
+        container.setStyleSheet(
+            f"background-color: {SLATE_COLOR}; border-radius: 5px;"
+        )
+        layout = QtWidgets.QVBoxLayout(container)
+        layout.setContentsMargins(10, 5, 10, 5)
+        label = QtWidgets.QLabel()
+        label.setTextFormat(QtCore.Qt.TextFormat.MarkdownText)
+        label.setText(text)
+        label.setWordWrap(True)
+        label.setStyleSheet(f"color: {TEXT_COLOR};")
+        label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft
+            | QtCore.Qt.AlignmentFlag.AlignTop
+        )
+        layout.addWidget(label)
+        return container
 
     def _icon_for_extension(self, ext: str) -> str:
         return FILE_TYPE_ICONS.get(ext, DEFAULT_FILE_ICON)
@@ -694,7 +739,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
-        if not name or name == "header":
+        if not name or name in {"header", "markdown"}:
             return
         ext = os.path.splitext(name)[1].lower()
         if ext not in THUMBNAIL_EXTS:
@@ -1000,7 +1045,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             if widget:
                 widget.setGraphicsEffect(None)
             data = item.data(QtCore.Qt.UserRole)
-            if data == "header":
+            if data in {"header", "markdown"}:
                 continue
             name = str(data).lower()
             if query and query in name:
@@ -1262,7 +1307,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
-        if not name or name == "header":
+        if not name or name in {"header", "markdown"}:
             return
         order = getattr(self.item, "order", None)
         if order is None:
@@ -1301,7 +1346,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
-        if not name or name == "header":
+        if not name or name in {"header", "markdown"}:
             return
         order = getattr(self.item, "order", None)
         if order is None:
@@ -1353,7 +1398,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
-        if not name or name == "header":
+        if not name or name in {"header", "markdown"}:
             return
         order = getattr(self.item, "order", None)
         if order is None:
