@@ -1238,13 +1238,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (
                 QtCore.Qt.Key_U,
                 self.move_selection_multiple,
-                -3,
+                -11,
                 QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
             (
                 QtCore.Qt.Key_D,
                 self.move_selection_multiple,
-                3,
+                11,
                 QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
             (QtCore.Qt.Key_PageUp, self.move_selection_multiple, -3),
