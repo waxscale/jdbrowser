@@ -742,11 +742,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 index = self._next_non_header_index(0, 1)
                 if index is not None:
                     self.file_list.setCurrentRow(index)
-                    self.file_list.scrollToItem(self.file_list.item(index))
+                    self._scroll_with_header(index, -1)
             return
         index = current + direction
         if index < 0:
             self.file_list.setCurrentItem(None)
+            self.file_list.scrollToTop()
             return
         if index >= count:
             index = count - 1
@@ -754,6 +755,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if index is None:
             if direction < 0:
                 self.file_list.setCurrentItem(None)
+                self.file_list.scrollToTop()
             return
         self.file_list.setCurrentRow(index)
         item = self.file_list.item(index)
@@ -772,7 +774,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         index = self._next_non_header_index(0, 1)
         if index is not None:
             self.file_list.setCurrentRow(index)
-            self.file_list.scrollToItem(self.file_list.item(index))
+            self._scroll_with_header(index, -1)
 
     def move_to_end(self) -> None:
         if self.in_search_mode:
