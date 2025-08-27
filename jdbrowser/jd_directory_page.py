@@ -554,11 +554,23 @@ class JdDirectoryPage(QtWidgets.QWidget):
         current_name = None
         current_item = self.file_list.currentItem()
         if current_item is not None:
-            widget = self.file_list.itemWidget(current_item)
-            if widget is not None:
-                label_widget = widget.layout().itemAt(1).widget()
-                if isinstance(label_widget, QtWidgets.QLabel):
-                    current_name = label_widget.text()
+            # Prefer the stored item data when available
+            role0 = current_item.data(QtCore.Qt.UserRole)
+            if (
+                role0
+                and isinstance(role0, str)
+                and role0 not in {"header", "markdown"}
+            ):
+                current_name = role0
+            else:
+                # Fall back to reading from the row widget defensively
+                widget = self.file_list.itemWidget(current_item)
+                if widget is not None and widget.layout() is not None:
+                    item1 = widget.layout().itemAt(1)
+                    if item1 is not None:
+                        w = item1.widget()
+                        if isinstance(w, QtWidgets.QLabel):
+                            current_name = w.text()
 
         path = self.current_path
         if not os.path.isdir(path):
@@ -2187,10 +2199,42 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._editing_markdown_item is not None:
             return
         item = self.file_list.currentItem()
+        # If a markdown preview row is selected, open the underlying file in nvim
         if item and item.data(QtCore.Qt.UserRole) == "markdown":
-            self._edit_markdown(item)
+            path = item.data(QtCore.Qt.UserRole + 1)
+            if path:
+                self._open_in_nvim(path)
+            return
         elif self._is_directory_selected():
             self._edit_tag_label_with_icon()
+        else:
+            # Otherwise, if a file row is selected, open it in nvim
+            if not item or self._current_item_is_directory():
+                return
+            path = item.data(QtCore.Qt.UserRole + 1)
+            if path:
+                self._open_in_nvim(path)
+
+    def _open_in_nvim(self, path: str) -> None:
+        # Launch nvim inside a terminal so it is visible to the user.
+        # Use kitty (already used elsewhere in the app) to host nvim.
+        proc = QtCore.QProcess(self)
+        proc.setProgram("kitty")
+        proc.setArguments(["-e", "nvim", path])
+        proc.setWorkingDirectory(os.path.dirname(path) or self.current_path)
+        # On exit, refresh the file list and reselect the edited file if present
+        def _after_edit(_code: int, _status: QtCore.QProcess.ExitStatus) -> None:
+            name = os.path.basename(path)
+            self.refresh_file_list()
+            for i in range(self.file_list.count()):
+                it = self.file_list.item(i)
+                if it and it.data(QtCore.Qt.UserRole) == name:
+                    self.file_list.setCurrentRow(i)
+                    self.file_list.scrollToItem(it)
+                    break
+            proc.deleteLater()
+        proc.finished.connect(_after_edit)
+        proc.start()
 
     def _edit_markdown(self, item: QtWidgets.QListWidgetItem) -> None:
         path = item.data(QtCore.Qt.UserRole + 1)
