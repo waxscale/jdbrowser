@@ -2255,6 +2255,21 @@ class JdDirectoryPage(QtWidgets.QWidget):
         esc.activated.connect(lambda: finish(False))
         save_sc = QtGui.QShortcut(QtGui.QKeySequence.Save, edit)
         save_sc.activated.connect(lambda: finish(True))
+        # Accept Ctrl+Enter as an alternative save shortcut
+        save_enter_return = QtGui.QShortcut(
+            QtGui.QKeySequence(
+                QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.Key_Return
+            ),
+            edit,
+        )
+        save_enter_return.activated.connect(lambda: finish(True))
+        save_enter_enter = QtGui.QShortcut(
+            QtGui.QKeySequence(
+                QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.Key_Enter
+            ),
+            edit,
+        )
+        save_enter_enter.activated.connect(lambda: finish(True))
 
         # Prevent Ctrl+Up / Ctrl+Down from moving the selection while editing
         noop = lambda: None
