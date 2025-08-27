@@ -2156,6 +2156,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
         save_sc = QtGui.QShortcut(QtGui.QKeySequence.Save, edit)
         save_sc.activated.connect(lambda: finish(True))
 
+        # Prevent Ctrl+Up / Ctrl+Down from moving the selection while editing
+        noop = lambda: None
+        ctrl_up = QtGui.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.Key_Up),
+            edit,
+        )
+        ctrl_up.activated.connect(noop)
+        ctrl_down = QtGui.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.Key_Down),
+            edit,
+        )
+        ctrl_down.activated.connect(noop)
+
         for s in self.shortcuts:
             key_str = s.key().toString()
             if key_str and not any(
