@@ -68,6 +68,8 @@ IMAGE_EXTS = {
     ".webp",
 }
 
+ARCHIVE_DIR_NAME = "[0-META 0000-00-00 00.00.01] archive"
+
 
 @contextlib.contextmanager
 def _capture_ffmpeg_output():
@@ -976,6 +978,53 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         QtCore.QProcess.startDetached("prev", [path])
 
+    def _unique_dest_path(self, dest_dir: str, filename: str) -> str:
+        base, ext = os.path.splitext(filename)
+        m = re.match(r"^(.*) \((\d+)\)$", base)
+        if m:
+            root = m.group(1)
+            n = int(m.group(2))
+        else:
+            root = base
+            n = 0
+        candidate = filename
+        dest_path = os.path.join(dest_dir, candidate)
+        while os.path.exists(dest_path):
+            n += 1
+            candidate = f"{root} ({n}){ext}"
+            dest_path = os.path.join(dest_dir, candidate)
+        return dest_path
+
+    def _toggle_archive_file(self) -> None:
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item or self._current_item_is_directory():
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name in {"header", "markdown"}:
+            return
+        src_path = item.data(QtCore.Qt.UserRole + 1)
+        if not src_path:
+            return
+        current_dir = self.current_path
+        row = self.file_list.currentRow()
+        if os.path.basename(current_dir) == ARCHIVE_DIR_NAME:
+            dest_dir = os.path.dirname(current_dir)
+        else:
+            dest_dir = os.path.join(current_dir, ARCHIVE_DIR_NAME)
+        os.makedirs(dest_dir, exist_ok=True)
+        dest_path = self._unique_dest_path(dest_dir, os.path.basename(src_path))
+        try:
+            os.rename(src_path, dest_path)
+        except OSError as e:
+            self._warn("Move File", str(e))
+            return
+        self.refresh_file_list()
+        if self.file_list.count():
+            row = min(row, self.file_list.count() - 1)
+            self.file_list.setCurrentRow(row)
+
     def _set_thumbnail_from_selection(self) -> None:
         if self._is_directory_selected():
             return
@@ -1375,6 +1424,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_F5, self.refresh_file_list, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
+            (QtCore.Qt.Key_D, self._toggle_archive_file, None),
             (QtCore.Qt.Key_Equal, self._apply_unra_prefix, (True, False)),
             (
                 QtCore.Qt.Key_Equal,
