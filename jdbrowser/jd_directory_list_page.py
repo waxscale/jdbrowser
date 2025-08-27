@@ -17,6 +17,7 @@ from .constants import *
 from .config import read_config
 from .search_line_edit import SearchLineEdit
 from .tag_search_overlay import TagSearchOverlay
+from .ext_tag_search_overlay import ExtTagSearchOverlay
 
 class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
@@ -85,6 +86,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.search_shortcut_instances = []
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
+        self.ext_tag_overlay = None
         self.recent_items = []
         self.recent_wrapper = None
         self.recent_frame = None
@@ -973,6 +975,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.search_input.move(self.width() - 310, self.height() - 40)
         if self.tag_search_overlay and self.tag_search_overlay.isVisible():
             self.tag_search_overlay.reposition()
+        if self.ext_tag_overlay and self.ext_tag_overlay.isVisible():
+            self.ext_tag_overlay.reposition()
         self._update_recent_width()
         super().resizeEvent(event)
 
@@ -1057,6 +1061,35 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if idx is not None and idx < len(self.items):
             self.set_selection(idx)
 
+    def open_ext_tag_search(self):
+        if not self.ext_tag_overlay:
+            self.ext_tag_overlay = ExtTagSearchOverlay(self, self.conn)
+            self.ext_tag_overlay.tagSelected.connect(self._navigate_to_ext_tag)
+            self.ext_tag_overlay.closed.connect(self._ext_tag_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.ext_tag_overlay.open()
+
+    def _ext_tag_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def _navigate_to_ext_tag(
+        self, tag_id, jd_area, jd_id, jd_ext, parent_uuid, grandparent_uuid
+    ):
+        from .jd_directory_list_page import JdDirectoryListPage
+
+        new_page = JdDirectoryListPage(
+            parent_uuid=tag_id,
+            jd_area=jd_area,
+            jd_id=jd_id,
+            jd_ext=jd_ext,
+            grandparent_uuid=parent_uuid,
+            great_grandparent_uuid=grandparent_uuid,
+        )
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         mappings = [
@@ -1095,6 +1128,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_D, self._remove_tag_from_directory, None),
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
+            (QtCore.Qt.Key_O, self.open_ext_tag_search, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (
