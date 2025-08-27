@@ -6,7 +6,12 @@ import subprocess
 from jdbrowser.migrator import migrate, rollback, TOKYO_COLORS, color_text
 
 MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "jdbrowser", "migrations")
-DB_PATH = os.path.join(os.path.dirname(__file__), "tag.db")
+
+# Use the standard per-user data location for the tag database.
+xdg_data_home = os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+db_dir = os.path.join(xdg_data_home, "jdbrowser")
+os.makedirs(db_dir, exist_ok=True)
+DB_PATH = os.path.join(db_dir, "tag.db")
 
 
 def add_migration(name: str) -> None:
