@@ -58,6 +58,16 @@ THUMBNAIL_EXTS = {
     ".webm",
 }
 
+# File extensions treated as images for previewing
+IMAGE_EXTS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".bmp",
+    ".gif",
+    ".webp",
+}
+
 
 @contextlib.contextmanager
 def _capture_ffmpeg_output():
@@ -901,6 +911,26 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if os.path.isdir(path):
             QtCore.QProcess.startDetached("thunar", [path])
 
+    def _open_prev(self) -> None:
+        if self._is_directory_selected():
+            order = getattr(self.item, "order", None)
+            if order is None:
+                return
+            folder = self._format_order(order)
+            path = os.path.join(self.repository_path, folder)
+            QtCore.QProcess.startDetached("prev", [path])
+            return
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        path = item.data(QtCore.Qt.UserRole + 1)
+        if not path:
+            return
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in IMAGE_EXTS:
+            return
+        QtCore.QProcess.startDetached("prev", [path])
+
     def _set_thumbnail_from_selection(self) -> None:
         if self._is_directory_selected():
             return
@@ -1325,6 +1355,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 None,
                 QtCore.Qt.KeyboardModifier.ShiftModifier,
             ),
+            (QtCore.Qt.Key_Space, self._open_prev, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (
                 QtCore.Qt.Key_F,
