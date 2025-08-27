@@ -1082,22 +1082,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     self._scroll_with_header(index, -1)
             return
         index = current + direction
-        if index < 0:
-            self.file_list.setCurrentItem(None)
-            self.file_list.scrollToTop()
-            return
-        if index >= count:
-            index = count - 1
-        index = self._next_non_header_index(index, 1 if direction > 0 else -1)
-        if index is None:
-            if direction < 0:
+        if index < 0 or index >= count:
+            self._scroll_with_header(current, direction)
+            if index < 0:
                 self.file_list.setCurrentItem(None)
-                self.file_list.scrollToTop()
+            return
+        index = self._next_non_header_index(index, 1 if direction > 0 else -1)
+        if index is None or index == current:
+            if index is None and direction < 0:
+                self.file_list.setCurrentItem(None)
+            self._scroll_with_header(current, direction)
             return
         self.file_list.setCurrentRow(index)
-        item = self.file_list.item(index)
-        if item:
-            self.file_list.scrollToItem(item)
+        self._scroll_with_header(index, direction)
 
     def move_selection_multiple(self, count: int) -> None:
         if self.in_search_mode or self.file_list.count() == 0:
@@ -1122,7 +1119,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         index = self._next_non_header_index(count - 1, -1)
         if index is not None:
             self.file_list.setCurrentRow(index)
-            self.file_list.scrollToItem(self.file_list.item(index))
+            self._scroll_with_header(index, -1)
 
     def centerSelectedItem(self) -> None:
         if self.in_search_mode:
