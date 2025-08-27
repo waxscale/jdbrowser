@@ -20,6 +20,7 @@ from .database import (
 )
 from .jd_id_page import JdIdPage
 from .constants import *
+from .ext_tag_search_overlay import ExtTagSearchOverlay
 
 class JdAreaPage(QtWidgets.QWidget):
     def __init__(self):
@@ -45,6 +46,7 @@ class JdAreaPage(QtWidgets.QWidget):
         self.current_match_idx = -1
         self.shortcuts = []
         self.search_shortcut_instances = []
+        self.ext_tag_overlay = None
         self.show_prefix = False
         # Load show_prefix and show_hidden state from QSettings
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -836,6 +838,7 @@ class JdAreaPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
+            (QtCore.Qt.Key_O, self.open_ext_tag_search, None),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
             (QtCore.Qt.Key_Home, self.firstInRow, None),
@@ -1133,6 +1136,35 @@ class JdAreaPage(QtWidgets.QWidget):
             self.desired_col = length - 1
             self.updateSelection()
 
+    def open_ext_tag_search(self):
+        if not self.ext_tag_overlay:
+            self.ext_tag_overlay = ExtTagSearchOverlay(self, self.conn)
+            self.ext_tag_overlay.tagSelected.connect(self._navigate_to_ext_tag)
+            self.ext_tag_overlay.closed.connect(self._ext_tag_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.ext_tag_overlay.open()
+
+    def _ext_tag_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def _navigate_to_ext_tag(
+        self, tag_id, jd_area, jd_id, jd_ext, parent_uuid, grandparent_uuid
+    ):
+        from .jd_directory_list_page import JdDirectoryListPage
+
+        new_page = JdDirectoryListPage(
+            parent_uuid=tag_id,
+            jd_area=jd_area,
+            jd_id=jd_id,
+            jd_ext=jd_ext,
+            grandparent_uuid=parent_uuid,
+            great_grandparent_uuid=grandparent_uuid,
+        )
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def descend_level(self):
         if not self.sections:
             return
@@ -1174,4 +1206,6 @@ class JdAreaPage(QtWidgets.QWidget):
         for widget in self.scroll_area.widget().findChildren(QtWidgets.QLabel):
             if widget.styleSheet().startswith(f'background-color: {BUTTON_COLOR}'):
                 widget.setMinimumWidth(self.scroll_area.viewport().width() - 10)
+        if self.ext_tag_overlay and self.ext_tag_overlay.isVisible():
+            self.ext_tag_overlay.reposition()
         super().resizeEvent(event)
