@@ -927,7 +927,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not path:
             return
         ext = os.path.splitext(path)[1].lower()
-        if ext not in IMAGE_EXTS:
+        if ext not in THUMBNAIL_EXTS:
             return
         QtCore.QProcess.startDetached("prev", [path])
 
