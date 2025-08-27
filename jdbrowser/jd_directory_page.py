@@ -6,6 +6,7 @@ import tempfile
 import hashlib
 from collections import deque
 from datetime import datetime, timezone
+from functools import partial
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 from shiboken6 import isValid
 import markdown
@@ -269,12 +270,26 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 sep.setStyleSheet(f"color: {BREADCRUMB_ACTIVE_COLOR};")
                 sep.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
                 layout.addWidget(sep)
-            label = QtWidgets.QLabel(text)
-            label.setStyleSheet(
-                f"color: {BREADCRUMB_INACTIVE_COLOR}; font-weight: bold;"
-            )
-            label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-            layout.addWidget(label)
+            if handler:
+                btn = QtWidgets.QPushButton(text)
+                btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+                btn.setFlat(True)
+                btn.setStyleSheet(
+                    f"QPushButton {{ background-color: transparent; border: none; color: {BREADCRUMB_ACTIVE_COLOR}; font-weight: bold; }}"
+                    "QPushButton:hover { text-decoration: underline; }"
+                )
+                btn.clicked.connect(handler)
+                btn.setSizePolicy(
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
+                )
+                layout.addWidget(btn)
+            else:
+                label = QtWidgets.QLabel(text)
+                label.setStyleSheet(
+                    f"color: {BREADCRUMB_INACTIVE_COLOR}; font-weight: bold;"
+                )
+                label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+                layout.addWidget(label)
         layout.addStretch(1)
         return bar
 
@@ -282,7 +297,20 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self.breadcrumb_bar:
             self.main_layout.removeWidget(self.breadcrumb_bar)
             self.breadcrumb_bar.deleteLater()
-        crumbs = self.base_crumbs + [(s, None) for s in self.subdir_stack]
+        crumbs: list[tuple[str, object | None]] = []
+        if self.base_crumbs:
+            for text, handler in self.base_crumbs[:-1]:
+                crumbs.append((text, handler))
+            base_text, base_handler = self.base_crumbs[-1]
+            if self.subdir_stack:
+                crumbs.append((base_text, partial(self._navigate_to_subdir, 0)))
+            else:
+                crumbs.append((base_text, base_handler))
+        for idx, s in enumerate(self.subdir_stack):
+            if idx == len(self.subdir_stack) - 1:
+                crumbs.append((s, None))
+            else:
+                crumbs.append((s, partial(self._navigate_to_subdir, idx + 1)))
         self.breadcrumb_bar = self._build_breadcrumb(crumbs)
         self.main_layout.insertWidget(0, self.breadcrumb_bar)
 
@@ -2257,21 +2285,32 @@ class JdDirectoryPage(QtWidgets.QWidget):
         jdbrowser.current_page = new_page
         jdbrowser.main_window.setCentralWidget(new_page)
 
-    def ascend_level(self):
-        if self.subdir_stack:
-            popped = self.subdir_stack.pop()
-            self.current_path = (
-                self.base_path
-                if not self.subdir_stack
-                else os.path.join(self.base_path, *self.subdir_stack)
-            )
-            self.refresh_file_list()
-            self._update_breadcrumb()
+    def _navigate_to_subdir(self, level: int) -> None:
+        if level < 0 or level > len(self.subdir_stack):
+            return
+        target_name = None
+        if level < len(self.subdir_stack):
+            target_name = self.subdir_stack[level]
+        self.subdir_stack = self.subdir_stack[:level]
+        self.current_path = (
+            self.base_path
+            if not self.subdir_stack
+            else os.path.join(self.base_path, *self.subdir_stack)
+        )
+        self.refresh_file_list()
+        self._update_breadcrumb()
+        if target_name:
             for i in range(self.file_list.count()):
                 it = self.file_list.item(i)
-                if it.data(QtCore.Qt.UserRole) == popped:
+                if it.data(QtCore.Qt.UserRole) == target_name:
                     self.file_list.setCurrentRow(i)
                     break
+        elif self.file_list.count() > 0:
+            self.file_list.setCurrentRow(0)
+
+    def ascend_level(self):
+        if self.subdir_stack:
+            self._navigate_to_subdir(len(self.subdir_stack) - 1)
             return
         if self.parent_uuid is None:
             return
