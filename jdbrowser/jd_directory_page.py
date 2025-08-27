@@ -470,9 +470,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if current_start is not None and last_file_index is not None:
             self.section_bounds.append((current_start, last_file_index))
 
-    def refresh_file_list(self) -> None:
+    def refresh_file_list(self, keep_scroll: bool = True) -> None:
         scrollbar = self.file_list.verticalScrollBar()
-        scroll_pos = scrollbar.value()
+        scroll_pos = scrollbar.value() if keep_scroll else None
 
         current_name = None
         current_item = self.file_list.currentItem()
@@ -591,7 +591,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         else:
             self.file_list.setCurrentItem(None)
 
-        QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
+        if keep_scroll and scroll_pos is not None:
+            QtCore.QTimer.singleShot(0, lambda: scrollbar.setValue(scroll_pos))
         QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _is_header_row(self, row: int) -> bool:
@@ -1703,12 +1704,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         except OSError as e:
             self._warn("Create File", str(e))
             return
-        self.refresh_file_list()
+        self.refresh_file_list(keep_scroll=False)
         for i in range(self.file_list.count()):
             it = self.file_list.item(i)
             if it.data(QtCore.Qt.UserRole) == name:
                 self.file_list.setCurrentRow(i)
-                self.file_list.scrollToItem(it)
+                QtCore.QTimer.singleShot(0, lambda it=it: self.file_list.scrollToItem(it))
                 break
 
     def _current_section_index(self) -> int | None:
