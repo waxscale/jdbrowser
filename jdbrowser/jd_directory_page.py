@@ -1879,7 +1879,25 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if replace_entire:
             if not ext and rest.startswith("."):
                 ext = rest
-            new_name = f"[5-UNRA {ts_str}]" + ext
+
+            base = rest[: -len(ext)] if ext else rest
+            version_match = re.search(r"\bv(\d+)\b", base)
+            version = ""
+            if version_match:
+                ver_digits = version_match.group(1)
+                if len(ver_digits) < 2:
+                    ver_digits = ver_digits.zfill(2)
+                version = f"v{ver_digits}"
+
+            hashtags = sorted(set(re.findall(r"#\w+", base)), key=str.lower)
+
+            suffix_parts = []
+            if version:
+                suffix_parts.append(version)
+            suffix_parts.extend(hashtags)
+            suffix = (" " + " ".join(suffix_parts)) if suffix_parts else ""
+
+            new_name = f"[5-UNRA {ts_str}]{suffix}" + ext
         else:
             if not rest or rest.startswith("."):
                 new_name = f"[5-UNRA {ts_str}]{rest}"
