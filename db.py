@@ -20,7 +20,7 @@ def add_migration(name: str) -> None:
         f.write("def up(conn):\n    pass\n\n\ndef down(conn):\n    pass\n")
     line = f"Created {filename}"
     print(color_text(line, fg=TOKYO_COLORS['green'], bg=TOKYO_COLORS['bg']))
-    subprocess.run(["vim", path])
+    subprocess.run(["nvim", path])
 
 
 def main() -> None:
