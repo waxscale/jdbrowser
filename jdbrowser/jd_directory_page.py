@@ -23,6 +23,7 @@ from .dialogs import EditTagDialog, SimpleEditTagDialog, CreateFileDialog
 from .directory_item import DirectoryItem
 from .tag_search_overlay import TagSearchOverlay
 from .ext_tag_search_overlay import ExtTagSearchOverlay
+from .directory_search_overlay import DirectorySearchOverlay
 from .search_line_edit import SearchLineEdit
 from .config import read_config
 
@@ -171,6 +172,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
         self.ext_tag_overlay = None
+        self.directory_overlay = None
 
         self._pending_thumbnails: deque[
             tuple[weakref.ReferenceType[QtWidgets.QLabel], str]
@@ -1464,6 +1466,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
             (QtCore.Qt.Key_O, self.open_ext_tag_search, None),
+            (
+                QtCore.Qt.Key_O,
+                self.open_directory_search,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_D, self._toggle_archive_file, None),
             (QtCore.Qt.Key_Equal, self._apply_unra_prefix, (True, False)),
             (
@@ -2200,6 +2208,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.remove_tag_overlay.reposition()
         if self.ext_tag_overlay and self.ext_tag_overlay.isVisible():
             self.ext_tag_overlay.reposition()
+        if self.directory_overlay and self.directory_overlay.isVisible():
+            self.directory_overlay.reposition()
         super().resizeEvent(event)
 
     def mousePressEvent(self, event):
@@ -2274,6 +2284,28 @@ class JdDirectoryPage(QtWidgets.QWidget):
         remove_directory_tag(self.conn, self.directory_id, tag_uuid)
         rebuild_state_directory_tags(self.conn)
         self._refresh_item()
+
+    def open_directory_search(self):
+        if not self.directory_overlay:
+            self.directory_overlay = DirectorySearchOverlay(self, self.conn)
+            self.directory_overlay.directorySelected.connect(
+                self._navigate_to_directory
+            )
+            self.directory_overlay.closed.connect(self._directory_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.directory_overlay.open()
+
+    def _directory_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def _navigate_to_directory(self, directory_id):
+        from .jd_directory_page import JdDirectoryPage
+
+        new_page = JdDirectoryPage(directory_id)
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
 
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
