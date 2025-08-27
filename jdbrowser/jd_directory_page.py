@@ -1240,6 +1240,15 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 break
 
     def _scroll_with_header(self, row: int, direction: int) -> None:
+        def _is_row_visible(r: int) -> bool:
+            if r < 0 or r >= self.file_list.count():
+                return False
+            it = self.file_list.item(r)
+            if it is None:
+                return False
+            rect = self.file_list.visualItemRect(it)
+            return rect.isValid() and rect.intersects(self.file_list.viewport().rect())
+
         header_row = row + direction
         last_header = None
         count = self.file_list.count()
@@ -1251,14 +1260,16 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 continue
             break
         if last_header is not None:
-            position = (
-                QtWidgets.QAbstractItemView.PositionAtTop
-                if direction < 0
-                else QtWidgets.QAbstractItemView.PositionAtBottom
-            )
-            self.file_list.scrollToItem(self.file_list.item(last_header), position)
+            if not _is_row_visible(last_header):
+                position = (
+                    QtWidgets.QAbstractItemView.PositionAtTop
+                    if direction < 0
+                    else QtWidgets.QAbstractItemView.PositionAtBottom
+                )
+                self.file_list.scrollToItem(self.file_list.item(last_header), position)
         else:
-            self.file_list.scrollToItem(self.file_list.item(row))
+            if not _is_row_visible(row):
+                self.file_list.scrollToItem(self.file_list.item(row))
 
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
