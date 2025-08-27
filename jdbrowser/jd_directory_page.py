@@ -331,10 +331,28 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (self.directory_id,),
         )
         row = cursor.fetchone()
-        label = row[0] if row else ""
-        order = row[1] if row else 0
-
-        crumb = self._format_order(order)
+        if row:
+            label = row[0] if row[0] is not None else ""
+            order = row[1] if row[1] is not None else 0
+        else:
+            # Fallbacks when directory does not yet exist in state tables:
+            # - Show the directory id as the label so the header isn't blank
+            # - Derive a numeric order from the id for prefix/thumbnail logic
+            label = self.directory_id
+            try:
+                order = int(self.directory_id.replace("_", ""))
+            except Exception:
+                order = 0
+        # Prefer the explicit directory id for breadcrumb and base path if
+        # there is no DB row; fall back to formatting the numeric order
+        # otherwise. This prevents defaulting to 0000_..._0000 when navigating
+        # via a direct directory-id link that isn't yet in state.
+        if row:
+            folder = self._format_order(order)
+            crumb = folder
+        else:
+            folder = self.directory_id
+            crumb = folder
         if self.parent_uuid is not None and self.ext_label:
             parent_crumb = self._strip_prefix(self.ext_label)
             self.base_crumbs = [(parent_crumb, self.ascend_level), (crumb, None)]
@@ -424,7 +442,6 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.file_list.itemDoubleClicked.connect(lambda _item: self._enter_selected())
         layout.addWidget(self.file_list)
 
-        folder = self._format_order(order)
         self.base_path = os.path.join(self.repository_path, folder)
         self.current_path = self.base_path
         self.subdir_stack: list[str] = []
@@ -767,6 +784,32 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return f"[{link_text}](jdlink:{code})"
 
         text = pattern.sub(repl, text)
+
+        # Also support directory-id links:
+        #   [[XXXX_XXXX_XXXX_XXXX]]
+        #   [[XXXX_XXXX_XXXX_XXXX|label]] -> open JdDirectoryPage for that id
+        dir_pattern = re.compile(r"\[\[((?:\d{4}_){3}\d{4})(?:\|([^\]]+))?\]\]")
+
+        def dir_repl(m):
+            directory_id = m.group(1)
+            explicit_label = m.group(2).strip() if m.group(2) else None
+            label = None
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(
+                    "SELECT label FROM state_jd_directories WHERE directory_id = ?",
+                    (directory_id,),
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    label = row[0]
+            except Exception:
+                label = None
+            link_text = explicit_label if explicit_label else (label if label else directory_id)
+            link_text = link_text.replace(']', r'\]')
+            return f"[{link_text}](dirlink:{directory_id})"
+
+        text = dir_pattern.sub(dir_repl, text)
         html = markdown.markdown(text)
         html = f"<style>a, a:visited {{ color: {LINK_COLOR}; }}</style>{html}"
 
@@ -830,6 +873,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _handle_anchor_click(self, url: QtCore.QUrl):
         if url.scheme() == "jdlink":
             self._open_jd_link(url.toString())
+        elif url.scheme() == "dirlink":
+            self._open_dir_link(url.toString())
         else:
             QtGui.QDesktopServices.openUrl(url)
 
@@ -874,6 +919,33 @@ class JdDirectoryPage(QtWidgets.QWidget):
             grandparent_uuid=id_tag,
             great_grandparent_uuid=area_tag,
         )
+        jdbrowser.current_page = new_page
+        if jdbrowser.main_window:
+            jdbrowser.main_window.setCentralWidget(new_page)
+
+    def _open_dir_link(self, url: str) -> None:
+        m = re.match(r"dirlink:((?:\d{4}_){3}\d{4})", url)
+        if not m:
+            return
+        folder_id = m.group(1)
+        # Resolve the on-disk folder id (order-coded) to an internal directory_id
+        # from state tables to retain labels and tag pills.
+        resolved_dir_id = None
+        try:
+            order_val = int(folder_id.replace("_", ""))
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT directory_id FROM state_jd_directories WHERE [order] = ?",
+                (order_val,),
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                resolved_dir_id = row[0]
+        except Exception:
+            resolved_dir_id = None
+        directory_id = resolved_dir_id or folder_id
+        from .jd_directory_page import JdDirectoryPage
+        new_page = JdDirectoryPage(directory_id)
         jdbrowser.current_page = new_page
         if jdbrowser.main_window:
             jdbrowser.main_window.setCentralWidget(new_page)
