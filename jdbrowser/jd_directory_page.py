@@ -5,7 +5,7 @@ import contextlib
 import tempfile
 import hashlib
 from collections import deque
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 from shiboken6 import isValid
 import markdown
@@ -1638,15 +1638,48 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if not m:
             return ts
         y, mo, d, h, mi, s = map(int, m.groups())
-        y = max(y, 1)
-        mo = max(mo, 1)
-        d = max(d, 1)
-        try:
-            dt = datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
-            dt += timedelta(seconds=seconds)
-        except ValueError:
-            return ts
-        return dt.strftime("%Y-%m-%d %H.%M.%S")
+
+        for _ in range(abs(seconds)):
+            if seconds > 0:
+                s += 1
+                if s >= 60:
+                    s = 0
+                    mi += 1
+                    if mi >= 60:
+                        mi = 0
+                        h += 1
+                        if h >= 24:
+                            h = 0
+                            d += 1
+                            if d >= 32:
+                                d = 0
+                                mo += 1
+                                if mo >= 13:
+                                    mo = 0
+                                    y += 1
+            else:
+                if y == 0 and mo == 0 and d == 0 and h == 0 and mi == 0 and s == 0:
+                    return "0000-00-00 00.00.00"
+                s -= 1
+                if s < 0:
+                    s = 59
+                    mi -= 1
+                    if mi < 0:
+                        mi = 59
+                        h -= 1
+                        if h < 0:
+                            h = 23
+                            d -= 1
+                            if d < 0:
+                                d = 31
+                                mo -= 1
+                                if mo < 0:
+                                    mo = 12
+                                    y -= 1
+                                    if y < 0:
+                                        return "0000-00-00 00.00.00"
+
+        return f"{y:04d}-{mo:02d}-{d:02d} {h:02d}.{mi:02d}.{s:02d}"
 
     def _prompt_file_label(self) -> str | None:
         dialog = CreateFileDialog(self)
@@ -1728,10 +1761,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
             return
-        m = re.match(r"(\[[^\]]+\])", name)
-        if not m:
+        cat, cat_name, ts = self._parse_prefix(name)
+        if not (cat and cat_name and ts):
             return
-        self._create_file_with_prefix(m.group(1))
+        new_ts = self._adjust_timestamp(ts, 1)
+        prefix = f"[{cat}-{cat_name} {new_ts}]"
+        self._create_file_with_prefix(prefix)
 
     def _create_file_before(self) -> None:
         if self._is_directory_selected():
@@ -1756,8 +1791,15 @@ class JdDirectoryPage(QtWidgets.QWidget):
         cat, cat_name = self._category_for_section(sec)
         if not (cat and cat_name):
             return
-        dt = datetime.now(tz=timezone.utc)
-        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        end = self.section_bounds[sec][1]
+        last_name = self.file_list.item(end).data(QtCore.Qt.UserRole)
+        _c, _n, ts = self._parse_prefix(last_name)
+        if ts:
+            new_ts = self._adjust_timestamp(ts, 1)
+        else:
+            dt = datetime.now(tz=timezone.utc)
+            new_ts = dt.strftime('%Y-%m-%d %H.%M.%S')
+        prefix = f"[{cat}-{cat_name} {new_ts}]"
         self._create_file_with_prefix(prefix)
 
     def _create_file_section_begin(self) -> None:
