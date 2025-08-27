@@ -21,6 +21,7 @@ from .database import (
 )
 from .constants import *
 from .ext_tag_search_overlay import ExtTagSearchOverlay
+from .directory_search_overlay import DirectorySearchOverlay
 
 class JdExtPage(QtWidgets.QWidget):
     def __init__(self, parent_uuid, jd_area, jd_id, grandparent_uuid):
@@ -48,6 +49,7 @@ class JdExtPage(QtWidgets.QWidget):
         self.shortcuts = []
         self.search_shortcut_instances = []
         self.ext_tag_overlay = None
+        self.directory_overlay = None
         self.show_prefix = False
         # Load show_prefix and show_hidden state from QSettings
         settings = QtCore.QSettings("xAI", "jdbrowser")
@@ -969,6 +971,12 @@ class JdExtPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_F, self.enter_search_mode, None, QtCore.Qt.KeyboardModifier.ControlModifier),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_O, self.open_ext_tag_search, None),
+            (
+                QtCore.Qt.Key_O,
+                self.open_directory_search,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_0, self.firstInRow, None),
             (QtCore.Qt.Key_Dollar, self.lastInRow, None),
             (QtCore.Qt.Key_Home, self.firstInRow, None),
@@ -1239,6 +1247,28 @@ class JdExtPage(QtWidgets.QWidget):
             self.desired_col = length - 1
             self.updateSelection()
 
+    def open_directory_search(self):
+        if not self.directory_overlay:
+            self.directory_overlay = DirectorySearchOverlay(self, self.conn)
+            self.directory_overlay.directorySelected.connect(
+                self._navigate_to_directory
+            )
+            self.directory_overlay.closed.connect(self._directory_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.directory_overlay.open()
+
+    def _directory_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def _navigate_to_directory(self, directory_id):
+        from .jd_directory_page import JdDirectoryPage
+
+        new_page = JdDirectoryPage(directory_id)
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
             self.ext_tag_overlay = ExtTagSearchOverlay(self, self.conn)
@@ -1316,4 +1346,6 @@ class JdExtPage(QtWidgets.QWidget):
                 widget.setMinimumWidth(self.scroll_area.viewport().width() - 10)
         if self.ext_tag_overlay and self.ext_tag_overlay.isVisible():
             self.ext_tag_overlay.reposition()
+        if self.directory_overlay and self.directory_overlay.isVisible():
+            self.directory_overlay.reposition()
         super().resizeEvent(event)

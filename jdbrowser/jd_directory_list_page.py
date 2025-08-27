@@ -18,6 +18,7 @@ from .config import read_config
 from .search_line_edit import SearchLineEdit
 from .tag_search_overlay import TagSearchOverlay
 from .ext_tag_search_overlay import ExtTagSearchOverlay
+from .directory_search_overlay import DirectorySearchOverlay
 
 class JdDirectoryListPage(QtWidgets.QWidget):
     def __init__(
@@ -87,6 +88,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         self.tag_search_overlay = None
         self.remove_tag_overlay = None
         self.ext_tag_overlay = None
+        self.directory_overlay = None
         self.recent_items = []
         self.recent_wrapper = None
         self.recent_frame = None
@@ -977,6 +979,8 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             self.tag_search_overlay.reposition()
         if self.ext_tag_overlay and self.ext_tag_overlay.isVisible():
             self.ext_tag_overlay.reposition()
+        if self.directory_overlay and self.directory_overlay.isVisible():
+            self.directory_overlay.reposition()
         self._update_recent_width()
         super().resizeEvent(event)
 
@@ -1061,6 +1065,26 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         if idx is not None and idx < len(self.items):
             self.set_selection(idx)
 
+    def open_directory_search(self):
+        if not self.directory_overlay:
+            self.directory_overlay = DirectorySearchOverlay(self, self.conn)
+            self.directory_overlay.directorySelected.connect(self._navigate_to_directory)
+            self.directory_overlay.closed.connect(self._directory_search_closed)
+        for s in self.shortcuts:
+            s.setEnabled(False)
+        self.directory_overlay.open()
+
+    def _directory_search_closed(self):
+        for s in self.shortcuts:
+            s.setEnabled(True)
+
+    def _navigate_to_directory(self, directory_id):
+        from .jd_directory_page import JdDirectoryPage
+
+        new_page = JdDirectoryPage(directory_id)
+        jdbrowser.current_page = new_page
+        jdbrowser.main_window.setCentralWidget(new_page)
+
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
             self.ext_tag_overlay = ExtTagSearchOverlay(self, self.conn)
@@ -1129,6 +1153,12 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_E, self.open_tag_search, None),
             (QtCore.Qt.Key_X, self.open_remove_tag_search, None),
             (QtCore.Qt.Key_O, self.open_ext_tag_search, None),
+            (
+                QtCore.Qt.Key_O,
+                self.open_directory_search,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (QtCore.Qt.Key_Slash, self.enter_search_mode, None),
             (
