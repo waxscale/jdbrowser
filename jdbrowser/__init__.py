@@ -10,6 +10,7 @@ current_page = None
 # Simple in-process navigation history. Pushing happens on navigate_to();
 # Backspace should pop via go_back().
 _history: list[tuple[str, dict]] = []
+_forward: list[tuple[str, dict]] = []
 
 def _describe_page(page) -> tuple[str, dict]:
     name = type(page).__name__
@@ -88,6 +89,8 @@ def navigate_to(page) -> None:
             _history.append(_describe_page(current_page))
         except Exception:
             pass
+    # Navigating to a new page clears the forward stack
+    _forward.clear()
     # Detach and delete the existing central widget, then show the new page
     if main_window is not None:
         old = main_window.takeCentralWidget()
@@ -111,6 +114,12 @@ def go_back() -> None:
     cur = main_window.takeCentralWidget()
     try:
         if cur is not None:
+            # Push current onto forward stack before deleting
+            if current_page is not None:
+                try:
+                    _forward.append(_describe_page(current_page))
+                except Exception:
+                    pass
             cur.deleteLater()
     except Exception:
         pass
@@ -118,3 +127,24 @@ def go_back() -> None:
     prev = _create_page(desc)
     main_window.setCentralWidget(prev)
     current_page = prev
+
+def go_forward() -> None:
+    global current_page
+    if main_window is None or not _forward:
+        return
+    cur = main_window.takeCentralWidget()
+    try:
+        if cur is not None:
+            # Push current onto back stack before deleting
+            if current_page is not None:
+                try:
+                    _history.append(_describe_page(current_page))
+                except Exception:
+                    pass
+            cur.deleteLater()
+    except Exception:
+        pass
+    desc = _forward.pop()
+    nxt = _create_page(desc)
+    main_window.setCentralWidget(nxt)
+    current_page = nxt

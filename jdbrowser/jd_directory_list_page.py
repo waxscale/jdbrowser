@@ -1113,6 +1113,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         mappings = [
             (QtCore.Qt.Key_Return, self.descend_level, None),
             (QtCore.Qt.Key_Enter, self.descend_level, None),
+            (QtCore.Qt.Key_Down, self.descend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
             (QtCore.Qt.Key_J, self.move_selection, 1),
             (QtCore.Qt.Key_Down, self.move_selection, 1),
             (QtCore.Qt.Key_K, self.move_selection, -1),
@@ -1132,12 +1133,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_L, lambda: None, None),
             (QtCore.Qt.Key_Right, lambda: None, None),
             (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
-            (
-                QtCore.Qt.Key_Up,
-                self.ascend_level,
-                None,
-                QtCore.Qt.KeyboardModifier.AltModifier,
-            ),
+            (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
             (QtCore.Qt.Key_AsciiTilde, self.ascend_to_area, None),
             (QtCore.Qt.Key_A, self._add_directory, None),
             (QtCore.Qt.Key_C, self._edit_tag_label_with_icon, None),
@@ -1176,6 +1172,13 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             else:
                 shortcut.activated.connect(lambda f=func, a=arg: f(a))
             self.shortcuts.append(shortcut)
+        # History navigation shortcuts
+        alt_left = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Left), self)
+        alt_left.activated.connect(lambda: jdbrowser.go_back())
+        self.shortcuts.append(alt_left)
+        alt_right = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Right), self)
+        alt_right.activated.connect(lambda: jdbrowser.go_forward())
+        self.shortcuts.append(alt_right)
         self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
         for seq in self.quit_sequences:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)

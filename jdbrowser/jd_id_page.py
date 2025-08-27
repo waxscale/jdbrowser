@@ -921,6 +921,9 @@ class JdIdPage(QtWidgets.QWidget):
               (QtCore.Qt.Key_Return, self.descend_level, None),
               (QtCore.Qt.Key_Enter, self.descend_level, None),
               (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
+              (QtCore.Qt.Key_Left, lambda: jdbrowser.go_back(), None, QtCore.Qt.KeyboardModifier.AltModifier),
+              (QtCore.Qt.Key_Right, lambda: jdbrowser.go_forward(), None, QtCore.Qt.KeyboardModifier.AltModifier),
+              (QtCore.Qt.Key_Down, self.descend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
               (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
               (QtCore.Qt.Key_AsciiTilde, self.ascend_level, None),
           ]
@@ -935,6 +938,7 @@ class JdIdPage(QtWidgets.QWidget):
             else:
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.shortcuts.append(s)
+        # Alt-based shortcuts are already added in normal_shortcuts above for this page
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(jdbrowser.main_window.close)

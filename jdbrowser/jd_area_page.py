@@ -876,6 +876,16 @@ class JdAreaPage(QtWidgets.QWidget):
             else:
                 s.activated.connect(lambda f=func, a=arg: f(a))
             self.shortcuts.append(s)
+        # History navigation and descend-only shortcuts
+        alt_left = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Left), self)
+        alt_left.activated.connect(lambda: jdbrowser.go_back())
+        self.shortcuts.append(alt_left)
+        alt_right = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Right), self)
+        alt_right.activated.connect(lambda: jdbrowser.go_forward())
+        self.shortcuts.append(alt_right)
+        alt_down = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Down), self)
+        alt_down.activated.connect(self.descend_level)
+        self.shortcuts.append(alt_down)
         for seq in quit_keys:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(jdbrowser.main_window.close)

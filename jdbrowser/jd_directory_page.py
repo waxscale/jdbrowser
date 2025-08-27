@@ -1567,6 +1567,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
             (QtCore.Qt.Key_Return, self._enter_selected, None),
             (QtCore.Qt.Key_Enter, self._enter_selected, None),
+            (QtCore.Qt.Key_Down, self._enter_selected, None, QtCore.Qt.KeyboardModifier.AltModifier),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (
                 QtCore.Qt.Key_Up,
@@ -1693,6 +1694,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.c_shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_C), self)
         self.c_shortcut.activated.connect(self._handle_c)
         self.shortcuts.append(self.c_shortcut)
+        # History navigation shortcuts
+        alt_left = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Left), self)
+        alt_left.activated.connect(lambda: jdbrowser.go_back())
+        self.shortcuts.append(alt_left)
+        alt_right = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.KeyboardModifier.AltModifier | QtCore.Qt.Key_Right), self)
+        alt_right.activated.connect(lambda: jdbrowser.go_forward())
+        self.shortcuts.append(alt_right)
         self.quit_sequences = ["Q", "Ctrl+Q", "Ctrl+W", "Alt+F4"]
         for seq in self.quit_sequences:
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
@@ -2610,24 +2618,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.setCurrentRow(0)
 
     def ascend_level(self):
+        # Only ascend within subdirectories of this directory page. Do not
+        # navigate to the parent page from here; history handles that.
         if self.subdir_stack:
             self._navigate_to_subdir(len(self.subdir_stack) - 1)
-            return
-        if self.parent_uuid is None:
-            return
-        from .jd_directory_list_page import JdDirectoryListPage
-
-        new_page = JdDirectoryListPage(
-            parent_uuid=self.parent_uuid,
-            jd_area=self.current_jd_area,
-            jd_id=self.current_jd_id,
-            jd_ext=self.current_jd_ext,
-            grandparent_uuid=self.grandparent_uuid,
-            great_grandparent_uuid=self.great_grandparent_uuid,
-        )
-        target_id = self.directory_id
-        for i, item in enumerate(new_page.items):
-            if item.directory_id == target_id:
-                new_page.set_selection(i)
-                break
-        jdbrowser.navigate_to(new_page)
+        # If already at the base directory, do nothing.
