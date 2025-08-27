@@ -1460,6 +1460,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_Backspace, self.ascend_level, None),
             (QtCore.Qt.Key_Return, self._enter_selected, None),
             (QtCore.Qt.Key_Enter, self._enter_selected, None),
+            (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
             (
                 QtCore.Qt.Key_Up,
                 self.ascend_level,
@@ -1590,6 +1591,20 @@ class JdDirectoryPage(QtWidgets.QWidget):
             s = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
             s.activated.connect(jdbrowser.main_window.close)
             self.shortcuts.append(s)
+
+    def toggle_label_prefix(self) -> None:
+        """Toggle prefix mode for the top directory entry only.
+
+        Mirrors other pages' behavior but intentionally limits the effect to the
+        header DirectoryItem at the top of the page. File list entries and tag
+        pills remain unchanged.
+        """
+        self.show_prefix = not self.show_prefix
+        # Update the directory header label and its tag pills to respect prefix mode
+        self.item.updateLabel(self.show_prefix)
+        # Persist preference like other pages
+        settings = QtCore.QSettings("xAI", "jdbrowser")
+        settings.setValue("show_prefix", self.show_prefix)
 
     def _warn(self, title: str, message: str) -> None:
         box = QtWidgets.QMessageBox(self)
