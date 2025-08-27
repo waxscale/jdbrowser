@@ -648,6 +648,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignLeft
         )
         color = TAG_COLOR if is_dir else TEXT_COLOR
+        if self._parse_prefix(name)[0] is None:
+            color = DELETE_BUTTON_COLOR
         label.setStyleSheet(f"color: {color};")
         label.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
