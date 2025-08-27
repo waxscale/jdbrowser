@@ -1,10 +1,12 @@
 import os
 import sys
 import re
+import subprocess
 
-from jdbrowser.migrator import migrate, TOKYO_COLORS, color_text
+from jdbrowser.migrator import migrate, rollback, TOKYO_COLORS, color_text
 
 MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "jdbrowser", "migrations")
+DB_PATH = os.path.join(os.path.dirname(__file__), "tag.db")
 
 
 def add_migration(name: str) -> None:
@@ -18,21 +20,26 @@ def add_migration(name: str) -> None:
         f.write("def up(conn):\n    pass\n\n\ndef down(conn):\n    pass\n")
     line = f"Created {filename}"
     print(color_text(line, fg=TOKYO_COLORS['green'], bg=TOKYO_COLORS['bg']))
+    subprocess.run(["vim", path])
 
 
 def main() -> None:
     args = sys.argv[1:]
-    if not args or args[0] != 'migrate':
-        print("Usage: python db.py migrate [DB_PATH]\n       python db.py migrate add NAME")
+    if not args:
+        print("Usage: db [add NAME|migrate|rollback]")
         return
-    if len(args) >= 2 and args[1] == 'add':
-        if len(args) < 3:
-            print("Usage: python db.py migrate add NAME")
+    cmd = args[0]
+    if cmd == 'add':
+        if len(args) < 2:
+            print("Usage: db add NAME")
             return
-        add_migration(args[2])
+        add_migration(args[1])
+    elif cmd == 'migrate':
+        migrate(DB_PATH)
+    elif cmd == 'rollback':
+        rollback(DB_PATH)
     else:
-        db_path = args[1] if len(args) > 1 else os.path.join(os.getcwd(), 'tag.db')
-        migrate(db_path)
+        print("Usage: db [add NAME|migrate|rollback]")
 
 
 if __name__ == '__main__':

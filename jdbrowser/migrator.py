@@ -78,3 +78,42 @@ def migrate(db_path: str):
     conn.execute('PRAGMA foreign_keys = ON')
     apply_migrations(conn, use_tui=True)
     conn.close()
+
+
+def rollback_last(conn: sqlite3.Connection, use_tui: bool = False):
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY)")
+    cursor.execute("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")
+    row = cursor.fetchone()
+    if row is None:
+        if use_tui:
+            line = "No migrations to rollback"
+            print(color_text(line, fg=TOKYO_COLORS["yellow"], bg=TOKYO_COLORS["bg"]))
+        return
+    version = row[0]
+    migrations = dict(get_migrations())
+    path = migrations.get(version)
+    if path is None:
+        if use_tui:
+            line = f"? {version} (missing)"
+            print(color_text(line, fg=TOKYO_COLORS["red"], bg=TOKYO_COLORS["bg"]))
+        cursor.execute("DELETE FROM schema_migrations WHERE version = ?", (version,))
+        conn.commit()
+        return
+    module = load_migration(path)
+    if use_tui:
+        line = f"↓ {version}"
+        print(color_text(line, fg=TOKYO_COLORS["fg"], bg=TOKYO_COLORS["bg"]))
+    module.down(conn)
+    cursor.execute("DELETE FROM schema_migrations WHERE version = ?", (version,))
+    conn.commit()
+    if use_tui:
+        line = f"✗ {version}"
+        print(color_text(line, fg=TOKYO_COLORS["red"], bg=TOKYO_COLORS["bg"]))
+
+
+def rollback(db_path: str):
+    conn = sqlite3.connect(db_path)
+    conn.execute('PRAGMA foreign_keys = ON')
+    rollback_last(conn, use_tui=True)
+    conn.close()
