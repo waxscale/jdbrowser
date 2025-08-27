@@ -2121,6 +2121,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.conn.commit()
             rebuild_state_jd_directories(self.conn)
             self._refresh_item()
+            # Ensure the directory entry remains selected after closing the dialog
+            self.set_selection(0)
 
     def _edit_tag_label_with_icon(self):
         if not self._is_directory_selected():
@@ -2184,6 +2186,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 break
             else:
                 break
+        # After the dialog closes (accepted or cancelled), re-select the directory entry
+        self.set_selection(0)
 
     def resizeEvent(self, event):
         self.search_input.move(self.width() - 310, self.height() - 40)
