@@ -400,6 +400,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtWidgets.QAbstractItemView.SingleSelection
         )
         self.file_list.currentItemChanged.connect(self._file_selection_changed)
+        # Double-click behaves like Enter on the selected item
+        self.file_list.itemDoubleClicked.connect(lambda _item: self._enter_selected())
         layout.addWidget(self.file_list)
 
         folder = self._format_order(order)

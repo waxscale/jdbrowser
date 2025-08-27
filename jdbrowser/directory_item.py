@@ -109,6 +109,7 @@ class DirectoryItem(QtWidgets.QWidget):
         # monitor their hover events via an event filter
         for widget in (self.icon, self.right, self.label, self.tags_widget):
             widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            widget.mouseDoubleClickEvent = self.mouseDoubleClickEvent  # type: ignore[attr-defined]
             widget.installEventFilter(self)
 
         self.updateStyle()
@@ -198,6 +199,7 @@ class DirectoryItem(QtWidgets.QWidget):
             # Pass mouse events through to the DirectoryItem so clicking a tag
             # pill still selects the underlying directory entry
             btn.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            btn.mouseDoubleClickEvent = self.mouseDoubleClickEvent  # type: ignore[attr-defined]
             btn.installEventFilter(self)
             self.tag_buttons.append((btn, t_id, t_label, t_order, parent_uuid))
             self.tags_layout.addWidget(btn)
@@ -267,3 +269,10 @@ class DirectoryItem(QtWidgets.QWidget):
                 self.page._edit_tag_label_with_icon()
         event.accept()
 
+    def mouseDoubleClickEvent(self, event):
+        """Descend on double-click when supported by the page."""
+        if self.page and event.button() == QtCore.Qt.LeftButton:
+            self.page.set_selection(self.index)
+            if hasattr(self.page, "descend_level"):
+                self.page.descend_level()
+        event.accept()

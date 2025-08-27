@@ -83,6 +83,11 @@ class FileItem(QtWidgets.QWidget):
         layout.addWidget(self.label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.updateLabel(False)
 
+        # Ensure double-clicks on children behave like the parent widget
+        for widget in (self.icon, self.label):
+            widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            widget.mouseDoubleClickEvent = self.mouseDoubleClickEvent  # type: ignore[attr-defined]
+
         # Fixed height: icon + single line label + spacings and margins
         fm = self.label.fontMetrics()
         label_height = fm.height()
@@ -153,6 +158,15 @@ class FileItem(QtWidgets.QWidget):
                 self.page._edit_tag_label_with_icon()
         super().mousePressEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        """Descend on double-click, mirroring Enter behavior."""
+        if self.page and event.button() == QtCore.Qt.LeftButton:
+            self.page.set_selection(self.section_idx, self.item_idx)
+            # Only descend if the page supports it and this is a real tag
+            if hasattr(self.page, "descend_level") and self.tag_id is not None:
+                self.page.descend_level()
+        super().mouseDoubleClickEvent(event)
+
     def mouseMoveEvent(self, event):
         if (
             self.tag_id is None
@@ -185,6 +199,14 @@ class FileItem(QtWidgets.QWidget):
         drag.exec(QtCore.Qt.MoveAction)
         super().mouseMoveEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        """Descend on double-click when supported by the page."""
+        if self.page and event.button() == QtCore.Qt.LeftButton:
+            self.page.set_selection(self.section_idx, self.item_idx)
+            if hasattr(self.page, "descend_level") and self.tag_id is not None:
+                self.page.descend_level()
+        super().mouseDoubleClickEvent(event)
+
     def dragEnterEvent(self, event):
         if event.mimeData().hasText():
             event.acceptProposedAction()
@@ -204,4 +226,3 @@ class FileItem(QtWidgets.QWidget):
             event.acceptProposedAction()
         else:
             event.ignore()
-

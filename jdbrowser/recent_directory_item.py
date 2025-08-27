@@ -99,6 +99,7 @@ class RecentDirectoryItem(QtWidgets.QWidget):
 
         for widget in (self.icon, self.right, self.label, self.tags_widget):
             widget.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            widget.mouseDoubleClickEvent = self.mouseDoubleClickEvent  # type: ignore[attr-defined]
             widget.installEventFilter(self)
 
         self._build_tag_pills()
@@ -155,6 +156,7 @@ class RecentDirectoryItem(QtWidgets.QWidget):
             )
             btn.setMinimumWidth(60)
             btn.mousePressEvent = self.mousePressEvent  # type: ignore[attr-defined]
+            btn.mouseDoubleClickEvent = self.mouseDoubleClickEvent  # type: ignore[attr-defined]
             btn.installEventFilter(self)
             self.tags_layout.addWidget(btn)
 
@@ -192,4 +194,11 @@ class RecentDirectoryItem(QtWidgets.QWidget):
             elif event.button() == QtCore.Qt.RightButton:
                 self.page.set_selection(self.index)
                 self.page._edit_tag_label_with_icon()
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        if self.page and event.button() == QtCore.Qt.LeftButton:
+            self.page.set_selection(self.index)
+            if hasattr(self.page, "descend_level"):
+                self.page.descend_level()
         event.accept()
