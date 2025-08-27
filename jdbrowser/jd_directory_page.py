@@ -1121,7 +1121,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         index = self._next_non_header_index(count - 1, -1)
         if index is not None:
             self.file_list.setCurrentRow(index)
-            self._scroll_with_header(index, -1)
+            self._scroll_with_header(index, 1)
 
     def centerSelectedItem(self) -> None:
         if self.in_search_mode:
