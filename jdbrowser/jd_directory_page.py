@@ -390,31 +390,27 @@ class JdDirectoryPage(QtWidgets.QWidget):
         path = self.current_path
         if not os.path.isdir(path):
             return
-        dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-        dirs.sort(key=lambda x: x.lower())
-        files = [
-            f
-            for f in os.listdir(path)
-            if os.path.isfile(os.path.join(path, f))
-        ]
-        files.sort(key=lambda x: x.lower())
+        entries = sorted(os.listdir(path), key=lambda x: x.lower())
         self.section_bounds = []
-        for name in dirs:
-            full_path = os.path.abspath(os.path.join(path, name))
-            widget = self._create_file_row(full_path, name, is_dir=True)
-            item = QtWidgets.QListWidgetItem(self.file_list)
-            item.setSizeHint(widget.sizeHint())
-            item.setData(QtCore.Qt.UserRole, name)
-            item.setData(QtCore.Qt.UserRole + 1, full_path)
-            item.setData(QtCore.Qt.UserRole + 2, "dir")
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
-            self.file_list.addItem(item)
-            self.file_list.setItemWidget(item, widget)
         current_start = None
         last_file_index = None
-        for name in files:
+        for name in entries:
             full_path = os.path.abspath(os.path.join(path, name))
-            if name.lower().endswith(".2do"):
+            if os.path.isdir(full_path):
+                widget = self._create_file_row(full_path, name, is_dir=True)
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(widget.sizeHint())
+                item.setData(QtCore.Qt.UserRole, name)
+                item.setData(QtCore.Qt.UserRole + 1, full_path)
+                item.setData(QtCore.Qt.UserRole + 2, "dir")
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, widget)
+                if current_start is None:
+                    current_start = self.file_list.count() - 1
+                last_file_index = self.file_list.count() - 1
+                continue
+            if os.path.isfile(full_path) and name.lower().endswith(".2do"):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
                     current_start = None
@@ -441,6 +437,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 item.setData(QtCore.Qt.UserRole, "header")
                 self.file_list.addItem(item)
                 self.file_list.setItemWidget(item, header)
+                continue
+            if not os.path.isfile(full_path):
                 continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
@@ -488,14 +486,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             self.file_list.clear()
             return
 
-        dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-        dirs.sort(key=lambda x: x.lower())
-        files = [
-            f
-            for f in os.listdir(path)
-            if os.path.isfile(os.path.join(path, f))
-        ]
-        files.sort(key=lambda x: x.lower())
+        entries = sorted(os.listdir(path), key=lambda x: x.lower())
 
         self.file_list.clear()
         self.section_bounds = []
@@ -503,7 +494,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._thumb_pool.clear()
         current_start = None
         last_file_index = None
-        non_header_names = [*dirs, *[n for n in files if not n.lower().endswith('.2do')]]
+        non_header_names = [n for n in entries if not n.lower().endswith('.2do')]
         target_name = None
         if current_name:
             if current_name in non_header_names:
@@ -515,24 +506,25 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     else:
                         break
         target_row = None
-        row_index = 0
-        for name in dirs:
+        for name in entries:
             full_path = os.path.abspath(os.path.join(path, name))
-            widget = self._create_file_row(full_path, name, is_dir=True)
-            item = QtWidgets.QListWidgetItem(self.file_list)
-            item.setSizeHint(widget.sizeHint())
-            item.setData(QtCore.Qt.UserRole, name)
-            item.setData(QtCore.Qt.UserRole + 1, full_path)
-            item.setData(QtCore.Qt.UserRole + 2, "dir")
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
-            self.file_list.addItem(item)
-            self.file_list.setItemWidget(item, widget)
-            if target_name is not None and name == target_name:
-                target_row = row_index
-            row_index += 1
-        for name in files:
-            full_path = os.path.abspath(os.path.join(path, name))
-            if name.lower().endswith('.2do'):
+            if os.path.isdir(full_path):
+                widget = self._create_file_row(full_path, name, is_dir=True)
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(widget.sizeHint())
+                item.setData(QtCore.Qt.UserRole, name)
+                item.setData(QtCore.Qt.UserRole + 1, full_path)
+                item.setData(QtCore.Qt.UserRole + 2, "dir")
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, widget)
+                if current_start is None:
+                    current_start = self.file_list.count() - 1
+                last_file_index = self.file_list.count() - 1
+                if target_name is not None and name == target_name:
+                    target_row = self.file_list.count() - 1
+                continue
+            if os.path.isfile(full_path) and name.lower().endswith('.2do'):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
                     current_start = None
@@ -559,6 +551,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 item.setData(QtCore.Qt.UserRole, 'header')
                 self.file_list.addItem(item)
                 self.file_list.setItemWidget(item, header)
+                continue
+            if not os.path.isfile(full_path):
                 continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
