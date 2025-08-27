@@ -1179,18 +1179,24 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _scroll_with_header(self, row: int, direction: int) -> None:
         header_row = row + direction
-        while 0 <= header_row < self.file_list.count():
+        last_header = None
+        count = self.file_list.count()
+        while 0 <= header_row < count:
             header_item = self.file_list.item(header_row)
             if header_item and header_item.data(QtCore.Qt.UserRole) == "header":
-                position = (
-                    QtWidgets.QAbstractItemView.PositionAtTop
-                    if direction < 0
-                    else QtWidgets.QAbstractItemView.PositionAtBottom
-                )
-                self.file_list.scrollToItem(header_item, position)
-                return
-            header_row += direction
-        self.file_list.scrollToItem(self.file_list.item(row))
+                last_header = header_row
+                header_row += direction
+                continue
+            break
+        if last_header is not None:
+            position = (
+                QtWidgets.QAbstractItemView.PositionAtTop
+                if direction < 0
+                else QtWidgets.QAbstractItemView.PositionAtBottom
+            )
+            self.file_list.scrollToItem(self.file_list.item(last_header), position)
+        else:
+            self.file_list.scrollToItem(self.file_list.item(row))
 
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
