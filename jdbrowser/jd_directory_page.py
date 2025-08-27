@@ -650,7 +650,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        label.setStyleSheet(f"color: {TAG_COLOR};")
+        color = TAG_COLOR if is_dir else TEXT_COLOR
+        label.setStyleSheet(f"color: {color};")
         label.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
