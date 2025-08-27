@@ -276,10 +276,19 @@ class JdDirectoryPage(QtWidgets.QWidget):
         layout.addStretch(1)
         return bar
 
+    def _update_breadcrumb(self) -> None:
+        if self.breadcrumb_bar:
+            self.main_layout.removeWidget(self.breadcrumb_bar)
+            self.breadcrumb_bar.deleteLater()
+        crumbs = self.base_crumbs + [(s, None) for s in self.subdir_stack]
+        self.breadcrumb_bar = self._build_breadcrumb(crumbs)
+        self.main_layout.insertWidget(0, self.breadcrumb_bar)
+
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
+        self.main_layout = layout
 
         cursor = self.conn.cursor()
         cursor.execute(
@@ -293,11 +302,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         crumb = self._format_order(order)
         if self.parent_uuid is not None and self.ext_label:
             parent_crumb = self._strip_prefix(self.ext_label)
-            self.breadcrumb_bar = self._build_breadcrumb(
-                [(parent_crumb, self.ascend_level), (crumb, None)]
-            )
+            self.base_crumbs = [(parent_crumb, self.ascend_level), (crumb, None)]
         else:
-            self.breadcrumb_bar = self._build_breadcrumb([(crumb, None)])
+            self.base_crumbs = [(crumb, None)]
+        self.breadcrumb_bar = self._build_breadcrumb(self.base_crumbs)
         layout.addWidget(self.breadcrumb_bar)
 
         cursor.execute(
@@ -360,7 +368,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.file_list.currentItemChanged.connect(self._file_selection_changed)
         layout.addWidget(self.file_list)
 
-        self._populate_files(order)
+        folder = self._format_order(order)
+        self.base_path = os.path.join(self.repository_path, folder)
+        self.current_path = self.base_path
+        self.subdir_stack: list[str] = []
+
+        self._populate_files()
 
         self.search_input = SearchLineEdit(self)
         self.search_input.setFixedWidth(300)
@@ -373,23 +386,31 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
 
-    def _populate_files(self, order: int) -> None:
-        folder = self._format_order(order)
-        path = os.path.join(self.repository_path, folder)
+    def _populate_files(self) -> None:
+        path = self.current_path
         if not os.path.isdir(path):
             return
-        files = [
-            f
-            for f in os.listdir(path)
-            if os.path.isfile(os.path.join(path, f))
-        ]
-        files.sort(key=lambda x: x.lower())
+        entries = sorted(os.listdir(path), key=lambda x: x.lower())
         self.section_bounds = []
         current_start = None
         last_file_index = None
-        for name in files:
+        for name in entries:
             full_path = os.path.abspath(os.path.join(path, name))
-            if name.lower().endswith(".2do"):
+            if os.path.isdir(full_path):
+                widget = self._create_file_row(full_path, name, is_dir=True)
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(widget.sizeHint())
+                item.setData(QtCore.Qt.UserRole, name)
+                item.setData(QtCore.Qt.UserRole + 1, full_path)
+                item.setData(QtCore.Qt.UserRole + 2, "dir")
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, widget)
+                if current_start is None:
+                    current_start = self.file_list.count() - 1
+                last_file_index = self.file_list.count() - 1
+                continue
+            if os.path.isfile(full_path) and name.lower().endswith(".2do"):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
                     current_start = None
@@ -417,11 +438,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.file_list.addItem(item)
                 self.file_list.setItemWidget(item, header)
                 continue
+            if not os.path.isfile(full_path):
+                continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
             item.setData(QtCore.Qt.UserRole, name)
             item.setData(QtCore.Qt.UserRole + 1, full_path)
+            item.setData(QtCore.Qt.UserRole + 2, "file")
             item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
@@ -457,22 +481,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 if isinstance(label_widget, QtWidgets.QLabel):
                     current_name = label_widget.text()
 
-        order = getattr(self.item, "order", None)
-        if order is None:
-            self.file_list.clear()
-            return
-        folder = self._format_order(order)
-        path = os.path.join(self.repository_path, folder)
+        path = self.current_path
         if not os.path.isdir(path):
             self.file_list.clear()
             return
 
-        files = [
-            f
-            for f in os.listdir(path)
-            if os.path.isfile(os.path.join(path, f))
-        ]
-        files.sort(key=lambda x: x.lower())
+        entries = sorted(os.listdir(path), key=lambda x: x.lower())
 
         self.file_list.clear()
         self.section_bounds = []
@@ -480,7 +494,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._thumb_pool.clear()
         current_start = None
         last_file_index = None
-        non_header_names = [n for n in files if not n.lower().endswith('.2do')]
+        non_header_names = [n for n in entries if not n.lower().endswith('.2do')]
         target_name = None
         if current_name:
             if current_name in non_header_names:
@@ -492,9 +506,25 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     else:
                         break
         target_row = None
-        for name in files:
+        for name in entries:
             full_path = os.path.abspath(os.path.join(path, name))
-            if name.lower().endswith('.2do'):
+            if os.path.isdir(full_path):
+                widget = self._create_file_row(full_path, name, is_dir=True)
+                item = QtWidgets.QListWidgetItem(self.file_list)
+                item.setSizeHint(widget.sizeHint())
+                item.setData(QtCore.Qt.UserRole, name)
+                item.setData(QtCore.Qt.UserRole + 1, full_path)
+                item.setData(QtCore.Qt.UserRole + 2, "dir")
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
+                self.file_list.addItem(item)
+                self.file_list.setItemWidget(item, widget)
+                if current_start is None:
+                    current_start = self.file_list.count() - 1
+                last_file_index = self.file_list.count() - 1
+                if target_name is not None and name == target_name:
+                    target_row = self.file_list.count() - 1
+                continue
+            if os.path.isfile(full_path) and name.lower().endswith('.2do'):
                 if current_start is not None and last_file_index is not None:
                     self.section_bounds.append((current_start, last_file_index))
                     current_start = None
@@ -522,11 +552,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.file_list.addItem(item)
                 self.file_list.setItemWidget(item, header)
                 continue
+            if not os.path.isfile(full_path):
+                continue
             widget = self._create_file_row(full_path, name)
             item = QtWidgets.QListWidgetItem(self.file_list)
             item.setSizeHint(widget.sizeHint())
             item.setData(QtCore.Qt.UserRole, name)
             item.setData(QtCore.Qt.UserRole + 1, full_path)
+            item.setData(QtCore.Qt.UserRole + 2, "file")
             item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
             self.file_list.addItem(item)
             self.file_list.setItemWidget(item, widget)
@@ -572,7 +605,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return idx
         return None
 
-    def _create_file_row(self, path: str, name: str) -> QtWidgets.QWidget:
+    def _create_file_row(
+        self, path: str, name: str, is_dir: bool = False
+    ) -> QtWidgets.QWidget:
         row = QtWidgets.QWidget()
         row.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
@@ -585,14 +620,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
         icon_label = QtWidgets.QLabel()
         icon_label.setFixedSize(120, 75)
         icon_label.setStyleSheet("border: none; border-radius: 10px;")
-        ext = os.path.splitext(name)[1].lower()
-        if ext in THUMBNAIL_EXTS:
+        ext = os.path.splitext(name)[1].lower() if not is_dir else ""
+        if not is_dir and ext in THUMBNAIL_EXTS:
             placeholder = QtGui.QPixmap(120, 75)
             placeholder.fill(QtGui.QColor(SLATE_COLOR))
             icon_label.setPixmap(placeholder)
             self._pending_thumbnails.append((weakref.ref(icon_label), path))
         else:
-            char = self._icon_for_extension(ext)
+            char = "\uf07b" if is_dir else self._icon_for_extension(ext)
             pixmap = QtGui.QPixmap(120, 75)
             pixmap.fill(QtGui.QColor(SLATE_COLOR))
             painter = QtGui.QPainter(pixmap)
@@ -609,7 +644,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        label.setStyleSheet(f"color: {TEXT_COLOR};")
+        color = TAG_COLOR if is_dir else TEXT_COLOR
+        label.setStyleSheet(f"color: {color};")
         label.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
@@ -894,30 +930,36 @@ class JdDirectoryPage(QtWidgets.QWidget):
             QtCore.QTimer.singleShot(0, self._start_pending_thumbnails)
 
     def _open_terminal(self) -> None:
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        path = os.path.join(self.repository_path, folder)
+        path = self.current_path
         if os.path.isdir(path):
             QtCore.QProcess.startDetached("kitty", [], path)
 
     def _open_thunar(self) -> None:
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        path = os.path.join(self.repository_path, folder)
+        path = self.current_path
         if os.path.isdir(path):
             QtCore.QProcess.startDetached("thunar", [path])
 
+    def _enter_selected(self) -> None:
+        item = self.file_list.currentItem()
+        if not item:
+            return
+        if self._current_item_is_directory():
+            name = item.data(QtCore.Qt.UserRole)
+            full_path = item.data(QtCore.Qt.UserRole + 1)
+            self.subdir_stack.append(name)
+            self.current_path = full_path
+            self.refresh_file_list()
+            self._update_breadcrumb()
+            if self.file_list.count() > 0:
+                self.file_list.setCurrentRow(0)
+        else:
+            path = item.data(QtCore.Qt.UserRole + 1)
+            if path:
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+
     def _open_prev(self) -> None:
         if self._is_directory_selected():
-            order = getattr(self.item, "order", None)
-            if order is None:
-                return
-            folder = self._format_order(order)
-            path = os.path.join(self.repository_path, folder)
+            path = self.current_path
             QtCore.QProcess.startDetached("prev", [path])
             return
         item = self.file_list.currentItem()
@@ -925,6 +967,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return
         path = item.data(QtCore.Qt.UserRole + 1)
         if not path:
+            return
+        if self._current_item_is_directory():
+            QtCore.QProcess.startDetached("prev", [path])
             return
         ext = os.path.splitext(path)[1].lower()
         if ext not in THUMBNAIL_EXTS:
@@ -935,7 +980,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._is_directory_selected():
             return
         item = self.file_list.currentItem()
-        if not item:
+        if not item or self._current_item_is_directory():
             return
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
@@ -943,11 +988,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         ext = os.path.splitext(name)[1].lower()
         if ext not in THUMBNAIL_EXTS:
             return
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        path = os.path.join(self.repository_path, folder, name)
+        path = os.path.join(self.current_path, name)
         icon_data = None
         if ext in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}:
             try:
@@ -1108,6 +1149,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
 
     def _is_directory_selected(self) -> bool:
         return self.file_list.currentItem() is None
+
+    def _current_item_is_directory(self) -> bool:
+        item = self.file_list.currentItem()
+        return bool(item and item.data(QtCore.Qt.UserRole + 2) == "dir")
 
     def _setup_search_shortcuts(self):
         for s in self.search_shortcut_instances:
@@ -1282,6 +1327,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         mappings = [
             (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+            (QtCore.Qt.Key_Return, self._enter_selected, None),
+            (QtCore.Qt.Key_Enter, self._enter_selected, None),
             (
                 QtCore.Qt.Key_Up,
                 self.ascend_level,
@@ -1511,14 +1558,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
             return
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        dir_path = os.path.join(self.repository_path, folder)
+        dir_path = self.current_path
         old_path = os.path.join(dir_path, name)
         dialog = SimpleEditTagDialog(name, self)
-        dialog.setWindowTitle("Rename File")
+        dialog.setWindowTitle("Rename Directory" if item.data(QtCore.Qt.UserRole + 2) == "dir" else "Rename File")
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             new_name = dialog.get_label()
             if not new_name or new_name == name:
@@ -1545,16 +1588,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._is_directory_selected():
             return
         item = self.file_list.currentItem()
-        if not item:
+        if not item or self._current_item_is_directory():
             return
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
             return
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        dir_path = os.path.join(self.repository_path, folder)
+        dir_path = self.current_path
         old_path = os.path.join(dir_path, name)
         if use_file_time:
             stat = os.stat(old_path)
@@ -1597,16 +1636,12 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._is_directory_selected():
             return
         item = self.file_list.currentItem()
-        if not item:
+        if not item or self._current_item_is_directory():
             return
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
             return
-        order = getattr(self.item, "order", None)
-        if order is None:
-            return
-        folder = self._format_order(order)
-        dir_path = os.path.join(self.repository_path, folder)
+        dir_path = self.current_path
         files = [f for f in os.listdir(dir_path) if f.lower().endswith(".2do")]
         files.sort(key=lambda x: x.lower())
         header_prefix = None
@@ -1668,7 +1703,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         item = self.file_list.currentItem()
         if item and item.data(QtCore.Qt.UserRole) == "markdown":
             self._edit_markdown(item)
-        else:
+        elif self._is_directory_selected():
             self._edit_tag_label_with_icon()
 
     def _edit_markdown(self, item: QtWidgets.QListWidgetItem) -> None:
@@ -1927,6 +1962,21 @@ class JdDirectoryPage(QtWidgets.QWidget):
         jdbrowser.main_window.setCentralWidget(new_page)
 
     def ascend_level(self):
+        if self.subdir_stack:
+            popped = self.subdir_stack.pop()
+            self.current_path = (
+                self.base_path
+                if not self.subdir_stack
+                else os.path.join(self.base_path, *self.subdir_stack)
+            )
+            self.refresh_file_list()
+            self._update_breadcrumb()
+            for i in range(self.file_list.count()):
+                it = self.file_list.item(i)
+                if it.data(QtCore.Qt.UserRole) == popped:
+                    self.file_list.setCurrentRow(i)
+                    break
+            return
         if self.parent_uuid is None:
             return
         from .jd_directory_list_page import JdDirectoryListPage
