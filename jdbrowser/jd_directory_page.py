@@ -196,6 +196,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self._editing_markdown_item: QtWidgets.QListWidgetItem | None = None
 
         self._thumbs_started = False
+        self._consume_list_events = False
 
         self._setup_ui()
         self._setup_shortcuts()
@@ -1280,9 +1281,32 @@ class JdDirectoryPage(QtWidgets.QWidget):
     def _file_selection_changed(
         self, current: QtWidgets.QListWidgetItem | None, _prev
     ) -> None:
+        # While editing markdown, do not allow any selection changes
+        if self._editing_markdown_item is not None:
+            if current is not self._editing_markdown_item:
+                # Restore selection to the editing item
+                self.file_list.setCurrentItem(self._editing_markdown_item)
+            return
         if not self.in_search_mode:
             self.item.isSelected = current is None
             self.item.updateStyle()
+
+    def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        # While editing markdown, swallow interactions targeting the list or its viewport
+        if self._consume_list_events and obj in {self.file_list, self.file_list.viewport()}:
+            et = event.type()
+            if et in {
+                QtCore.QEvent.Type.MouseButtonPress,
+                QtCore.QEvent.Type.MouseButtonRelease,
+                QtCore.QEvent.Type.MouseButtonDblClick,
+                QtCore.QEvent.Type.Wheel,
+                QtCore.QEvent.Type.KeyPress,
+                QtCore.QEvent.Type.KeyRelease,
+                QtCore.QEvent.Type.FocusIn,
+                QtCore.QEvent.Type.FocusOut,
+            }:
+                return True
+        return super().eventFilter(obj, event)
 
     def _is_directory_selected(self) -> bool:
         return self.file_list.currentItem() is None
@@ -2132,6 +2156,10 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.file_list.setItemWidget(item, container)
         self.file_list.setCurrentItem(item)
         edit.setFocus()
+        # Consume interactions on the list while editing so selection can't change
+        self._consume_list_events = True
+        self.file_list.installEventFilter(self)
+        self.file_list.viewport().installEventFilter(self)
 
         def finish(save: bool) -> None:
             if save:
@@ -2150,6 +2178,13 @@ class JdDirectoryPage(QtWidgets.QWidget):
             for s in self.search_shortcut_instances:
                 s.setEnabled(False)
             self._editing_markdown_item = None
+            # Re-enable list interactions
+            self._consume_list_events = False
+            try:
+                self.file_list.removeEventFilter(self)
+                self.file_list.viewport().removeEventFilter(self)
+            except Exception:
+                pass
 
         esc = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), edit)
         esc.activated.connect(lambda: finish(False))
