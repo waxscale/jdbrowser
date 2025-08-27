@@ -5,7 +5,7 @@ import contextlib
 import tempfile
 import hashlib
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from PySide6 import QtWidgets, QtCore, QtGui, QtMultimedia
 from shiboken6 import isValid
 import markdown
@@ -18,7 +18,7 @@ from .database import (
     rebuild_state_directory_tags,
     rebuild_state_jd_directories,
 )
-from .dialogs import EditTagDialog, SimpleEditTagDialog
+from .dialogs import EditTagDialog, SimpleEditTagDialog, CreateFileDialog
 from .directory_item import DirectoryItem
 from .tag_search_overlay import TagSearchOverlay
 from .search_line_edit import SearchLineEdit
@@ -1460,6 +1460,26 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 None,
                 QtCore.Qt.KeyboardModifier.ControlModifier,
             ),
+            (QtCore.Qt.Key_A, self._create_file_after, None),
+            (QtCore.Qt.Key_I, self._create_file_before, None),
+            (
+                QtCore.Qt.Key_A,
+                self._create_file_section_end,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_I,
+                self._create_file_section_begin,
+                None,
+                QtCore.Qt.KeyboardModifier.ShiftModifier,
+            ),
+            (
+                QtCore.Qt.Key_N,
+                self._create_file_unra,
+                None,
+                QtCore.Qt.KeyboardModifier.ControlModifier,
+            ),
         ]
         for i in range(10):
             mappings.append(
@@ -1595,11 +1615,152 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.item.icon.mousePressEvent = self.item.mousePressEvent  # type: ignore[attr-defined]
                 self.item.icon.installEventFilter(self.item)
                 layout.insertWidget(0, self.item.icon)
-            self.item.icon.setFixedSize(240, 150)
-            self.item.icon.setStyleSheet(
-                f"background-color: {SLATE_COLOR}; border-radius: 5px;"
-            )
+                self.item.icon.setFixedSize(240, 150)
+                self.item.icon.setStyleSheet(
+                    f"background-color: {SLATE_COLOR}; border-radius: 5px;"
+                )
         self.item.updateStyle()
+
+    def _parse_prefix(self, name: str) -> tuple[str | None, str | None, str | None]:
+        m = re.match(
+            r"\[(\d+)-([A-Za-z]{4}) (\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2})\]",
+            name,
+        )
+        if m:
+            return m.group(1), m.group(2), m.group(3)
+        return None, None, None
+
+    def _prompt_file_label(self) -> str | None:
+        dialog = CreateFileDialog(self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            label = dialog.get_label()
+            return label if label else None
+        return None
+
+    def _create_file_with_prefix(self, prefix: str) -> None:
+        label = self._prompt_file_label()
+        if not label:
+            return
+        name = f"{prefix}{label}" if label.startswith(".") else f"{prefix} {label}"
+        path = os.path.join(self.current_path, name)
+        if os.path.exists(path):
+            self._warn("Create File", f"File {name} already exists.")
+            return
+        try:
+            with open(path, "x"):
+                pass
+        except OSError as e:
+            self._warn("Create File", str(e))
+            return
+        self.refresh_file_list()
+        for i in range(self.file_list.count()):
+            it = self.file_list.item(i)
+            if it.data(QtCore.Qt.UserRole) == name:
+                self.file_list.setCurrentRow(i)
+                self.file_list.scrollToItem(it)
+                break
+
+    def _current_section_index(self) -> int | None:
+        if self.in_search_mode or not self.section_bounds:
+            return None
+        row = self.file_list.currentRow()
+        if row == -1:
+            return None
+        item = self.file_list.item(row)
+        if item and item.data(QtCore.Qt.UserRole) == "header":
+            for idx, (start, _end) in enumerate(self.section_bounds):
+                if start > row:
+                    return idx
+            return None
+        for idx, (start, end) in enumerate(self.section_bounds):
+            if start <= row <= end:
+                return idx
+        return None
+
+    def _header_for_section(self, section_idx: int) -> str | None:
+        dir_path = self.current_path
+        entries = sorted(os.listdir(dir_path), key=lambda x: x.lower())
+        headers = [e for e in entries if e.lower().endswith(".2do")]
+        start = self.section_bounds[section_idx][0]
+        start_name = self.file_list.item(start).data(QtCore.Qt.UserRole)
+        header = None
+        for h in headers:
+            if h.lower() < start_name.lower():
+                header = h
+            else:
+                break
+        return header
+
+    def _category_for_section(self, section_idx: int) -> tuple[str | None, str | None]:
+        header = self._header_for_section(section_idx)
+        if header:
+            cat, name, _ = self._parse_prefix(header)
+            if cat and name:
+                return cat, name
+        start = self.section_bounds[section_idx][0]
+        item_name = self.file_list.item(start).data(QtCore.Qt.UserRole)
+        return self._parse_prefix(item_name)[:2]
+
+    def _create_file_after(self) -> None:
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item or self._current_item_is_directory():
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name in {"header", "markdown"}:
+            return
+        m = re.match(r"(\[[^\]]+\])", name)
+        if not m:
+            return
+        self._create_file_with_prefix(m.group(1))
+
+    def _create_file_before(self) -> None:
+        if self._is_directory_selected():
+            return
+        item = self.file_list.currentItem()
+        if not item or self._current_item_is_directory():
+            return
+        name = item.data(QtCore.Qt.UserRole)
+        if not name or name in {"header", "markdown"}:
+            return
+        cat, cat_name, ts = self._parse_prefix(name)
+        if not (cat and cat_name and ts):
+            return
+        dt = datetime.strptime(ts, "%Y-%m-%d %H.%M.%S").replace(tzinfo=timezone.utc)
+        dt -= timedelta(seconds=1)
+        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        self._create_file_with_prefix(prefix)
+
+    def _create_file_section_end(self) -> None:
+        sec = self._current_section_index()
+        if sec is None:
+            return
+        cat, cat_name = self._category_for_section(sec)
+        if not (cat and cat_name):
+            return
+        dt = datetime.now(tz=timezone.utc)
+        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        self._create_file_with_prefix(prefix)
+
+    def _create_file_section_begin(self) -> None:
+        sec = self._current_section_index()
+        if sec is None:
+            return
+        start = self.section_bounds[sec][0]
+        first_name = self.file_list.item(start).data(QtCore.Qt.UserRole)
+        cat, cat_name, ts = self._parse_prefix(first_name)
+        if not (cat and cat_name and ts):
+            return
+        dt = datetime.strptime(ts, "%Y-%m-%d %H.%M.%S").replace(tzinfo=timezone.utc)
+        dt -= timedelta(seconds=1)
+        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        self._create_file_with_prefix(prefix)
+
+    def _create_file_unra(self) -> None:
+        dt = datetime.now(tz=timezone.utc)
+        prefix = f"[5-UNRA {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        self._create_file_with_prefix(prefix)
 
     def _rename_file(self) -> None:
         item = self.file_list.currentItem()

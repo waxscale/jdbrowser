@@ -3,3 +3,4 @@ from .simple_edit_tag_dialog import SimpleEditTagDialog
 from .input_tag_dialog import InputTagDialog
 from .delete_tag_dialog import DeleteTagDialog
 from .remove_directory_tag_dialog import RemoveDirectoryTagDialog
+from .create_file_dialog import CreateFileDialog
