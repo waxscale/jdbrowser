@@ -744,7 +744,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         rebuild_state_directory_tags(self.conn)
         self._load_directories()
         if self.items:
-            self.set_selection(len(self.items) - 1)
+            self.set_selection(self.main_count - 1)
 
     def _rename_tag_label(self):
         """Edit the current directory's label with a simple dialog."""
