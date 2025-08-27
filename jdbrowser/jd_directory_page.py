@@ -378,6 +378,25 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.item.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
         )
+        # Allow double-click on the header (or its children) to jump back to
+        # the top-level directory when inside a subdirectory
+        def _bind_header_dblclick(w: QtWidgets.QWidget) -> None:
+            try:
+                w.mouseDoubleClickEvent = self._handle_header_double_click  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        _bind_header_dblclick(self.item)
+        if hasattr(self.item, "icon"):
+            _bind_header_dblclick(self.item.icon)
+        if hasattr(self.item, "right"):
+            _bind_header_dblclick(self.item.right)
+        if hasattr(self.item, "label"):
+            _bind_header_dblclick(self.item.label)
+        if hasattr(self.item, "tags_widget"):
+            _bind_header_dblclick(self.item.tags_widget)
+        if hasattr(self.item, "tag_buttons"):
+            for btn, *_ in getattr(self.item, "tag_buttons", []):
+                _bind_header_dblclick(btn)
         layout.addWidget(self.item)
 
         # List of files within the directory
@@ -418,6 +437,15 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.search_input.textChanged.connect(self.perform_search)
         self._setup_search_shortcuts()
         self.search_input.move(self.width() - 310, self.height() - 40)
+
+    def _handle_header_double_click(self, event: QtGui.QMouseEvent) -> None:
+        # When inside a subdirectory, double-clicking the directory header
+        # returns to the page's top-level directory (base_path).
+        if event.button() == QtCore.Qt.LeftButton and self.subdir_stack:
+            self._navigate_to_subdir(0)
+            event.accept()
+            return
+        event.ignore()
 
     def _strip_prefix(self, text: str) -> str:
         return re.sub(r"^\[[^\]]*\]\s*", "", text).strip()
