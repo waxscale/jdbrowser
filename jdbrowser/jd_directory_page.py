@@ -1630,6 +1630,24 @@ class JdDirectoryPage(QtWidgets.QWidget):
             return m.group(1), m.group(2), m.group(3)
         return None, None, None
 
+    def _adjust_timestamp(self, ts: str, seconds: int) -> str:
+        m = re.match(
+            r"(\d{4})-(\d{2})-(\d{2}) (\d{2})\.(\d{2})\.(\d{2})",
+            ts,
+        )
+        if not m:
+            return ts
+        y, mo, d, h, mi, s = map(int, m.groups())
+        y = max(y, 1)
+        mo = max(mo, 1)
+        d = max(d, 1)
+        try:
+            dt = datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
+            dt += timedelta(seconds=seconds)
+        except ValueError:
+            return ts
+        return dt.strftime("%Y-%m-%d %H.%M.%S")
+
     def _prompt_file_label(self) -> str | None:
         dialog = CreateFileDialog(self)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
@@ -1705,7 +1723,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._is_directory_selected():
             return
         item = self.file_list.currentItem()
-        if not item or self._current_item_is_directory():
+        if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
@@ -1719,7 +1737,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         if self._is_directory_selected():
             return
         item = self.file_list.currentItem()
-        if not item or self._current_item_is_directory():
+        if not item:
             return
         name = item.data(QtCore.Qt.UserRole)
         if not name or name in {"header", "markdown"}:
@@ -1727,9 +1745,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         cat, cat_name, ts = self._parse_prefix(name)
         if not (cat and cat_name and ts):
             return
-        dt = datetime.strptime(ts, "%Y-%m-%d %H.%M.%S").replace(tzinfo=timezone.utc)
-        dt -= timedelta(seconds=1)
-        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        new_ts = self._adjust_timestamp(ts, -1)
+        prefix = f"[{cat}-{cat_name} {new_ts}]"
         self._create_file_with_prefix(prefix)
 
     def _create_file_section_end(self) -> None:
@@ -1752,9 +1769,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         cat, cat_name, ts = self._parse_prefix(first_name)
         if not (cat and cat_name and ts):
             return
-        dt = datetime.strptime(ts, "%Y-%m-%d %H.%M.%S").replace(tzinfo=timezone.utc)
-        dt -= timedelta(seconds=1)
-        prefix = f"[{cat}-{cat_name} {dt.strftime('%Y-%m-%d %H.%M.%S')}]"
+        new_ts = self._adjust_timestamp(ts, -1)
+        prefix = f"[{cat}-{cat_name} {new_ts}]"
         self._create_file_with_prefix(prefix)
 
     def _create_file_unra(self) -> None:
