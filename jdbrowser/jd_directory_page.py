@@ -353,11 +353,8 @@ class JdDirectoryPage(QtWidgets.QWidget):
         else:
             folder = self.directory_id
             crumb = folder
-        if self.parent_uuid is not None and self.ext_label:
-            parent_crumb = self._strip_prefix(self.ext_label)
-            self.base_crumbs = [(parent_crumb, self.ascend_level), (crumb, None)]
-        else:
-            self.base_crumbs = [(crumb, None)]
+        # Do not show a parent crumb; navigation uses history now.
+        self.base_crumbs = [(crumb, None)]
         self.breadcrumb_bar = self._build_breadcrumb(self.base_crumbs)
         layout.addWidget(self.breadcrumb_bar)
 
@@ -919,9 +916,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             grandparent_uuid=id_tag,
             great_grandparent_uuid=area_tag,
         )
-        jdbrowser.current_page = new_page
-        if jdbrowser.main_window:
-            jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _open_dir_link(self, url: str) -> None:
         m = re.match(r"dirlink:((?:\d{4}_){3}\d{4})", url)
@@ -946,9 +941,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         directory_id = resolved_dir_id or folder_id
         from .jd_directory_page import JdDirectoryPage
         new_page = JdDirectoryPage(directory_id)
-        jdbrowser.current_page = new_page
-        if jdbrowser.main_window:
-            jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _icon_for_extension(self, ext: str) -> str:
         return FILE_TYPE_ICONS.get(ext, DEFAULT_FILE_ICON)
@@ -1559,7 +1552,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         self.shortcuts = []
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         mappings = [
-            (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+            (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
             (QtCore.Qt.Key_Return, self._enter_selected, None),
             (QtCore.Qt.Key_Enter, self._enter_selected, None),
             (QtCore.Qt.Key_Tab, self.toggle_label_prefix, None),
@@ -2486,8 +2479,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         from .jd_directory_page import JdDirectoryPage
 
         new_page = JdDirectoryPage(directory_id)
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
@@ -2515,8 +2507,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             grandparent_uuid=parent_uuid,
             great_grandparent_uuid=grandparent_uuid,
         )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def ascend_to_area(self):
         from .jd_area_page import JdAreaPage
@@ -2534,8 +2525,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _navigate_to_subdir(self, level: int) -> None:
         if level < 0 or level > len(self.subdir_stack):
@@ -2581,5 +2571,4 @@ class JdDirectoryPage(QtWidgets.QWidget):
             if item.directory_id == target_id:
                 new_page.set_selection(i)
                 break
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)

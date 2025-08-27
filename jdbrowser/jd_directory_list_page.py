@@ -138,8 +138,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def ascend_to_id(self):
         from .jd_id_page import JdIdPage
@@ -159,8 +158,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def ascend_to_area(self):
         from .jd_area_page import JdAreaPage
@@ -178,8 +176,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def descend_level(self):
         if self.selected_index is None or not self.items:
@@ -199,8 +196,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             great_grandparent_uuid=self.great_grandparent_uuid,
             ext_label=self.ext_label,
         )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _warn(self, title: str, message: str) -> None:
         box = QtWidgets.QMessageBox(self)
@@ -1082,8 +1078,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
         from .jd_directory_page import JdDirectoryPage
 
         new_page = JdDirectoryPage(directory_id)
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
@@ -1111,8 +1106,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             grandparent_uuid=parent_uuid,
             great_grandparent_uuid=grandparent_uuid,
         )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _setup_shortcuts(self):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -1137,7 +1131,7 @@ class JdDirectoryListPage(QtWidgets.QWidget):
             (QtCore.Qt.Key_Left, lambda: None, None),
             (QtCore.Qt.Key_L, lambda: None, None),
             (QtCore.Qt.Key_Right, lambda: None, None),
-            (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+            (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
             (
                 QtCore.Qt.Key_Up,
                 self.ascend_level,

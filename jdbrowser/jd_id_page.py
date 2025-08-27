@@ -359,8 +359,7 @@ class JdIdPage(QtWidgets.QWidget):
             if found:
                 break
         new_page.updateSelection()
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def _edit_tag_label_with_icon(self):
         """Edit the current tag's label and thumbnail with a dialog showing the icon."""
@@ -921,7 +920,7 @@ class JdIdPage(QtWidgets.QWidget):
               (QtCore.Qt.Key_T, self._set_thumbnail, None),
               (QtCore.Qt.Key_Return, self.descend_level, None),
               (QtCore.Qt.Key_Enter, self.descend_level, None),
-              (QtCore.Qt.Key_Backspace, self.ascend_level, None),
+              (QtCore.Qt.Key_Backspace, lambda: jdbrowser.go_back(), None),
               (QtCore.Qt.Key_Up, self.ascend_level, None, QtCore.Qt.KeyboardModifier.AltModifier),
               (QtCore.Qt.Key_AsciiTilde, self.ascend_level, None),
           ]
@@ -1218,8 +1217,7 @@ class JdIdPage(QtWidgets.QWidget):
         from .jd_directory_page import JdDirectoryPage
 
         new_page = JdDirectoryPage(directory_id)
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def open_ext_tag_search(self):
         if not self.ext_tag_overlay:
@@ -1247,8 +1245,7 @@ class JdIdPage(QtWidgets.QWidget):
             grandparent_uuid=parent_uuid,
             great_grandparent_uuid=grandparent_uuid,
         )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def descend_level(self):
         if not self.sections:
@@ -1268,8 +1265,7 @@ class JdIdPage(QtWidgets.QWidget):
             jd_id=current_item.jd_id,
             grandparent_uuid=self.parent_uuid,
         )
-        jdbrowser.current_page = new_page
-        jdbrowser.main_window.setCentralWidget(new_page)
+        jdbrowser.navigate_to(new_page)
 
     def updateSelection(self):
         if self.sections and 0 <= self.sec_idx < len(self.sections) and 0 <= self.idx_in_sec < len(self.sections[self.sec_idx]):
