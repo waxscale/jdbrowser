@@ -1079,7 +1079,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 index = self._next_non_header_index(0, 1)
                 if index is not None:
                     self.file_list.setCurrentRow(index)
-                    self._scroll_with_header(index, -1)
+                    self._scroll_section_header(index)
             return
         index = current + direction
         if index < 0:
@@ -1095,9 +1095,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.file_list.scrollToTop()
             return
         self.file_list.setCurrentRow(index)
-        item = self.file_list.item(index)
-        if item:
-            self.file_list.scrollToItem(item)
+        self._scroll_section_header(index)
 
     def move_selection_multiple(self, count: int) -> None:
         if self.in_search_mode or self.file_list.count() == 0:
@@ -1111,7 +1109,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         index = self._next_non_header_index(0, 1)
         if index is not None:
             self.file_list.setCurrentRow(index)
-            self._scroll_with_header(index, -1)
+            self._scroll_section_header(index)
 
     def move_to_end(self) -> None:
         if self.in_search_mode:
@@ -1122,7 +1120,7 @@ class JdDirectoryPage(QtWidgets.QWidget):
         index = self._next_non_header_index(count - 1, -1)
         if index is not None:
             self.file_list.setCurrentRow(index)
-            self.file_list.scrollToItem(self.file_list.item(index))
+            self._scroll_section_header(index)
 
     def centerSelectedItem(self) -> None:
         if self.in_search_mode:
@@ -1177,6 +1175,22 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 self.file_list.setCurrentRow(target)
                 self._scroll_with_header(target, 1)
                 break
+
+    def _scroll_section_header(self, row: int) -> None:
+        if not self.section_bounds:
+            self.file_list.scrollToItem(self.file_list.item(row))
+            return
+        for start, end in self.section_bounds:
+            if start <= row <= end:
+                header_row = start - 1
+                if self._is_header_row(header_row):
+                    self.file_list.scrollToItem(
+                        self.file_list.item(header_row),
+                        QtWidgets.QAbstractItemView.PositionAtTop,
+                    )
+                    return
+                break
+        self.file_list.scrollToItem(self.file_list.item(row))
 
     def _scroll_with_header(self, row: int, direction: int) -> None:
         header_row = row + direction
