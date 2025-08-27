@@ -726,10 +726,14 @@ class JdDirectoryPage(QtWidgets.QWidget):
                 text = f.read()
         except OSError:
             pass
-        pattern = re.compile(r"\[\[(\d{2})\.(\d{2})\+(\d{4})\]\]")
+        # Support wiki-style links in Markdown:
+        #   [[XX.YY+ZZZZ]]
+        #   [[XX.YY+ZZZZ|label]]  -> same target, custom link text
+        pattern = re.compile(r"\[\[(\d{2})\.(\d{2})\+(\d{4})(?:\|([^\]]+))?\]\]")
 
         def repl(m):
             code = f"{m.group(1)}.{m.group(2)}+{m.group(3)}"
+            explicit_label = m.group(4).strip() if m.group(4) else None
             jd_area = int(m.group(1))
             jd_id = int(m.group(2))
             jd_ext = int(m.group(3))
@@ -756,7 +760,9 @@ class JdDirectoryPage(QtWidgets.QWidget):
                     row = cursor.fetchone()
                     if row and row[0]:
                         label = row[0]
-            link_text = label if label else code
+            link_text = explicit_label if explicit_label else (label if label else code)
+            # Escape closing bracket in markdown link text if present
+            link_text = link_text.replace(']', r'\]')
             return f"[{link_text}](jdlink:{code})"
 
         text = pattern.sub(repl, text)
